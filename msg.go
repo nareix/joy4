@@ -111,6 +111,7 @@ type MsgStream struct {
 	Msg map[int]*Msg
 	vts, ats int
 
+	meta AMFObj
 	id string
 	role int
 	stat int

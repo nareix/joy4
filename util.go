@@ -9,29 +9,25 @@ import (
 	"strings"
 )
 
-type dummyWriter struct {
-}
-
-func (m *dummyWriter) Write(p []byte) (n int, err error) {
-	return 0, nil
-}
-
 type logger int
 
 func (l logger) Printf(format string, v ...interface{}) {
 	str := fmt.Sprintf(format, v...)
 	switch {
-	case strings.HasPrefix(str, "server") && l >= 0,
-			 strings.HasPrefix(str, "stream") && l >= 0,
-			 strings.HasPrefix(str, "event") && l >= 0,
-			 strings.HasPrefix(str, "data") && l >= 0,
-			 strings.HasPrefix(str, "msg") && l >= 1:
+	case strings.HasPrefix(str, "server") && l >= 1,
+			 strings.HasPrefix(str, "stream") && l >= 1,
+			 strings.HasPrefix(str, "event") && l >= 1,
+			 strings.HasPrefix(str, "data") && l >= 1,
+			 strings.HasPrefix(str, "msg") && l >= 2:
 		l2.Println(str)
+	default:
+		if l >= 1 {
+			l2.Println(str)
+		}
 	}
 }
 
 var (
-	dummyW = &dummyWriter{}
 	l = logger(0)
 	l2 *log.Logger
 )
@@ -39,6 +35,10 @@ var (
 func init() {
 	l2 = log.New(os.Stderr, "", 0)
 	l2.SetFlags(log.Lmicroseconds)
+}
+
+func LogLevel(i int) {
+	l = logger(i)
 }
 
 type stream struct {

@@ -97,25 +97,25 @@ func createResp(b []byte, key []byte) {
 
 func parseChal(b []byte, peerKey []byte, key []byte) (dig []byte, err int) {
 	if b[0] != 0x3 {
-		l.Printf("handshake: invalid rtmp version\n")
+		l.Printf("handshake: invalid rtmp version")
 		err = 1
 		return
 	}
 
 	epoch := b[1:5]
 	ver := b[5:9]
-	l.Printf("handshake:   epoch %v ver %v\n", epoch, ver)
+	l.Printf("handshake:   epoch %v ver %v", epoch, ver)
 
 	var offs int
 	if offs = findDigest(b[1:], peerKey, 772); offs == -1 {
 		if offs = findDigest(b[1:], peerKey, 8); offs == -1 {
-			l.Printf("handshake: digest not found\n")
+			l.Printf("handshake: digest not found")
 			err = 1
 			return
 		}
 	}
 
-	l.Printf("handshake:   offs = %v\n", offs)
+	l.Printf("handshake:   offs = %v", offs)
 
 	dig = makeDigest(key, b[1+offs:1+offs+32], -1)
 	return
@@ -124,22 +124,22 @@ func parseChal(b []byte, peerKey []byte, key []byte) (dig []byte, err int) {
 
 func handShake(rw io.ReadWriter) {
 	b := ReadBuf(rw, 1537)
-	l.Printf("handshake: got client chal\n")
+	l.Printf("handshake: got client chal")
 	dig, err := parseChal(b, clientKey2, serverKey)
 	if err != 0 {
 		return
 	}
 
 	createChal(b, serverVersion, serverKey2)
-	l.Printf("handshake: send server chal\n")
+	l.Printf("handshake: send server chal")
 	rw.Write(b)
 
 	b = make([]byte, 1536)
 	createResp(b, dig)
-	l.Printf("handshake: send server resp\n")
+	l.Printf("handshake: send server resp")
 	rw.Write(b)
 
 	b = ReadBuf(rw, 1536)
-	l.Printf("handshake: got client resp\n")
+	l.Printf("handshake: got client resp")
 }
 
