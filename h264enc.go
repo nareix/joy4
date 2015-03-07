@@ -29,7 +29,7 @@ import (
 		m->c = avcodec_find_encoder(CODEC_ID_H264);
 		m->ctx = avcodec_alloc_context3(m->c);
 		m->ctx->width = m->w;
-		m->ctx->height = m->w;
+		m->ctx->height = m->h;
 		m->ctx->bit_rate = m->bitrate;
 		m->ctx->pix_fmt = m->pixfmt;
 		m->ctx->flags |= CODEC_FLAG_GLOBAL_HEADER;
