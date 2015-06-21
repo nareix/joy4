@@ -70,3 +70,8 @@ for _, p := range pkts[1:] {
 	sample, err := dec.Decode(p)
 }
 ```
+
+License
+----
+
+All code is under WTFPL. You can use it for everything as you want :)
