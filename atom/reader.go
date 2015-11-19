@@ -6,15 +6,24 @@ import (
 	"io/ioutil"
 )
 
-type Reader struct {
-	io.LimitedReader
+type Fixed32 uint32
+type TimeStamp uint32
+
+func ReadBytes(r io.Reader, n int) (res []byte, err error) {
+	res = make([]byte, n)
+	if n, err = r.Read(res); err != nil {
+		return
+	}
+	return
 }
 
-type Fixed32 uint32
+func ReadBytesLeft(r *io.LimitedReader) (res []byte, err error) {
+	return ReadBytes(r, int(r.N))
+}
 
-func (self Reader) ReadUInt(n int) (res uint, err error) {
-	b := make([]byte, n)
-	if n, err = self.Read(b); err != nil {
+func ReadUInt(r io.Reader, n int) (res uint, err error) {
+	var b []byte
+	if b, err = ReadBytes(r, n); err != nil {
 		return
 	}
 	for i := 0; i < n; i++ {
@@ -24,29 +33,48 @@ func (self Reader) ReadUInt(n int) (res uint, err error) {
 	return
 }
 
-func (self Reader) ReadInt(n int) (res int, err error) {
-	var resu uint
-	if resu, err = self.ReadUInt(n); err != nil {
+func ReadInt(r io.Reader, n int) (res int, err error) {
+	var ui uint
+	if ui, err = ReadUInt(r, n); err != nil {
 		return
 	}
-	res = int(resu)
+	res = int(ui)
 	return
 }
 
-func (self Reader) ReadString(n int) (res string, err error) {
-	b := make([]byte, n)
-	if n, err = self.Read(b); err != nil {
+func ReadFixed32(r io.Reader, n int) (res Fixed32, err error) {
+	var ui uint
+	if ui, err = ReadUInt(r, n); err != nil {
+		return
+	}
+	res = Fixed32(ui)
+	return
+}
+
+func ReadTimeStamp(r io.Reader, n int) (res TimeStamp, err error) {
+	var ui uint
+	if ui, err = ReadUInt(r, n); err != nil {
+		return
+	}
+	res = TimeStamp(ui)
+	return
+}
+
+func ReadString(r io.Reader, n int) (res string, err error) {
+	var b []byte
+	if b, err = ReadBytes(r, n); err != nil {
 		return
 	}
 	res = string(b)
 	return
 }
 
-func (self Reader) Skip(n int) (err error) {
-	_, err = io.CopyN(ioutil.Discard, self.Reader, int64(n))
+func ReadDummy(r io.Reader, n int) (res int, err error) {
+	_, err = io.CopyN(ioutil.Discard, r, int64(n))
 	return
 }
 
+/*
 func (self Reader) ReadAtom(atom Atom) (res Atom, err error) {
 	for {
 		var size int
@@ -83,4 +111,5 @@ func (self Reader) ReadAtom(atom Atom) (res Atom, err error) {
 		return
 	}
 }
+*/
 
