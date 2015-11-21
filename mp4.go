@@ -31,6 +31,31 @@ func (self *File) Sync() {
 func (self *File) Close() {
 }
 
+func changeMoov(moov *atom.Movie) {
+	header := moov.Header
+
+	log.Println("moov: ", header.CreateTime, header.TimeScale, header.Duration)
+	log.Println("moov: ", header.PreferredRate, header.PreferredVolume)
+	log.Println("moov: ", header.PreviewTime, header.PreviewDuration)
+	log.Println("moov: ", header.PosterTime)
+	log.Println("moov: ", header.SelectionTime, header.SelectionDuration)
+	log.Println("moov: ", header.CurrentTime)
+	log.Println("moov: ", header.NextTrackId)
+	log.Println("moov: ", header.Matrix)
+	header.NextTrackId = 0
+
+	for i, track := range moov.Tracks {
+		log.Println("track", i, ":", track.Header.TrackId)
+		log.Println("track", i, ":", track.Header.Duration)
+		log.Println("track", i, ":", track.Header.Layer, track.Header.AlternateGroup)
+		log.Println("track", i, ":", track.Header.Volume)
+		log.Println("track", i, ":", track.Header.TrackWidth, track.Header.TrackHeight)
+		log.Println("track", i, ":", track.Header.Matrix)
+
+		//media := track.Media
+	}
+}
+
 func Open(filename string) (file *File, err error) {
 	var osfile *os.File
 	if osfile, err = os.Open(filename); err != nil {
@@ -65,6 +90,7 @@ func Open(filename string) (file *File, err error) {
 			if moov, err = atom.ReadMovie(ar); err != nil {
 				return
 			}
+			changeMoov(moov)
 			if err = atom.WriteMovie(outfile, moov); err != nil {
 				return
 			}

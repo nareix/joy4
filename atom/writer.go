@@ -24,12 +24,19 @@ func WriteInt(w io.Writer, val int, n int) (err error) {
 	return WriteUInt(w, uint(val), n)
 }
 
+func WriteFixed(w io.Writer, val Fixed, n int) (err error) {
+	return WriteUInt(w, uint(val), n)
+}
+
 func WriteTimeStamp(w io.Writer, ts TimeStamp, n int) (err error) {
 	return WriteUInt(w, uint(ts), n)
 }
 
-func WriteString(w io.Writer, val string) (err error) {
-	return WriteBytes(w, []byte(val))
+func WriteString(w io.Writer, val string, n int) (err error) {
+	wb := make([]byte, n)
+	sb := []byte(val)
+	copy(wb, sb)
+	return WriteBytes(w, wb)
 }
 
 func WriteDummy(w io.Writer, n int) (err error) {
@@ -70,7 +77,7 @@ func WriteAtomHeader(w io.WriteSeeker, cc4 string) (res *Writer, err error) {
 	if err = WriteDummy(self, 4); err != nil {
 		return
 	}
-	if err = WriteString(self, cc4); err != nil {
+	if err = WriteString(self, cc4, 4); err != nil {
 		return
 	}
 

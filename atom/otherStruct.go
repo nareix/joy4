@@ -3,12 +3,58 @@ package atom
 
 import (
 	"io"
+	"bytes"
+	"log"
+	"encoding/hex"
 )
+
+type VideoSampleDesc struct {
+	VideoSampleDescHeader
+	AVCDecoderConf []byte
+}
+
+func ReadVideoSampleDesc(r *io.LimitedReader) (res *VideoSampleDesc, err error) {
+	self := &VideoSampleDesc{}
+
+	if self.VideoSampleDescHeader, err = ReadVideoSampleDescHeader(r); err != nil {
+		return
+	}
+
+	for r.N > 0 {
+		var cc4 string
+		var ar *io.LimitedReader
+		if ar, cc4, err = ReadAtomHeader(r, ""); err != nil {
+			return
+		}
+
+		if false {
+			log.Println("VideoSampleDesc:", cc4, ar.N)
+			//log.Println("VideoSampleDesc:", "avcC", len(self.AVCDecoderConf))
+		}
+
+		switch cc4 {
+			case "avcC": {
+				if self.AVCDecoderConf, err = ReadBytes(ar, int(ar.N)); err != nil {
+					return
+				}
+			}
+		}
+
+		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
+			return
+		}
+	}
+
+	res = self
+	return
+}
 
 type SampleDescEntry struct {
 	Format string
 	DataRefIndex int
 	Data []byte
+
+	Video *VideoSampleDesc
 }
 
 func ReadSampleDescEntry(r *io.LimitedReader) (res *SampleDescEntry, err error) {
@@ -22,9 +68,22 @@ func ReadSampleDescEntry(r *io.LimitedReader) (res *SampleDescEntry, err error) 
 	if self.DataRefIndex, err = ReadInt(r, 2); err != nil {
 		return
 	}
+
 	if self.Data, err = ReadBytes(r, int(r.N)); err != nil {
 		return
 	}
+
+	if self.Format == "avc1" {
+		br := bytes.NewReader(self.Data)
+		var err error
+		self.Video, err = ReadVideoSampleDesc(&io.LimitedReader{R: br, N: int64(len(self.Data))})
+		if false {
+			log.Println("ReadSampleDescEntry:", hex.Dump(self.Data))
+			log.Println("ReadSampleDescEntry:", err)
+		}
+	} else if self.Format == "mp4a" {
+	}
+
 	res = self
 	return
 }
@@ -94,16 +153,16 @@ func WriteHandlerRefer(w io.WriteSeeker, self *HandlerRefer) (err error) {
 	if err = WriteInt(w, self.Flags, 1); err != nil {
 		return
 	}
-	if err = WriteString(w, self.Type); err != nil {
+	if err = WriteString(w, self.Type, 4); err != nil {
 		return
 	}
-	if err = WriteString(w, self.SubType); err != nil {
+	if err = WriteString(w, self.SubType, 4); err != nil {
 		return
 	}
 	if err = WriteDummy(w, 12); err != nil {
 		return
 	}
-	if err = WriteString(w, self.Name); err != nil {
+	if err = WriteString(w, self.Name, len(self.Name)); err != nil {
 		return
 	}
 	if err = aw.Close(); err != nil {

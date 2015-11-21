@@ -3,21 +3,20 @@ package atom
 
 import (
 	"io"
-	"log"
 )
 
 type FileType struct {
 }
 
 func ReadFileType(r *io.LimitedReader) (res *FileType, err error) {
-	log.Println("ReadFileType")
+
 	self := &FileType{}
 
 	res = self
 	return
 }
 func WriteFileType(w io.WriteSeeker, self *FileType) (err error) {
-	log.Println("WriteFileType")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "ftyp"); err != nil {
 		return
@@ -36,7 +35,7 @@ type Movie struct {
 }
 
 func ReadMovie(r *io.LimitedReader) (res *Movie, err error) {
-	log.Println("ReadMovie")
+
 	self := &Movie{}
 	for r.N > 0 {
 		var cc4 string
@@ -59,10 +58,7 @@ func ReadMovie(r *io.LimitedReader) (res *Movie, err error) {
 				}
 				self.Tracks = append(self.Tracks, item)
 			}
-		default:
-			{
-				log.Println("skip", cc4)
-			}
+
 		}
 		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
 			return
@@ -72,7 +68,7 @@ func ReadMovie(r *io.LimitedReader) (res *Movie, err error) {
 	return
 }
 func WriteMovie(w io.WriteSeeker, self *Movie) (err error) {
-	log.Println("WriteMovie")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "moov"); err != nil {
 		return
@@ -99,8 +95,8 @@ func WriteMovie(w io.WriteSeeker, self *Movie) (err error) {
 type MovieHeader struct {
 	Version           int
 	Flags             int
-	CTime             TimeStamp
-	MTime             TimeStamp
+	CreateTime        TimeStamp
+	ModifyTime        TimeStamp
 	TimeScale         TimeStamp
 	Duration          TimeStamp
 	PreferredRate     int
@@ -116,7 +112,7 @@ type MovieHeader struct {
 }
 
 func ReadMovieHeader(r *io.LimitedReader) (res *MovieHeader, err error) {
-	log.Println("ReadMovieHeader")
+
 	self := &MovieHeader{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
@@ -124,10 +120,10 @@ func ReadMovieHeader(r *io.LimitedReader) (res *MovieHeader, err error) {
 	if self.Flags, err = ReadInt(r, 3); err != nil {
 		return
 	}
-	if self.CTime, err = ReadTimeStamp(r, 4); err != nil {
+	if self.CreateTime, err = ReadTimeStamp(r, 4); err != nil {
 		return
 	}
-	if self.MTime, err = ReadTimeStamp(r, 4); err != nil {
+	if self.ModifyTime, err = ReadTimeStamp(r, 4); err != nil {
 		return
 	}
 	if self.TimeScale, err = ReadTimeStamp(r, 4); err != nil {
@@ -175,7 +171,7 @@ func ReadMovieHeader(r *io.LimitedReader) (res *MovieHeader, err error) {
 	return
 }
 func WriteMovieHeader(w io.WriteSeeker, self *MovieHeader) (err error) {
-	log.Println("WriteMovieHeader")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "mvhd"); err != nil {
 		return
@@ -187,10 +183,10 @@ func WriteMovieHeader(w io.WriteSeeker, self *MovieHeader) (err error) {
 	if err = WriteInt(w, self.Flags, 3); err != nil {
 		return
 	}
-	if err = WriteTimeStamp(w, self.CTime, 4); err != nil {
+	if err = WriteTimeStamp(w, self.CreateTime, 4); err != nil {
 		return
 	}
-	if err = WriteTimeStamp(w, self.MTime, 4); err != nil {
+	if err = WriteTimeStamp(w, self.ModifyTime, 4); err != nil {
 		return
 	}
 	if err = WriteTimeStamp(w, self.TimeScale, 4); err != nil {
@@ -246,7 +242,7 @@ type Track struct {
 }
 
 func ReadTrack(r *io.LimitedReader) (res *Track, err error) {
-	log.Println("ReadTrack")
+
 	self := &Track{}
 	for r.N > 0 {
 		var cc4 string
@@ -267,10 +263,7 @@ func ReadTrack(r *io.LimitedReader) (res *Track, err error) {
 					return
 				}
 			}
-		default:
-			{
-				log.Println("skip", cc4)
-			}
+
 		}
 		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
 			return
@@ -280,7 +273,7 @@ func ReadTrack(r *io.LimitedReader) (res *Track, err error) {
 	return
 }
 func WriteTrack(w io.WriteSeeker, self *Track) (err error) {
-	log.Println("WriteTrack")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "trak"); err != nil {
 		return
@@ -305,20 +298,20 @@ func WriteTrack(w io.WriteSeeker, self *Track) (err error) {
 type TrackHeader struct {
 	Version        int
 	Flags          int
-	CTime          TimeStamp
-	MTime          TimeStamp
+	CreateTime     TimeStamp
+	ModifyTime     TimeStamp
 	TrackId        TimeStamp
 	Duration       TimeStamp
 	Layer          int
 	AlternateGroup int
 	Volume         int
 	Matrix         [9]int
-	TrackWidth     int
-	TrackHeader    int
+	TrackWidth     Fixed
+	TrackHeight    Fixed
 }
 
 func ReadTrackHeader(r *io.LimitedReader) (res *TrackHeader, err error) {
-	log.Println("ReadTrackHeader")
+
 	self := &TrackHeader{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
@@ -326,10 +319,10 @@ func ReadTrackHeader(r *io.LimitedReader) (res *TrackHeader, err error) {
 	if self.Flags, err = ReadInt(r, 3); err != nil {
 		return
 	}
-	if self.CTime, err = ReadTimeStamp(r, 4); err != nil {
+	if self.CreateTime, err = ReadTimeStamp(r, 4); err != nil {
 		return
 	}
-	if self.MTime, err = ReadTimeStamp(r, 4); err != nil {
+	if self.ModifyTime, err = ReadTimeStamp(r, 4); err != nil {
 		return
 	}
 	if self.TrackId, err = ReadTimeStamp(r, 4); err != nil {
@@ -361,17 +354,17 @@ func ReadTrackHeader(r *io.LimitedReader) (res *TrackHeader, err error) {
 			return
 		}
 	}
-	if self.TrackWidth, err = ReadInt(r, 4); err != nil {
+	if self.TrackWidth, err = ReadFixed(r, 4); err != nil {
 		return
 	}
-	if self.TrackHeader, err = ReadInt(r, 4); err != nil {
+	if self.TrackHeight, err = ReadFixed(r, 4); err != nil {
 		return
 	}
 	res = self
 	return
 }
 func WriteTrackHeader(w io.WriteSeeker, self *TrackHeader) (err error) {
-	log.Println("WriteTrackHeader")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "tkhd"); err != nil {
 		return
@@ -383,10 +376,10 @@ func WriteTrackHeader(w io.WriteSeeker, self *TrackHeader) (err error) {
 	if err = WriteInt(w, self.Flags, 3); err != nil {
 		return
 	}
-	if err = WriteTimeStamp(w, self.CTime, 4); err != nil {
+	if err = WriteTimeStamp(w, self.CreateTime, 4); err != nil {
 		return
 	}
-	if err = WriteTimeStamp(w, self.MTime, 4); err != nil {
+	if err = WriteTimeStamp(w, self.ModifyTime, 4); err != nil {
 		return
 	}
 	if err = WriteTimeStamp(w, self.TrackId, 4); err != nil {
@@ -418,10 +411,10 @@ func WriteTrackHeader(w io.WriteSeeker, self *TrackHeader) (err error) {
 			return
 		}
 	}
-	if err = WriteInt(w, self.TrackWidth, 4); err != nil {
+	if err = WriteFixed(w, self.TrackWidth, 4); err != nil {
 		return
 	}
-	if err = WriteInt(w, self.TrackHeader, 4); err != nil {
+	if err = WriteFixed(w, self.TrackHeight, 4); err != nil {
 		return
 	}
 	if err = aw.Close(); err != nil {
@@ -437,7 +430,7 @@ type Media struct {
 }
 
 func ReadMedia(r *io.LimitedReader) (res *Media, err error) {
-	log.Println("ReadMedia")
+
 	self := &Media{}
 	for r.N > 0 {
 		var cc4 string
@@ -464,10 +457,7 @@ func ReadMedia(r *io.LimitedReader) (res *Media, err error) {
 					return
 				}
 			}
-		default:
-			{
-				log.Println("skip", cc4)
-			}
+
 		}
 		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
 			return
@@ -477,7 +467,7 @@ func ReadMedia(r *io.LimitedReader) (res *Media, err error) {
 	return
 }
 func WriteMedia(w io.WriteSeeker, self *Media) (err error) {
-	log.Println("WriteMedia")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "mdia"); err != nil {
 		return
@@ -505,18 +495,18 @@ func WriteMedia(w io.WriteSeeker, self *Media) (err error) {
 }
 
 type MediaHeader struct {
-	Version   int
-	Flags     int
-	CTime     int
-	MTime     int
-	TimeScale int
-	Duration  int
-	Language  int
-	Quality   int
+	Version    int
+	Flags      int
+	CreateTime int
+	ModifyTime int
+	TimeScale  int
+	Duration   int
+	Language   int
+	Quality    int
 }
 
 func ReadMediaHeader(r *io.LimitedReader) (res *MediaHeader, err error) {
-	log.Println("ReadMediaHeader")
+
 	self := &MediaHeader{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
@@ -524,10 +514,10 @@ func ReadMediaHeader(r *io.LimitedReader) (res *MediaHeader, err error) {
 	if self.Flags, err = ReadInt(r, 3); err != nil {
 		return
 	}
-	if self.CTime, err = ReadInt(r, 4); err != nil {
+	if self.CreateTime, err = ReadInt(r, 4); err != nil {
 		return
 	}
-	if self.MTime, err = ReadInt(r, 4); err != nil {
+	if self.ModifyTime, err = ReadInt(r, 4); err != nil {
 		return
 	}
 	if self.TimeScale, err = ReadInt(r, 4); err != nil {
@@ -546,7 +536,7 @@ func ReadMediaHeader(r *io.LimitedReader) (res *MediaHeader, err error) {
 	return
 }
 func WriteMediaHeader(w io.WriteSeeker, self *MediaHeader) (err error) {
-	log.Println("WriteMediaHeader")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "mdhd"); err != nil {
 		return
@@ -558,10 +548,10 @@ func WriteMediaHeader(w io.WriteSeeker, self *MediaHeader) (err error) {
 	if err = WriteInt(w, self.Flags, 3); err != nil {
 		return
 	}
-	if err = WriteInt(w, self.CTime, 4); err != nil {
+	if err = WriteInt(w, self.CreateTime, 4); err != nil {
 		return
 	}
-	if err = WriteInt(w, self.MTime, 4); err != nil {
+	if err = WriteInt(w, self.ModifyTime, 4); err != nil {
 		return
 	}
 	if err = WriteInt(w, self.TimeScale, 4); err != nil {
@@ -589,7 +579,7 @@ type MediaInfo struct {
 }
 
 func ReadMediaInfo(r *io.LimitedReader) (res *MediaInfo, err error) {
-	log.Println("ReadMediaInfo")
+
 	self := &MediaInfo{}
 	for r.N > 0 {
 		var cc4 string
@@ -616,10 +606,7 @@ func ReadMediaInfo(r *io.LimitedReader) (res *MediaInfo, err error) {
 					return
 				}
 			}
-		default:
-			{
-				log.Println("skip", cc4)
-			}
+
 		}
 		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
 			return
@@ -629,7 +616,7 @@ func ReadMediaInfo(r *io.LimitedReader) (res *MediaInfo, err error) {
 	return
 }
 func WriteMediaInfo(w io.WriteSeeker, self *MediaInfo) (err error) {
-	log.Println("WriteMediaInfo")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "minf"); err != nil {
 		return
@@ -663,7 +650,7 @@ type SoundMediaInfo struct {
 }
 
 func ReadSoundMediaInfo(r *io.LimitedReader) (res *SoundMediaInfo, err error) {
-	log.Println("ReadSoundMediaInfo")
+
 	self := &SoundMediaInfo{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
@@ -681,7 +668,7 @@ func ReadSoundMediaInfo(r *io.LimitedReader) (res *SoundMediaInfo, err error) {
 	return
 }
 func WriteSoundMediaInfo(w io.WriteSeeker, self *SoundMediaInfo) (err error) {
-	log.Println("WriteSoundMediaInfo")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "smhd"); err != nil {
 		return
@@ -713,7 +700,7 @@ type VideoMediaInfo struct {
 }
 
 func ReadVideoMediaInfo(r *io.LimitedReader) (res *VideoMediaInfo, err error) {
-	log.Println("ReadVideoMediaInfo")
+
 	self := &VideoMediaInfo{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
@@ -733,7 +720,7 @@ func ReadVideoMediaInfo(r *io.LimitedReader) (res *VideoMediaInfo, err error) {
 	return
 }
 func WriteVideoMediaInfo(w io.WriteSeeker, self *VideoMediaInfo) (err error) {
-	log.Println("WriteVideoMediaInfo")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "vmhd"); err != nil {
 		return
@@ -770,7 +757,7 @@ type SampleTable struct {
 }
 
 func ReadSampleTable(r *io.LimitedReader) (res *SampleTable, err error) {
-	log.Println("ReadSampleTable")
+
 	self := &SampleTable{}
 	for r.N > 0 {
 		var cc4 string
@@ -821,10 +808,7 @@ func ReadSampleTable(r *io.LimitedReader) (res *SampleTable, err error) {
 					return
 				}
 			}
-		default:
-			{
-				log.Println("skip", cc4)
-			}
+
 		}
 		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
 			return
@@ -834,7 +818,7 @@ func ReadSampleTable(r *io.LimitedReader) (res *SampleTable, err error) {
 	return
 }
 func WriteSampleTable(w io.WriteSeeker, self *SampleTable) (err error) {
-	log.Println("WriteSampleTable")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "stbl"); err != nil {
 		return
@@ -888,7 +872,7 @@ type SampleDesc struct {
 }
 
 func ReadSampleDesc(r *io.LimitedReader) (res *SampleDesc, err error) {
-	log.Println("ReadSampleDesc")
+
 	self := &SampleDesc{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
@@ -910,7 +894,7 @@ func ReadSampleDesc(r *io.LimitedReader) (res *SampleDesc, err error) {
 	return
 }
 func WriteSampleDesc(w io.WriteSeeker, self *SampleDesc) (err error) {
-	log.Println("WriteSampleDesc")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "stsd"); err != nil {
 		return
@@ -943,7 +927,7 @@ type TimeToSample struct {
 }
 
 func ReadTimeToSample(r *io.LimitedReader) (res *TimeToSample, err error) {
-	log.Println("ReadTimeToSample")
+
 	self := &TimeToSample{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
@@ -965,7 +949,7 @@ func ReadTimeToSample(r *io.LimitedReader) (res *TimeToSample, err error) {
 	return
 }
 func WriteTimeToSample(w io.WriteSeeker, self *TimeToSample) (err error) {
-	log.Println("WriteTimeToSample")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "stts"); err != nil {
 		return
@@ -997,7 +981,7 @@ type TimeToSampleEntry struct {
 }
 
 func ReadTimeToSampleEntry(r *io.LimitedReader) (self TimeToSampleEntry, err error) {
-	log.Println("ReadTimeToSampleEntry")
+
 	if self.Count, err = ReadInt(r, 4); err != nil {
 		return
 	}
@@ -1007,7 +991,7 @@ func ReadTimeToSampleEntry(r *io.LimitedReader) (self TimeToSampleEntry, err err
 	return
 }
 func WriteTimeToSampleEntry(w io.WriteSeeker, self TimeToSampleEntry) (err error) {
-	log.Println("WriteTimeToSampleEntry")
+
 	if err = WriteInt(w, self.Count, 4); err != nil {
 		return
 	}
@@ -1024,7 +1008,7 @@ type SampleToChunk struct {
 }
 
 func ReadSampleToChunk(r *io.LimitedReader) (res *SampleToChunk, err error) {
-	log.Println("ReadSampleToChunk")
+
 	self := &SampleToChunk{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
@@ -1046,7 +1030,7 @@ func ReadSampleToChunk(r *io.LimitedReader) (res *SampleToChunk, err error) {
 	return
 }
 func WriteSampleToChunk(w io.WriteSeeker, self *SampleToChunk) (err error) {
-	log.Println("WriteSampleToChunk")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "stsc"); err != nil {
 		return
@@ -1079,7 +1063,7 @@ type SampleToChunkEntry struct {
 }
 
 func ReadSampleToChunkEntry(r *io.LimitedReader) (self SampleToChunkEntry, err error) {
-	log.Println("ReadSampleToChunkEntry")
+
 	if self.FirstChunk, err = ReadInt(r, 4); err != nil {
 		return
 	}
@@ -1092,7 +1076,7 @@ func ReadSampleToChunkEntry(r *io.LimitedReader) (self SampleToChunkEntry, err e
 	return
 }
 func WriteSampleToChunkEntry(w io.WriteSeeker, self SampleToChunkEntry) (err error) {
-	log.Println("WriteSampleToChunkEntry")
+
 	if err = WriteInt(w, self.FirstChunk, 4); err != nil {
 		return
 	}
@@ -1112,7 +1096,7 @@ type CompositionOffset struct {
 }
 
 func ReadCompositionOffset(r *io.LimitedReader) (res *CompositionOffset, err error) {
-	log.Println("ReadCompositionOffset")
+
 	self := &CompositionOffset{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
@@ -1134,7 +1118,7 @@ func ReadCompositionOffset(r *io.LimitedReader) (res *CompositionOffset, err err
 	return
 }
 func WriteCompositionOffset(w io.WriteSeeker, self *CompositionOffset) (err error) {
-	log.Println("WriteCompositionOffset")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "ctts"); err != nil {
 		return
@@ -1166,7 +1150,7 @@ type CompositionOffsetEntry struct {
 }
 
 func ReadCompositionOffsetEntry(r *io.LimitedReader) (self CompositionOffsetEntry, err error) {
-	log.Println("ReadCompositionOffsetEntry")
+
 	if self.Count, err = ReadInt(r, 4); err != nil {
 		return
 	}
@@ -1176,7 +1160,7 @@ func ReadCompositionOffsetEntry(r *io.LimitedReader) (self CompositionOffsetEntr
 	return
 }
 func WriteCompositionOffsetEntry(w io.WriteSeeker, self CompositionOffsetEntry) (err error) {
-	log.Println("WriteCompositionOffsetEntry")
+
 	if err = WriteInt(w, self.Count, 4); err != nil {
 		return
 	}
@@ -1193,7 +1177,7 @@ type SyncSample struct {
 }
 
 func ReadSyncSample(r *io.LimitedReader) (res *SyncSample, err error) {
-	log.Println("ReadSyncSample")
+
 	self := &SyncSample{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
@@ -1215,7 +1199,7 @@ func ReadSyncSample(r *io.LimitedReader) (res *SyncSample, err error) {
 	return
 }
 func WriteSyncSample(w io.WriteSeeker, self *SyncSample) (err error) {
-	log.Println("WriteSyncSample")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "stss"); err != nil {
 		return
@@ -1249,7 +1233,7 @@ type SampleSize struct {
 }
 
 func ReadSampleSize(r *io.LimitedReader) (res *SampleSize, err error) {
-	log.Println("ReadSampleSize")
+
 	self := &SampleSize{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
@@ -1274,7 +1258,7 @@ func ReadSampleSize(r *io.LimitedReader) (res *SampleSize, err error) {
 	return
 }
 func WriteSampleSize(w io.WriteSeeker, self *SampleSize) (err error) {
-	log.Println("WriteSampleSize")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "stsz"); err != nil {
 		return
@@ -1310,7 +1294,7 @@ type ChunkOffset struct {
 }
 
 func ReadChunkOffset(r *io.LimitedReader) (res *ChunkOffset, err error) {
-	log.Println("ReadChunkOffset")
+
 	self := &ChunkOffset{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
@@ -1332,7 +1316,7 @@ func ReadChunkOffset(r *io.LimitedReader) (res *ChunkOffset, err error) {
 	return
 }
 func WriteChunkOffset(w io.WriteSeeker, self *ChunkOffset) (err error) {
-	log.Println("WriteChunkOffset")
+
 	var aw *Writer
 	if aw, err = WriteAtomHeader(w, "stco"); err != nil {
 		return
@@ -1353,6 +1337,115 @@ func WriteChunkOffset(w io.WriteSeeker, self *ChunkOffset) (err error) {
 		}
 	}
 	if err = aw.Close(); err != nil {
+		return
+	}
+	return
+}
+
+type VideoSampleDescHeader struct {
+	Version              int
+	Revision             int
+	Vendor               int
+	TemporalQuality      int
+	SpatialQuality       int
+	Width                int
+	Height               int
+	HorizontalResolution Fixed
+	VorizontalResolution Fixed
+	CompressorName       string
+	FrameCount           int
+	Depth                int
+	ColorTableId         int
+}
+
+func ReadVideoSampleDescHeader(r *io.LimitedReader) (self VideoSampleDescHeader, err error) {
+
+	if self.Version, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.Revision, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.Vendor, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	if self.TemporalQuality, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	if self.SpatialQuality, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	if self.Width, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.Height, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.HorizontalResolution, err = ReadFixed(r, 4); err != nil {
+		return
+	}
+	if self.VorizontalResolution, err = ReadFixed(r, 4); err != nil {
+		return
+	}
+	if _, err = ReadDummy(r, 4); err != nil {
+		return
+	}
+	if self.CompressorName, err = ReadString(r, 32); err != nil {
+		return
+	}
+	if self.FrameCount, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.Depth, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.ColorTableId, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	return
+}
+func WriteVideoSampleDescHeader(w io.WriteSeeker, self VideoSampleDescHeader) (err error) {
+
+	if err = WriteInt(w, self.Version, 2); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Revision, 2); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Vendor, 4); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.TemporalQuality, 4); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.SpatialQuality, 4); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Width, 2); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Height, 2); err != nil {
+		return
+	}
+	if err = WriteFixed(w, self.HorizontalResolution, 4); err != nil {
+		return
+	}
+	if err = WriteFixed(w, self.VorizontalResolution, 4); err != nil {
+		return
+	}
+	if err = WriteDummy(w, 4); err != nil {
+		return
+	}
+	if err = WriteString(w, self.CompressorName, 32); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.FrameCount, 2); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Depth, 2); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.ColorTableId, 2); err != nil {
 		return
 	}
 	return

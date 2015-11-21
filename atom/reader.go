@@ -7,9 +7,6 @@ import (
 	"log"
 )
 
-type Fixed32 uint32
-type TimeStamp uint32
-
 func ReadBytes(r io.Reader, n int) (res []byte, err error) {
 	res = make([]byte, n)
 	if n, err = r.Read(res); err != nil {
@@ -39,12 +36,12 @@ func ReadInt(r io.Reader, n int) (res int, err error) {
 	return
 }
 
-func ReadFixed32(r io.Reader, n int) (res Fixed32, err error) {
+func ReadFixed(r io.Reader, n int) (res Fixed, err error) {
 	var ui uint
 	if ui, err = ReadUInt(r, n); err != nil {
 		return
 	}
-	res = Fixed32(ui)
+	res = Fixed(ui)
 	return
 }
 

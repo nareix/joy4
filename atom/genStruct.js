@@ -24,8 +24,8 @@ var atoms = {
 		fields: [
 			['version', 'int8'],
 			['flags', 'int24'],
-			['cTime', 'TimeStamp32'],
-			['mTime', 'TimeStamp32'],
+			['createTime', 'TimeStamp32'],
+			['modifyTime', 'TimeStamp32'],
 			['timeScale', 'TimeStamp32'],
 			['duration', 'TimeStamp32'],
 			['preferredRate', 'int32'],
@@ -55,8 +55,8 @@ var atoms = {
 		fields: [
 			['version', 'int8'],
 			['flags', 'int24'],
-			['cTime', 'TimeStamp32'],
-			['mTime', 'TimeStamp32'],
+			['createTime', 'TimeStamp32'],
+			['modifyTime', 'TimeStamp32'],
 			['trackId', 'TimeStamp32'],
 			['_', '[4]byte'],
 			['duration', 'TimeStamp32'],
@@ -66,8 +66,8 @@ var atoms = {
 			['volume', 'int16'],
 			['_', '[2]byte'],
 			['matrix', '[9]int32'],
-			['trackWidth', 'int32'],
-			['trackHeader', 'int32'],
+			['trackWidth', 'Fixed32'],
+			['trackHeight', 'Fixed32'],
 		],
 	},
 
@@ -89,8 +89,8 @@ var atoms = {
 		fields: [
 			['version', 'int8'],
 			['flags', 'int24'],
-			['cTime', 'int32'],
-			['mTime', 'int32'],
+			['createTime', 'int32'],
+			['modifyTime', 'int32'],
 			['timeScale', 'int32'],
 			['duration', 'int32'],
 			['language', 'int16'],
@@ -223,6 +223,25 @@ var atoms = {
 			['version', 'int8'],
 			['flags', 'int24'],
 			['entries', '[int32]int32'],
+		],
+	},
+
+	videoSampleDescHeader: {
+		fields: [
+			['version', 'int16'],
+			['revision', 'int16'],
+			['vendor', 'int32'],
+			['temporalQuality', 'int32'],
+			['spatialQuality', 'int32'],
+			['width', 'int16'],
+			['height', 'int16'],
+			['horizontalResolution', 'Fixed32'],
+			['vorizontalResolution', 'Fixed32'],
+			['_', 'int32'],
+			['compressorName', '[32]char'],
+			['frameCount', 'int16'],
+			['depth', 'int16'],
+			['colorTableId', 'int16'],
 		],
 	},
 
@@ -386,7 +405,7 @@ D('DeclStruct', 'name', 'body');
 D('StrStmt', 'content');
 D('Switch', 'cond', 'cases', 'default');
 
-var showlog = true;
+var showlog = false;
 var S = s => s && s || '';
 
 var dumpFn = f => {
@@ -439,6 +458,10 @@ var dumpStmts = stmts => {
 var parseType = s => {
 	var r = {};
 	var bracket = /^\[(.*)\]/;
+	var lenDiv = 8;
+	var types = /^(int|TimeStamp|byte|Fixed|char)/;
+	var number = /[0-9]+/;
+
 	if (s.match(bracket)) {
 		var count = s.match(bracket)[1];
 		if (count.substr(0,3) == 'int') {
@@ -449,31 +472,36 @@ var parseType = s => {
 		r.arr = true;
 		s = s.replace(bracket, '');
 	}
+
 	if (s.substr(0,1) == '*') {
 		r.ptr = true;
 		s = s.slice(1);
 	}
-	var types = /^(int|TimeStamp|byte|cc)/;
+
 	if (s.match(types)) {
 		r.type = s.match(types)[0];
 		r.fn = uc(r.type);
 		s = s.replace(types, '');
 	}
+
 	if (r.type == 'byte' && r.arr) {
 		r.len = r.count;
 		r.fn = 'Bytes';
 	}
-	var lenDiv = 8;
-	if (r.type == 'cc') {
+
+	if (r.type == 'char' && r.arr) {
+		r.len = r.count;
 		r.fn = 'String';
 		r.type = 'string';
+		r.arr = false;
 		lenDiv = 1;
 	}
-	var number = /[0-9]+/;
+
 	if (s.match(number)) {
 		r.len = +s.match(number)[0]/lenDiv;
 		s = s.replace(number, '');
 	}
+
 	if (s != '') {
 		r.struct = s;
 		r.Struct = uc(s);
