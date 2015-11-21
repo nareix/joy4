@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	if _, err := mp4.Open("tiny2-avconv.mp4"); err != nil {
+	if _, err := mp4.Open("mid.mp4"); err != nil {
 		log.Println(err)
 		return
 	}

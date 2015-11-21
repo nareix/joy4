@@ -59,14 +59,26 @@ func Open(filename string) (file *File, err error) {
 		}
 
 		if cc4 == "moov" {
+			curPos, _ := outfile.Seek(0, 1)
+			origSize := ar.N+8
 			var moov *atom.Movie
 			if moov, err = atom.ReadMovie(ar); err != nil {
 				return
 			}
-			log.Println("regen moov", "tracks nr", len(moov.Tracks))
 			if err = atom.WriteMovie(outfile, moov); err != nil {
 				return
 			}
+			curPosAfterRead, _ := outfile.Seek(0, 1)
+			bytesWritten := curPosAfterRead - curPos
+
+			log.Println("regen moov", "tracks nr", len(moov.Tracks),
+				"origSize", origSize, "bytesWritten", bytesWritten,
+			)
+
+			padSize := origSize - bytesWritten - 8
+			aw, _ := atom.WriteAtomHeader(outfile, "free")
+			atom.WriteDummy(outfile, int(padSize))
+			aw.Close()
 		} else {
 			var aw *atom.Writer
 			if aw, err = atom.WriteAtomHeader(outfile, cc4); err != nil {
