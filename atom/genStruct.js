@@ -71,11 +71,16 @@ var atoms = {
 		],
 	},
 
+	handlerRefer: {
+		cc4: 'hdlr',
+	},
+
 	media: {
 		cc4: 'mdia',
 		atoms: [
 			['header', '*mediaHeader'],
 			['info', '*mediaInfo'],
+			['hdlr', '*handlerRefer'],
 		],
 	},
 
@@ -182,7 +187,7 @@ var atoms = {
 		fields: [
 			['version', 'int8'],
 			['flags', 'int24'],
-			['entries', '[int32]int32'],
+			['entries', '[int32]compositionOffsetEntry'],
 		],
 	},
 
@@ -207,6 +212,7 @@ var atoms = {
 		fields: [
 			['version', 'int8'],
 			['flags', 'int24'],
+			['sampleSize', 'int32'],
 			['entries', '[int32]int32'],
 		],
 	},
@@ -225,7 +231,7 @@ var atoms = {
 var DeclReadFunc = (opts) => {
 	var stmts = [];
 
-	var DebugStmt = type => StrStmt(`// ${JSON.stringify(type)}`);
+	var DebugStmt = type => `// ${JSON.stringify(type)}`;
 
 	var ReadArr = (name, type) => {
 		return [
@@ -234,7 +240,7 @@ var DeclReadFunc = (opts) => {
 			type.varcount && [
 				DeclVar('count', 'int'),
 				CallCheckAssign('ReadInt', ['r', type.varcount], ['count']),
-				StrStmt(`${name} = make(${typeStr(type)}, count)`),
+				`${name} = make(${typeStr(type)}, count)`,
 			],
 			For(RangeN('i', type.varcount ? 'count' : type.count), [
 				ReadCommnType(name+'[i]', type),
@@ -244,8 +250,7 @@ var DeclReadFunc = (opts) => {
 
 	var elemTypeStr = type => typeStr(Object.assign({}, type, {arr: false}));
 	var ReadAtoms = () => [
-		StrStmt(`// ReadAtoms`),
-		For(StrStmt(`r.N > 0`), [
+		For(`r.N > 0`, [
 			DeclVar('cc4', 'string'),
 			DeclVar('ar', '*io.LimitedReader'),
 			CallCheckAssign('ReadAtomHeader', ['r', '""'], ['ar', 'cc4']),
@@ -254,12 +259,12 @@ var DeclReadFunc = (opts) => {
 					field.type.arr ? [
 						DeclVar('item', elemTypeStr(field.type)),
 						CallCheckAssign('Read'+field.type.Struct, ['ar'], ['item']),
-						StrStmt(`self.${field.name} = append(self.${field.name}, item)`),
+						`self.${field.name} = append(self.${field.name}, item)`,
 					] : [
 						CallCheckAssign('Read'+field.type.Struct, ['ar'], [`self.${field.name}`]),
 					],
 				]
-			]), showlog && [StrStmt(`log.Println("skip", cc4)`)]),
+			]), showlog && [`log.Println("skip", cc4)`]),
 			CallCheckAssign('ReadDummy', ['ar', 'int(ar.N)'], ['_']),
 		])
 	];
@@ -296,9 +301,70 @@ var DeclReadFunc = (opts) => {
 		[['r', '*io.LimitedReader']],
 		[[ptr?'res':'self', (ptr?'*':'')+opts.type], ['err', 'error']],
 		[ 
-			ptr && StrStmt(`self := &${opts.type}{}`),
+			ptr && `self := &${opts.type}{}`,
 			!opts.atoms ? ReadFields() : ReadAtoms(),
-			ptr && StrStmt(`res = self`),
+			ptr && `res = self`,
+		]
+	);
+};
+
+var DeclWriteFunc = (opts) => {
+	var SavePos = [
+		DeclVar('aw', '*Writer'),
+		CallCheckAssign('WriteAtomHeader', ['w', `"${opts.cc4}"`], ['aw']),
+		`w = aw`,
+	];
+
+	var RestorePosSetSize = [
+		CallCheckAssign('aw.Close', [], []),
+	];
+
+	var WriteAtoms = () => opts.fields.map(field => {
+		var name = 'self.'+field.name;
+		return [
+			`if ${name} != nil {`,
+			field.type.arr ? WriteArr(name, field.type) : WriteCommnType(name, field.type),
+			`}`,
+		];
+	});
+
+	var WriteArr = (name, type) => {
+		return [
+			type.varcount && CallCheckAssign('WriteInt', ['w', `len(${name})`, type.varcount], []),
+			For(`_, elem := range ${name}`, [
+				WriteCommnType('elem', type),
+			]),
+		];
+	};
+
+	var WriteCommnType = (name, type) => {
+		if (type.struct)
+			return CallCheckAssign(
+				'Write'+type.Struct, ['w', name], []);
+		return [
+			CallCheckAssign(
+				'Write'+type.fn, ['w', name, type.len].nonull(), []),
+		]
+	};
+
+	var WriteField = (name, type) => {
+		if (name == '_')
+			return CallCheckAssign('WriteDummy', ['w', type.len], []);
+		if (type.arr && type.fn != 'Bytes')
+			return WriteArr('self.'+name, type);
+		return WriteCommnType('self.'+name, type);
+	};
+
+	var WriteFields = () => opts.fields.map(field => WriteField(field.name, field.type));
+
+	return Func(
+		'Write'+opts.type,
+		[['w', 'io.WriteSeeker'], ['self', (opts.cc4?'*':'')+opts.type]],
+		[['err', 'error']],
+		[
+			opts.cc4 && SavePos,
+			opts.atoms ? WriteAtoms() : WriteFields(),
+			opts.cc4 && RestorePosSetSize,
 		]
 	);
 };
@@ -320,7 +386,7 @@ D('DeclStruct', 'name', 'body');
 D('StrStmt', 'content');
 D('Switch', 'cond', 'cases', 'default');
 
-var showlog = false;
+var showlog = true;
 var S = s => s && s || '';
 
 var dumpFn = f => {
@@ -334,7 +400,9 @@ var dumpFn = f => {
 
 var dumpStmts = stmts => {
 	var dumpStmt = stmt => {
-		if (stmt instanceof Array) {
+		if (typeof(stmt) == 'string') {
+			return stmt;
+		} else if (stmt instanceof Array) {
 			return dumpStmts(stmt);
 		} if (stmt.cls == 'CallCheckAssign') {
 			return `if ${stmt.rets.concat(['err']).join(',')} = ${stmt.fn}(${stmt.args.join(',')}); err != nil {
@@ -433,9 +501,13 @@ var allStmts = () => {
 
 	for (var k in atoms) {
 		var atom = atoms[k];
-
 		var name = uc(k);
-		var fields = (atom.fields || atom.atoms).map(field => {
+
+		var fields = (atom.fields || atom.atoms);
+		if (fields == null)
+			continue;
+
+		fields = fields.map(field => {
 			return {
 				name: uc(field[0]),
 				type: parseType(field[1]),
@@ -449,6 +521,13 @@ var allStmts = () => {
 			]).nonull()),
 
 			DeclReadFunc({
+				type: name,
+				fields: fields,
+				cc4: atom.cc4,
+				atoms: atom.atoms != null,
+			}),
+
+			DeclWriteFunc({
 				type: name,
 				fields: fields,
 				cc4: atom.cc4,

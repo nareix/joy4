@@ -45,24 +45,47 @@ func Open(filename string) (file *File, err error) {
 
 	lr := &io.LimitedReader{R: osfile, N: finfo.Size()}
 
-	for lr.N > 0 {
-		var r *io.LimitedReader
-		var cc4 string
-		if r, cc4, err = atom.ReadAtomHeader(lr, ""); err != nil {
-			return
-		}
-		if cc4 == "moov" {
-			var moov *atom.Movie
-			if moov, err = atom.ReadMovie(r); err != nil {
-				return
-			}
-			log.Println("tracks nr", len(moov.Tracks))
-		}
-		log.Println("atom", cc4, "left", lr.N)
-		atom.ReadDummy(r, int(r.N))
+	var outfile *os.File
+	if outfile, err = os.Create(filename+".out.mp4"); err != nil {
+		return
 	}
 
-	if _, err = os.Create(filename+".out.mp4"); err != nil {
+	for lr.N > 0 {
+		var ar *io.LimitedReader
+
+		var cc4 string
+		if ar, cc4, err = atom.ReadAtomHeader(lr, ""); err != nil {
+			return
+		}
+
+		if cc4 == "moov" {
+			var moov *atom.Movie
+			if moov, err = atom.ReadMovie(ar); err != nil {
+				return
+			}
+			log.Println("regen moov", "tracks nr", len(moov.Tracks))
+			if err = atom.WriteMovie(outfile, moov); err != nil {
+				return
+			}
+		} else {
+			var aw *atom.Writer
+			if aw, err = atom.WriteAtomHeader(outfile, cc4); err != nil {
+				return
+			}
+			log.Println("copy", cc4)
+			if _, err = io.CopyN(aw, ar, ar.N); err != nil {
+				return
+			}
+			if err = aw.Close(); err != nil {
+				return
+			}
+		}
+
+		//log.Println("atom", cc4, "left", lr.N)
+		//atom.ReadDummy(ar, int(ar.N))
+	}
+
+	if err = outfile.Close(); err != nil {
 		return
 	}
 
