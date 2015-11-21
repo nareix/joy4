@@ -4,6 +4,7 @@ package atom
 import (
 	"io"
 	"io/ioutil"
+	"log"
 )
 
 type Fixed32 uint32
@@ -15,10 +16,6 @@ func ReadBytes(r io.Reader, n int) (res []byte, err error) {
 		return
 	}
 	return
-}
-
-func ReadBytesLeft(r *io.LimitedReader) (res []byte, err error) {
-	return ReadBytes(r, int(r.N))
 }
 
 func ReadUInt(r io.Reader, n int) (res uint, err error) {
@@ -74,42 +71,38 @@ func ReadDummy(r io.Reader, n int) (res int, err error) {
 	return
 }
 
-/*
-func (self Reader) ReadAtom(atom Atom) (res Atom, err error) {
+func ReadAtomHeader(r io.Reader, targetCC4 string) (res *io.LimitedReader, cc4 string, err error) {
 	for {
 		var size int
-		if size, err = self.ReadInt(4); err != nil {
+		if size, err = ReadInt(r, 4); err != nil {
 			return
 		}
 		if size == 0 {
 			continue
 		}
 
-		var cc4 string
-		if cc4, err = self.ReadString(4); err != nil {
+		if cc4, err = ReadString(r, 4); err != nil {
 			return
 		}
-		if atom.CC4() != cc4 {
-			if err = self.Skip(size); err != nil {
+		size = size - 8
+
+		if false {
+			log.Println(cc4, targetCC4, size, cc4 == targetCC4)
+		}
+
+		if targetCC4 != "" && cc4 != targetCC4 {
+			log.Println("ReadAtomHeader skip:", cc4)
+			if _, err = ReadDummy(r, size); err != nil {
 				return
 			}
 			continue
 		}
 
-		reader := &io.LimitedReader{
-			R: self.Reader,
-			N: int64(size - 8),
+		res = &io.LimitedReader{
+			R: r,
+			N: int64(size),
 		}
-		if err = atom.Read(Reader{reader}); err != nil {
-			return
-		}
-		if err = self.Skip(int(reader.N)); err != nil {
-			return
-		}
-
-		res = atom
 		return
 	}
 }
-*/
 

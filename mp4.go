@@ -4,11 +4,11 @@ package mp4
 import (
 	"./atom"
 	"os"
+	"io"
+	"log"
 )
 
 type File struct {
-	moov *atom.Moov
-	ftyp *atom.Ftyp
 }
 
 func (self *File) AddAvcc(avcc *Avcc) {
@@ -37,19 +37,34 @@ func Open(filename string) (file *File, err error) {
 		return
 	}
 
-	var entry atom.Atom
-	file = &File{}
-	r := atom.Reader{osfile}
-
-	if entry, err = r.ReadAtom(&atom.Ftyp{}); err != nil {
+	var finfo os.FileInfo
+	if finfo, err = osfile.Stat(); err != nil {
 		return
 	}
-	file.ftyp = entry.(*atom.Ftyp)
+	log.Println("filesize", finfo.Size())
 
-	if entry, err = r.ReadAtom(&atom.Moov{}); err != nil {
+	lr := &io.LimitedReader{R: osfile, N: finfo.Size()}
+
+	for lr.N > 0 {
+		var r *io.LimitedReader
+		var cc4 string
+		if r, cc4, err = atom.ReadAtomHeader(lr, ""); err != nil {
+			return
+		}
+		if cc4 == "moov" {
+			var moov *atom.Movie
+			if moov, err = atom.ReadMovie(r); err != nil {
+				return
+			}
+			log.Println("tracks nr", len(moov.Tracks))
+		}
+		log.Println("atom", cc4, "left", lr.N)
+		atom.ReadDummy(r, int(r.N))
+	}
+
+	if _, err = os.Create(filename+".out.mp4"); err != nil {
 		return
 	}
-	file.moov = entry.(*atom.Moov)
 
 	return
 }

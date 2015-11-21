@@ -5,50 +5,67 @@ import (
 	"io"
 )
 
-type FileTypeAtom struct {
-	Movie *MovieAtom
+type FileType struct {
 }
 
-func ReadFileTypeAtom(r *io.LimitedReader) (res *FileTypeAtom, err error) {
-	self := &FileTypeAtom{}
-	if self.Movie, err = ReadMovieAtom(r); err != nil {
-		return
-	}
+func ReadFileType(r *io.LimitedReader) (res *FileType, err error) {
+
+	self := &FileType{}
+
 	res = self
 	return
 }
 
-type MovieAtom struct {
-	Header *MovieHeaderAtom
-	Tracks []*TrackAtom
+type Movie struct {
+	Header *MovieHeader
+	Tracks []*Track
 }
 
-func ReadMovieAtom(r *io.LimitedReader) (res *MovieAtom, err error) {
-	self := &MovieAtom{}
-	if self.Header, err = ReadMovieHeaderAtom(r); err != nil {
-		return
-	}
+func ReadMovie(r *io.LimitedReader) (res *Movie, err error) {
+
+	self := &Movie{}
+	// ReadAtoms
 	for r.N > 0 {
-		var item *TrackAtom
-		if item, err = ReadTrackAtom(r); err != nil {
+		var cc4 string
+		var ar *io.LimitedReader
+		if ar, cc4, err = ReadAtomHeader(r, ""); err != nil {
 			return
 		}
-		self.Tracks = append(self.Tracks, item)
+		switch cc4 {
+		case "mvhd":
+			{
+				if self.Header, err = ReadMovieHeader(ar); err != nil {
+					return
+				}
+			}
+		case "trak":
+			{
+				var item *Track
+				if item, err = ReadTrack(ar); err != nil {
+					return
+				}
+				self.Tracks = append(self.Tracks, item)
+			}
+
+		}
+		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
+			return
+		}
 	}
 	res = self
 	return
 }
 
-type MovieHeaderAtom struct {
+type MovieHeader struct {
 	Version           int
 	Flags             int
 	CTime             TimeStamp
 	MTime             TimeStamp
-	TimeScale         int
-	Duration          int
+	TimeScale         TimeStamp
+	Duration          TimeStamp
 	PreferredRate     int
 	PreferredVolume   int
-	Matrix            []byte
+	Matrix            [9]int
 	PreviewTime       TimeStamp
 	PreviewDuration   TimeStamp
 	PosterTime        TimeStamp
@@ -58,8 +75,9 @@ type MovieHeaderAtom struct {
 	NextTrackId       int
 }
 
-func ReadMovieHeaderAtom(r *io.LimitedReader) (res *MovieHeaderAtom, err error) {
-	self := &MovieHeaderAtom{}
+func ReadMovieHeader(r *io.LimitedReader) (res *MovieHeader, err error) {
+
+	self := &MovieHeader{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
 	}
@@ -72,10 +90,10 @@ func ReadMovieHeaderAtom(r *io.LimitedReader) (res *MovieHeaderAtom, err error) 
 	if self.MTime, err = ReadTimeStamp(r, 4); err != nil {
 		return
 	}
-	if self.TimeScale, err = ReadInt(r, 4); err != nil {
+	if self.TimeScale, err = ReadTimeStamp(r, 4); err != nil {
 		return
 	}
-	if self.Duration, err = ReadInt(r, 4); err != nil {
+	if self.Duration, err = ReadTimeStamp(r, 4); err != nil {
 		return
 	}
 	if self.PreferredRate, err = ReadInt(r, 4); err != nil {
@@ -84,8 +102,13 @@ func ReadMovieHeaderAtom(r *io.LimitedReader) (res *MovieHeaderAtom, err error) 
 	if self.PreferredVolume, err = ReadInt(r, 2); err != nil {
 		return
 	}
-	if self.Matrix, err = ReadBytes(r, 36); err != nil {
+	if _, err = ReadDummy(r, 10); err != nil {
 		return
+	}
+	for i := 0; i < 9; i++ {
+		if self.Matrix[i], err = ReadInt(r, 4); err != nil {
+			return
+		}
 	}
 	if self.PreviewTime, err = ReadTimeStamp(r, 4); err != nil {
 		return
@@ -112,40 +135,62 @@ func ReadMovieHeaderAtom(r *io.LimitedReader) (res *MovieHeaderAtom, err error) 
 	return
 }
 
-type TrackAtom struct {
-	Header *TrackHeaderAtom
-	Media  *MediaAtom
+type Track struct {
+	Header *TrackHeader
+	Media  *Media
 }
 
-func ReadTrackAtom(r *io.LimitedReader) (res *TrackAtom, err error) {
-	self := &TrackAtom{}
-	if self.Header, err = ReadTrackHeaderAtom(r); err != nil {
-		return
-	}
-	if self.Media, err = ReadMediaAtom(r); err != nil {
-		return
+func ReadTrack(r *io.LimitedReader) (res *Track, err error) {
+
+	self := &Track{}
+	// ReadAtoms
+	for r.N > 0 {
+		var cc4 string
+		var ar *io.LimitedReader
+		if ar, cc4, err = ReadAtomHeader(r, ""); err != nil {
+			return
+		}
+		switch cc4 {
+		case "tkhd":
+			{
+				if self.Header, err = ReadTrackHeader(ar); err != nil {
+					return
+				}
+			}
+		case "mdia":
+			{
+				if self.Media, err = ReadMedia(ar); err != nil {
+					return
+				}
+			}
+
+		}
+		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
+			return
+		}
 	}
 	res = self
 	return
 }
 
-type TrackHeaderAtom struct {
+type TrackHeader struct {
 	Version        int
 	Flags          int
 	CTime          TimeStamp
 	MTime          TimeStamp
-	TrackId        int
-	Duration       int
+	TrackId        TimeStamp
+	Duration       TimeStamp
 	Layer          int
 	AlternateGroup int
 	Volume         int
-	Matrix         []byte
-	TrackWidth     Fixed32
-	TrackHeight    Fixed32
+	Matrix         [9]int
+	TrackWidth     int
+	TrackHeader    int
 }
 
-func ReadTrackHeaderAtom(r *io.LimitedReader) (res *TrackHeaderAtom, err error) {
-	self := &TrackHeaderAtom{}
+func ReadTrackHeader(r *io.LimitedReader) (res *TrackHeader, err error) {
+
+	self := &TrackHeader{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
 	}
@@ -158,10 +203,16 @@ func ReadTrackHeaderAtom(r *io.LimitedReader) (res *TrackHeaderAtom, err error) 
 	if self.MTime, err = ReadTimeStamp(r, 4); err != nil {
 		return
 	}
-	if self.TrackId, err = ReadInt(r, 4); err != nil {
+	if self.TrackId, err = ReadTimeStamp(r, 4); err != nil {
 		return
 	}
-	if self.Duration, err = ReadInt(r, 4); err != nil {
+	if _, err = ReadDummy(r, 4); err != nil {
+		return
+	}
+	if self.Duration, err = ReadTimeStamp(r, 4); err != nil {
+		return
+	}
+	if _, err = ReadDummy(r, 8); err != nil {
 		return
 	}
 	if self.Layer, err = ReadInt(r, 2); err != nil {
@@ -173,59 +224,86 @@ func ReadTrackHeaderAtom(r *io.LimitedReader) (res *TrackHeaderAtom, err error) 
 	if self.Volume, err = ReadInt(r, 2); err != nil {
 		return
 	}
-	if self.Matrix, err = ReadBytes(r, 36); err != nil {
+	if _, err = ReadDummy(r, 2); err != nil {
 		return
 	}
-	if self.TrackWidth, err = ReadFixed32(r, 4); err != nil {
+	for i := 0; i < 9; i++ {
+		if self.Matrix[i], err = ReadInt(r, 4); err != nil {
+			return
+		}
+	}
+	if self.TrackWidth, err = ReadInt(r, 4); err != nil {
 		return
 	}
-	if self.TrackHeight, err = ReadFixed32(r, 4); err != nil {
-		return
-	}
-	res = self
-	return
-}
-
-type MediaAtom struct {
-	Header *MediaHeaderAtom
-	Info   *MediaInfoAtom
-}
-
-func ReadMediaAtom(r *io.LimitedReader) (res *MediaAtom, err error) {
-	self := &MediaAtom{}
-	if self.Header, err = ReadMediaHeaderAtom(r); err != nil {
-		return
-	}
-	if self.Info, err = ReadMediaInfoAtom(r); err != nil {
+	if self.TrackHeader, err = ReadInt(r, 4); err != nil {
 		return
 	}
 	res = self
 	return
 }
 
-type MediaHeaderAtom struct {
+type Media struct {
+	Header *MediaHeader
+	Info   *MediaInfo
+}
+
+func ReadMedia(r *io.LimitedReader) (res *Media, err error) {
+
+	self := &Media{}
+	// ReadAtoms
+	for r.N > 0 {
+		var cc4 string
+		var ar *io.LimitedReader
+		if ar, cc4, err = ReadAtomHeader(r, ""); err != nil {
+			return
+		}
+		switch cc4 {
+		case "mdhd":
+			{
+				if self.Header, err = ReadMediaHeader(ar); err != nil {
+					return
+				}
+			}
+		case "minf":
+			{
+				if self.Info, err = ReadMediaInfo(ar); err != nil {
+					return
+				}
+			}
+
+		}
+		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
+			return
+		}
+	}
+	res = self
+	return
+}
+
+type MediaHeader struct {
 	Version   int
 	Flags     int
-	CTime     TimeStamp
-	MTime     TimeStamp
+	CTime     int
+	MTime     int
 	TimeScale int
 	Duration  int
 	Language  int
 	Quality   int
 }
 
-func ReadMediaHeaderAtom(r *io.LimitedReader) (res *MediaHeaderAtom, err error) {
-	self := &MediaHeaderAtom{}
+func ReadMediaHeader(r *io.LimitedReader) (res *MediaHeader, err error) {
+
+	self := &MediaHeader{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
 	}
 	if self.Flags, err = ReadInt(r, 3); err != nil {
 		return
 	}
-	if self.CTime, err = ReadTimeStamp(r, 4); err != nil {
+	if self.CTime, err = ReadInt(r, 4); err != nil {
 		return
 	}
-	if self.MTime, err = ReadTimeStamp(r, 4); err != nil {
+	if self.MTime, err = ReadInt(r, 4); err != nil {
 		return
 	}
 	if self.TimeScale, err = ReadInt(r, 4); err != nil {
@@ -244,32 +322,86 @@ func ReadMediaHeaderAtom(r *io.LimitedReader) (res *MediaHeaderAtom, err error) 
 	return
 }
 
-type MediaInfoAtom struct {
-	Video  *VideoMediaInfoAtom
-	Sample *SampleTableAtom
+type MediaInfo struct {
+	Sound  *SoundMediaInfo
+	Video  *VideoMediaInfo
+	Sample *SampleTable
 }
 
-func ReadMediaInfoAtom(r *io.LimitedReader) (res *MediaInfoAtom, err error) {
-	self := &MediaInfoAtom{}
-	if self.Video, err = ReadVideoMediaInfoAtom(r); err != nil {
+func ReadMediaInfo(r *io.LimitedReader) (res *MediaInfo, err error) {
+
+	self := &MediaInfo{}
+	// ReadAtoms
+	for r.N > 0 {
+		var cc4 string
+		var ar *io.LimitedReader
+		if ar, cc4, err = ReadAtomHeader(r, ""); err != nil {
+			return
+		}
+		switch cc4 {
+		case "smhd":
+			{
+				if self.Sound, err = ReadSoundMediaInfo(ar); err != nil {
+					return
+				}
+			}
+		case "vmhd":
+			{
+				if self.Video, err = ReadVideoMediaInfo(ar); err != nil {
+					return
+				}
+			}
+		case "stbl":
+			{
+				if self.Sample, err = ReadSampleTable(ar); err != nil {
+					return
+				}
+			}
+
+		}
+		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
+			return
+		}
+	}
+	res = self
+	return
+}
+
+type SoundMediaInfo struct {
+	Version int
+	Flags   int
+	Balance int
+}
+
+func ReadSoundMediaInfo(r *io.LimitedReader) (res *SoundMediaInfo, err error) {
+
+	self := &SoundMediaInfo{}
+	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
 	}
-	if self.Sample, err = ReadSampleTableAtom(r); err != nil {
+	if self.Flags, err = ReadInt(r, 3); err != nil {
+		return
+	}
+	if self.Balance, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if _, err = ReadDummy(r, 2); err != nil {
 		return
 	}
 	res = self
 	return
 }
 
-type VideoMediaInfoAtom struct {
+type VideoMediaInfo struct {
 	Version      int
 	Flags        int
 	GraphicsMode int
-	Opcolor      []int
+	Opcolor      [3]int
 }
 
-func ReadVideoMediaInfoAtom(r *io.LimitedReader) (res *VideoMediaInfoAtom, err error) {
-	self := &VideoMediaInfoAtom{}
+func ReadVideoMediaInfo(r *io.LimitedReader) (res *VideoMediaInfo, err error) {
+
+	self := &VideoMediaInfo{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
 	}
@@ -280,57 +412,96 @@ func ReadVideoMediaInfoAtom(r *io.LimitedReader) (res *VideoMediaInfoAtom, err e
 		return
 	}
 	for i := 0; i < 3; i++ {
-		var item int
-		if item, err = ReadInt(r, 2); err != nil {
+		if self.Opcolor[i], err = ReadInt(r, 2); err != nil {
 			return
 		}
-		self.Opcolor = append(self.Opcolor, item)
 	}
 	res = self
 	return
 }
 
-type SampleTableAtom struct {
-	SampleDesc        *SampleDescAtom
-	TimeToSample      *TimeToSampleAtom
-	CompositionOffset *CompositionOffsetAtom
-	SyncSample        *SyncSampleAtom
-	SampleSize        *SampleSizeAtom
-	ChunkOffset       *ChunkOffsetAtom
+type SampleTable struct {
+	SampleDesc        *SampleDesc
+	TimeToSample      *TimeToSample
+	CompositionOffset *CompositionOffset
+	SampleToChunk     *SampleToChunk
+	SyncSample        *SyncSample
+	ChunkOffset       *ChunkOffset
+	SampleSize        *SampleSize
 }
 
-func ReadSampleTableAtom(r *io.LimitedReader) (res *SampleTableAtom, err error) {
-	self := &SampleTableAtom{}
-	if self.SampleDesc, err = ReadSampleDescAtom(r); err != nil {
-		return
-	}
-	if self.TimeToSample, err = ReadTimeToSampleAtom(r); err != nil {
-		return
-	}
-	if self.CompositionOffset, err = ReadCompositionOffsetAtom(r); err != nil {
-		return
-	}
-	if self.SyncSample, err = ReadSyncSampleAtom(r); err != nil {
-		return
-	}
-	if self.SampleSize, err = ReadSampleSizeAtom(r); err != nil {
-		return
-	}
-	if self.ChunkOffset, err = ReadChunkOffsetAtom(r); err != nil {
-		return
+func ReadSampleTable(r *io.LimitedReader) (res *SampleTable, err error) {
+
+	self := &SampleTable{}
+	// ReadAtoms
+	for r.N > 0 {
+		var cc4 string
+		var ar *io.LimitedReader
+		if ar, cc4, err = ReadAtomHeader(r, ""); err != nil {
+			return
+		}
+		switch cc4 {
+		case "stsd":
+			{
+				if self.SampleDesc, err = ReadSampleDesc(ar); err != nil {
+					return
+				}
+			}
+		case "stts":
+			{
+				if self.TimeToSample, err = ReadTimeToSample(ar); err != nil {
+					return
+				}
+			}
+		case "ctts":
+			{
+				if self.CompositionOffset, err = ReadCompositionOffset(ar); err != nil {
+					return
+				}
+			}
+		case "stsc":
+			{
+				if self.SampleToChunk, err = ReadSampleToChunk(ar); err != nil {
+					return
+				}
+			}
+		case "stss":
+			{
+				if self.SyncSample, err = ReadSyncSample(ar); err != nil {
+					return
+				}
+			}
+		case "stco":
+			{
+				if self.ChunkOffset, err = ReadChunkOffset(ar); err != nil {
+					return
+				}
+			}
+		case "stsz":
+			{
+				if self.SampleSize, err = ReadSampleSize(ar); err != nil {
+					return
+				}
+			}
+
+		}
+		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
+			return
+		}
 	}
 	res = self
 	return
 }
 
-type SampleDescAtom struct {
+type SampleDesc struct {
 	Version int
 	Flags   int
-	Entries []SampleDescEntry
+	Entries []*SampleDescEntry
 }
 
-func ReadSampleDescAtom(r *io.LimitedReader) (res *SampleDescAtom, err error) {
-	self := &SampleDescAtom{}
+func ReadSampleDesc(r *io.LimitedReader) (res *SampleDesc, err error) {
+
+	self := &SampleDesc{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
 	}
@@ -341,25 +512,25 @@ func ReadSampleDescAtom(r *io.LimitedReader) (res *SampleDescAtom, err error) {
 	if count, err = ReadInt(r, 4); err != nil {
 		return
 	}
+	self.Entries = make([]*SampleDescEntry, count)
 	for i := 0; i < count; i++ {
-		var item SampleDescEntry
-		if item, err = ReadSampleDescEntry(r); err != nil {
+		if self.Entries[i], err = ReadSampleDescEntry(r); err != nil {
 			return
 		}
-		self.Entries = append(self.Entries, item)
 	}
 	res = self
 	return
 }
 
-type TimeToSampleAtom struct {
+type TimeToSample struct {
 	Version int
 	Flags   int
 	Entries []TimeToSampleEntry
 }
 
-func ReadTimeToSampleAtom(r *io.LimitedReader) (res *TimeToSampleAtom, err error) {
-	self := &TimeToSampleAtom{}
+func ReadTimeToSample(r *io.LimitedReader) (res *TimeToSample, err error) {
+
+	self := &TimeToSample{}
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
 	}
@@ -370,149 +541,13 @@ func ReadTimeToSampleAtom(r *io.LimitedReader) (res *TimeToSampleAtom, err error
 	if count, err = ReadInt(r, 4); err != nil {
 		return
 	}
+	self.Entries = make([]TimeToSampleEntry, count)
 	for i := 0; i < count; i++ {
-		var item TimeToSampleEntry
-		if item, err = ReadTimeToSampleEntry(r); err != nil {
+		if self.Entries[i], err = ReadTimeToSampleEntry(r); err != nil {
 			return
 		}
-		self.Entries = append(self.Entries, item)
 	}
 	res = self
-	return
-}
-
-type CompositionOffsetAtom struct {
-	Version int
-	Flags   int
-	Entries []CompositionOffsetEntry
-}
-
-func ReadCompositionOffsetAtom(r *io.LimitedReader) (res *CompositionOffsetAtom, err error) {
-	self := &CompositionOffsetAtom{}
-	if self.Version, err = ReadInt(r, 1); err != nil {
-		return
-	}
-	if self.Flags, err = ReadInt(r, 3); err != nil {
-		return
-	}
-	var count int
-	if count, err = ReadInt(r, 4); err != nil {
-		return
-	}
-	for i := 0; i < count; i++ {
-		var item CompositionOffsetEntry
-		if item, err = ReadCompositionOffsetEntry(r); err != nil {
-			return
-		}
-		self.Entries = append(self.Entries, item)
-	}
-	res = self
-	return
-}
-
-type SyncSampleAtom struct {
-	Version int
-	Flags   int
-	Entries []int
-}
-
-func ReadSyncSampleAtom(r *io.LimitedReader) (res *SyncSampleAtom, err error) {
-	self := &SyncSampleAtom{}
-	if self.Version, err = ReadInt(r, 1); err != nil {
-		return
-	}
-	if self.Flags, err = ReadInt(r, 3); err != nil {
-		return
-	}
-	var count int
-	if count, err = ReadInt(r, 4); err != nil {
-		return
-	}
-	for i := 0; i < count; i++ {
-		var item int
-		if item, err = ReadInt(r, 4); err != nil {
-			return
-		}
-		self.Entries = append(self.Entries, item)
-	}
-	res = self
-	return
-}
-
-type SampleSizeAtom struct {
-	Version int
-	Flags   int
-	Entries []int
-}
-
-func ReadSampleSizeAtom(r *io.LimitedReader) (res *SampleSizeAtom, err error) {
-	self := &SampleSizeAtom{}
-	if self.Version, err = ReadInt(r, 1); err != nil {
-		return
-	}
-	if self.Flags, err = ReadInt(r, 3); err != nil {
-		return
-	}
-	var count int
-	if count, err = ReadInt(r, 4); err != nil {
-		return
-	}
-	for i := 0; i < count; i++ {
-		var item int
-		if item, err = ReadInt(r, 4); err != nil {
-			return
-		}
-		self.Entries = append(self.Entries, item)
-	}
-	res = self
-	return
-}
-
-type ChunkOffsetAtom struct {
-	Version int
-	Flags   int
-	Entries []int
-}
-
-func ReadChunkOffsetAtom(r *io.LimitedReader) (res *ChunkOffsetAtom, err error) {
-	self := &ChunkOffsetAtom{}
-	if self.Version, err = ReadInt(r, 1); err != nil {
-		return
-	}
-	if self.Flags, err = ReadInt(r, 3); err != nil {
-		return
-	}
-	var count int
-	if count, err = ReadInt(r, 4); err != nil {
-		return
-	}
-	for i := 0; i < count; i++ {
-		var item int
-		if item, err = ReadInt(r, 4); err != nil {
-			return
-		}
-		self.Entries = append(self.Entries, item)
-	}
-	res = self
-	return
-}
-
-type SampleDescEntry struct {
-	Format     string
-	DataRefIdx int
-	Data       []byte
-}
-
-func ReadSampleDescEntry(r *io.LimitedReader) (self SampleDescEntry, err error) {
-	if self.Format, err = ReadString(r, 4); err != nil {
-		return
-	}
-	if self.DataRefIdx, err = ReadInt(r, 2); err != nil {
-		return
-	}
-	if self.Data, err = ReadBytesLeft(r); err != nil {
-		return
-	}
 	return
 }
 
@@ -522,6 +557,7 @@ type TimeToSampleEntry struct {
 }
 
 func ReadTimeToSampleEntry(r *io.LimitedReader) (self TimeToSampleEntry, err error) {
+
 	if self.Count, err = ReadInt(r, 4); err != nil {
 		return
 	}
@@ -531,17 +567,183 @@ func ReadTimeToSampleEntry(r *io.LimitedReader) (self TimeToSampleEntry, err err
 	return
 }
 
+type SampleToChunk struct {
+	Version int
+	Flags   int
+	Entries []SampleToChunkEntry
+}
+
+func ReadSampleToChunk(r *io.LimitedReader) (res *SampleToChunk, err error) {
+
+	self := &SampleToChunk{}
+	if self.Version, err = ReadInt(r, 1); err != nil {
+		return
+	}
+	if self.Flags, err = ReadInt(r, 3); err != nil {
+		return
+	}
+	var count int
+	if count, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	self.Entries = make([]SampleToChunkEntry, count)
+	for i := 0; i < count; i++ {
+		if self.Entries[i], err = ReadSampleToChunkEntry(r); err != nil {
+			return
+		}
+	}
+	res = self
+	return
+}
+
+type SampleToChunkEntry struct {
+	FirstChunk      int
+	SamplesPerChunk int
+	SampleDescId    int
+}
+
+func ReadSampleToChunkEntry(r *io.LimitedReader) (self SampleToChunkEntry, err error) {
+
+	if self.FirstChunk, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	if self.SamplesPerChunk, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	if self.SampleDescId, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	return
+}
+
+type CompositionOffset struct {
+	Version int
+	Flags   int
+	Entries []int
+}
+
+func ReadCompositionOffset(r *io.LimitedReader) (res *CompositionOffset, err error) {
+
+	self := &CompositionOffset{}
+	if self.Version, err = ReadInt(r, 1); err != nil {
+		return
+	}
+	if self.Flags, err = ReadInt(r, 3); err != nil {
+		return
+	}
+	var count int
+	if count, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	self.Entries = make([]int, count)
+	for i := 0; i < count; i++ {
+		if self.Entries[i], err = ReadInt(r, 4); err != nil {
+			return
+		}
+	}
+	res = self
+	return
+}
+
 type CompositionOffsetEntry struct {
 	Count  int
 	Offset int
 }
 
 func ReadCompositionOffsetEntry(r *io.LimitedReader) (self CompositionOffsetEntry, err error) {
+
 	if self.Count, err = ReadInt(r, 4); err != nil {
 		return
 	}
 	if self.Offset, err = ReadInt(r, 4); err != nil {
 		return
 	}
+	return
+}
+
+type SyncSample struct {
+	Version int
+	Flags   int
+	Entries []int
+}
+
+func ReadSyncSample(r *io.LimitedReader) (res *SyncSample, err error) {
+
+	self := &SyncSample{}
+	if self.Version, err = ReadInt(r, 1); err != nil {
+		return
+	}
+	if self.Flags, err = ReadInt(r, 3); err != nil {
+		return
+	}
+	var count int
+	if count, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	self.Entries = make([]int, count)
+	for i := 0; i < count; i++ {
+		if self.Entries[i], err = ReadInt(r, 4); err != nil {
+			return
+		}
+	}
+	res = self
+	return
+}
+
+type SampleSize struct {
+	Version int
+	Flags   int
+	Entries []int
+}
+
+func ReadSampleSize(r *io.LimitedReader) (res *SampleSize, err error) {
+
+	self := &SampleSize{}
+	if self.Version, err = ReadInt(r, 1); err != nil {
+		return
+	}
+	if self.Flags, err = ReadInt(r, 3); err != nil {
+		return
+	}
+	var count int
+	if count, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	self.Entries = make([]int, count)
+	for i := 0; i < count; i++ {
+		if self.Entries[i], err = ReadInt(r, 4); err != nil {
+			return
+		}
+	}
+	res = self
+	return
+}
+
+type ChunkOffset struct {
+	Version int
+	Flags   int
+	Entries []int
+}
+
+func ReadChunkOffset(r *io.LimitedReader) (res *ChunkOffset, err error) {
+
+	self := &ChunkOffset{}
+	if self.Version, err = ReadInt(r, 1); err != nil {
+		return
+	}
+	if self.Flags, err = ReadInt(r, 3); err != nil {
+		return
+	}
+	var count int
+	if count, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	self.Entries = make([]int, count)
+	for i := 0; i < count; i++ {
+		if self.Entries[i], err = ReadInt(r, 4); err != nil {
+			return
+		}
+	}
+	res = self
 	return
 }

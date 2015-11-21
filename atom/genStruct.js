@@ -4,227 +4,302 @@ Array.prototype.nonull = function () {
 	return this.filter(x => x);
 };
 
-var Int = (name,len) => {return {name:uc(name),len,type:'int',fn:'Int'}};
-var Str = (name,len) => {return {name:uc(name),len,type:'string',fn:'String'}};
-var TimeStamp = (name,len) => {return {name:uc(name),len,type:'TimeStamp',fn:'TimeStamp'}};
-var Bytes = (name,len) => {return {name:uc(name),len,type:'[]byte',fn:'Bytes'}};
-var BytesLeft = (name) => {return {name:uc(name),type:'[]byte',fn:'BytesLeft'}};
-var Fixed32 = (name,len) => {return {name:uc(name),len,type:'Fixed32',fn:'Fixed32'}};
-
-var Atom = (type,name) => {return {name:uc(name),type:uc(type)+'Atom',fn:uc(type)+'Atom'}};
-var AtomPtr = (type,name) => {return {name:uc(name),type:'*'+uc(type)+'Atom',fn:uc(type)+'Atom'}};
-
-var Struct = (type,name) => {return {name:uc(name),type:uc(type),fn:uc(type)}};
-var StructPtr = (type,name) => {return {name:uc(name),type:'*'+uc(type),fn:uc(type)}};
-
-var Arr = (name,elem,count) => {return {name:uc(name),elem,count,type:'[]'+elem.type}};
-var LenArr = (sizelen,name,elem) => {return {sizelen,name:uc(name),elem,type:'[]'+elem.type}};
-
-var Size = (len) => {return {len,hide:true,fn:'Int'}};
-var _ = (len) => {return {len,hide:true,fn:'Dummy'}};
-
 var atoms = {
-	fileType: [
-		'ftyp',
-		AtomPtr('movie', 'movie'),
-	],
+	fileType: {
+		cc4: 'ftyp',
+		fields: [
+		],
+	},
 
-	movie: [
-		'moov',
-		AtomPtr('movieHeader', 'header'),
-		Arr('tracks', AtomPtr('track')),
-	],
+	movie: {
+		cc4: 'moov',
+		atoms: [
+			['header', '*movieHeader'],
+			['tracks', '[]*track'],
+		],
+	},
 
-	movieHeader: [
-		'mvhd',
-		Int('version', 1),
-		Int('flags', 3),
-		TimeStamp('cTime', 4),
-		TimeStamp('mTime', 4),
-		Int('timeScale', 4),
-		Int('duration', 4),
-		Int('preferredRate', 4),
-		Int('preferredVolume', 2),
-		_(10),
-		Bytes('matrix', 36),
-		TimeStamp('previewTime', 4),
-		TimeStamp('previewDuration', 4),
-		TimeStamp('posterTime', 4),
-		TimeStamp('selectionTime', 4),
-		TimeStamp('selectionDuration', 4),
-		TimeStamp('currentTime', 4),
-		Int('nextTrackId', 4),
-	],
+	movieHeader: {
+		cc4: 'mvhd',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['cTime', 'TimeStamp32'],
+			['mTime', 'TimeStamp32'],
+			['timeScale', 'TimeStamp32'],
+			['duration', 'TimeStamp32'],
+			['preferredRate', 'int32'],
+			['preferredVolume', 'int16'],
+			['_', '[10]byte'],
+			['matrix', '[9]int32'],
+			['previewTime', 'TimeStamp32'],
+			['previewDuration', 'TimeStamp32'],
+			['posterTime', 'TimeStamp32'],
+			['selectionTime', 'TimeStamp32'],
+			['selectionDuration', 'TimeStamp32'],
+			['currentTime', 'TimeStamp32'],
+			['nextTrackId', 'int32'],
+		],
+	},
 
-	track: [
-		'trak',
-		AtomPtr('trackHeader', 'header'),
-		AtomPtr('media', 'media'),
-	],
+	track: {
+		cc4: 'trak',
+		atoms: [
+			['header', '*trackHeader'],
+			['media', '*media'],
+		],
+	},
 
-	trackHeader: [
-		'tkhd',
-		Int('version', 1),
-		Int('flags', 3),
-		TimeStamp('cTime', 4),
-		TimeStamp('mTime', 4),
-		Int('trackId', 4),
-		_(4),
-		Int('duration', 4),
-		_(8),
-		Int('layer', 2),
-		Int('alternateGroup', 2),
-		Int('volume', 2),
-		_(2),
-		Bytes('matrix', 36),
-		Fixed32('trackWidth', 4),
-		Fixed32('trackHeight', 4),
-	],
+	trackHeader: {
+		cc4: 'tkhd',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['cTime', 'TimeStamp32'],
+			['mTime', 'TimeStamp32'],
+			['trackId', 'TimeStamp32'],
+			['_', '[4]byte'],
+			['duration', 'TimeStamp32'],
+			['_', '[8]byte'],
+			['layer', 'int16'],
+			['alternateGroup', 'int16'],
+			['volume', 'int16'],
+			['_', '[2]byte'],
+			['matrix', '[9]int32'],
+			['trackWidth', 'int32'],
+			['trackHeader', 'int32'],
+		],
+	},
 
-	media: [
-		'mdia',
-		AtomPtr('mediaHeader', 'header'),
-		AtomPtr('mediaInfo', 'info'),
-	],
+	media: {
+		cc4: 'mdia',
+		atoms: [
+			['header', '*mediaHeader'],
+			['info', '*mediaInfo'],
+		],
+	},
 
-	mediaHeader: [
-		'mdhd',
-		Int('version', 1),
-		Int('flags', 3),
-		TimeStamp('cTime', 4),
-		TimeStamp('mTime', 4),
-		Int('timeScale', 4),
-		Int('duration', 4),
-		Int('language', 2),
-		Int('quality', 2),
-	],
+	mediaHeader: {
+		cc4: 'mdhd',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['cTime', 'int32'],
+			['mTime', 'int32'],
+			['timeScale', 'int32'],
+			['duration', 'int32'],
+			['language', 'int16'],
+			['quality', 'int16'],
+		],
+	},
 
-	mediaInfo: [
-		'minf',
-		AtomPtr('videoMediaInfo', 'video'),
-		AtomPtr('sampleTable', 'sample'),
-	],
+	mediaInfo: {
+		cc4: 'minf',
+		atoms: [
+			['sound', '*soundMediaInfo'],
+			['video', '*videoMediaInfo'],
+			['sample', '*sampleTable'],
+		],
+	},
 
-	videoMediaInfo: [
-		'vmhd',
-		Int('version', 1),
-		Int('flags', 3),
-		Int('graphicsMode', 2),
-		Arr('opcolor', Int('', 2), 3),
-	],
+	soundMediaInfo: {
+		cc4: 'smhd',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['balance', 'int16'],
+			['_', 'int16'],
+		],
+	},
 
-	sampleTable: [
-		'stbl',
-		AtomPtr('sampleDesc', 'sampleDesc'),
-		AtomPtr('timeToSample', 'timeToSample'),
-		AtomPtr('compositionOffset', 'compositionOffset'),
-		AtomPtr('syncSample', 'syncSample'),
-		AtomPtr('sampleSize', 'sampleSize'),
-		AtomPtr('chunkOffset', 'chunkOffset'),
-	],
+	videoMediaInfo: {
+		cc4: 'vmhd',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['graphicsMode', 'int16'],
+			['opcolor', '[3]int16'],
+		],
+	},
 
-	sampleDesc: [
-		'stsd',
-		Int('version', 1),
-		Int('flags', 3),
-		LenArr(4, 'entries', Struct('sampleDescEntry')),
-	],
+	sampleTable: {
+		cc4: 'stbl',
+		atoms: [
+			['sampleDesc', '*sampleDesc'],
+			['timeToSample', '*timeToSample'],
+			['compositionOffset', '*compositionOffset'],
+			['sampleToChunk', '*sampleToChunk'],
+			['syncSample', '*syncSample'],
+			['chunkOffset', '*chunkOffset'],
+			['sampleSize', '*sampleSize'],
+		],
+	},
 
-	timeToSample: [
-		'stts',
-		Int('version', 1),
-		Int('flags', 3),
-		LenArr(4, 'entries', Struct('timeToSampleEntry')),
-	],
+	sampleDesc: {
+		cc4: 'stsd',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['entries', '[int32]*sampleDescEntry'],
+		],
+	},
 
-	compositionOffset: [
-		'ctts',
-		Int('version', 1),
-		Int('flags', 3),
-		LenArr(4, 'entries', Struct('compositionOffsetEntry')),
-	],
+	timeToSample: {
+		cc4: 'stts',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['entries', '[int32]timeToSampleEntry'],
+		],
+	},
 
-	syncSample: [
-		'stss',
-		Int('version', 1),
-		Int('flags', 3),
-		LenArr(4, 'entries', Int('', 4)),
-	],
+	timeToSampleEntry: {
+		fields: [
+			['count', 'int32'],
+			['duration', 'int32'],
+		],
+	},
 
-	sampleSize: [
-		'stsz',
-		Int('version', 1),
-		Int('flags', 3),
-		LenArr(4, 'entries', Int('', 4)),
-	],
+	sampleToChunk: {
+		cc4: 'stsc',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['entries', '[int32]sampleToChunkEntry'],
+		],
+	},
 
-	chunkOffset: [
-		'stco',
-		Int('version', 1),
-		Int('flags', 3),
-		LenArr(4, 'entries', Int('', 4)),
-	],
+	sampleToChunkEntry: {
+		fields: [
+			['firstChunk', 'int32'],
+			['samplesPerChunk', 'int32'],
+			['sampleDescId', 'int32'],
+		],
+	},
+
+	compositionOffset: {
+		cc4: 'ctts',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['entries', '[int32]int32'],
+		],
+	},
+
+	compositionOffsetEntry: {
+		fields: [
+			['count', 'int32'],
+			['offset', 'int32'],
+		],
+	},
+
+	syncSample: {
+		cc4: 'stss',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['entries', '[int32]int32'],
+		],
+	},
+
+	sampleSize: {
+		cc4: 'stsz',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['entries', '[int32]int32'],
+		],
+	},
+
+	chunkOffset: {
+		cc4: 'stco',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['entries', '[int32]int32'],
+		],
+	},
+
 };
 
-var structs = {
-	sampleDescEntry: [
-		Size(4),
-		Str('format', 4),
-		_(6),
-		Int('dataRefIdx', 2),
-		BytesLeft('data'),
-	],
-
-	timeToSampleEntry: [
-		Int('count', 4),
-		Int('duration', 4),
-	],
-
-	compositionOffsetEntry: [
-		Int('count', 4),
-		Int('offset', 4),
-	],
-};
-
-var genReadStmts = (opts) => {
+var DeclReadFunc = (opts) => {
 	var stmts = [];
 
-	if (opts.resIsPtr)
-		stmts = stmts.concat([StrStmt(`self := &${opts.atomType}{}`)]);
+	var DebugStmt = type => StrStmt(`// ${JSON.stringify(type)}`);
 
-	var readElemStmts = field => {
-		var arr = 'self.'+field.name;
+	var ReadArr = (name, type) => {
 		return [
-			DeclVar('item', field.elem.type),
-			CallCheckAssign('Read'+field.elem.fn, ['r', field.elem.len].nonull(), ['item']),
-			StrStmt(`${arr} = append(${arr}, item)`),
+			//StrStmt('// ReadArr'),
+			//DebugStmt(type),
+			type.varcount && [
+				DeclVar('count', 'int'),
+				CallCheckAssign('ReadInt', ['r', type.varcount], ['count']),
+				StrStmt(`${name} = make(${typeStr(type)}, count)`),
+			],
+			For(RangeN('i', type.varcount ? 'count' : type.count), [
+				ReadCommnType(name+'[i]', type),
+			]),
+		];
+	};
+
+	var elemTypeStr = type => typeStr(Object.assign({}, type, {arr: false}));
+	var ReadAtoms = () => [
+		StrStmt(`// ReadAtoms`),
+		For(StrStmt(`r.N > 0`), [
+			DeclVar('cc4', 'string'),
+			DeclVar('ar', '*io.LimitedReader'),
+			CallCheckAssign('ReadAtomHeader', ['r', '""'], ['ar', 'cc4']),
+			Switch('cc4', opts.fields.map(field => [
+				`"${atoms[field.type.struct].cc4}"`, [
+					field.type.arr ? [
+						DeclVar('item', elemTypeStr(field.type)),
+						CallCheckAssign('Read'+field.type.Struct, ['ar'], ['item']),
+						StrStmt(`self.${field.name} = append(self.${field.name}, item)`),
+					] : [
+						CallCheckAssign('Read'+field.type.Struct, ['ar'], [`self.${field.name}`]),
+					],
+				]
+			]), showlog && [StrStmt(`log.Println("skip", cc4)`)]),
+			CallCheckAssign('ReadDummy', ['ar', 'int(ar.N)'], ['_']),
+		])
+	];
+
+	var ReadCommnType = (name, type) => {
+		if (type.struct)
+			return CallCheckAssign(
+				'Read'+type.Struct, ['r'], [name]);
+		return [
+			//DebugStmt(type),
+			CallCheckAssign(
+				'Read'+type.fn, ['r', type.len].nonull(), [name]),
 		]
 	};
 
-	stmts = stmts.concat(opts.fields.map(field => {
-		if (field.sizelen) {
-			var arr = 'self.'+field.name;
-			return [
-				DeclVar('count', 'int'),
-				CallCheckAssign('ReadInt', ['r', field.sizelen], ['count']),
-				For(RangeN('i', 'count'), readElemStmts(field)),
-			];
-		} else if (field.elem) {
-			var cond = field.count ? RangeN('i', field.count) : StrStmt('r.N > 0');
-			return For(cond, readElemStmts(field));
-		} else if (!field.hide) {
-			return CallCheckAssign('Read'+field.fn, ['r', field.len].nonull(), ['self.'+field.name]);
-		}
-	}).nonull());
+	var ReadField = (name, type) => {
+		if (name == '_')
+			return CallCheckAssign('ReadDummy', ['r', type.len], ['_']);
+		if (type.arr && type.fn != 'Bytes')
+			return ReadArr('self.'+name, type);
+		return ReadCommnType('self.'+name, type);
+	};
 
-	if (opts.resIsPtr)
-		stmts = stmts.concat([StrStmt(`res = self`)]);
+	var ReadFields = () => opts.fields.map(field => {
+		var name = field.name;
+		var type = field.type;
+		return ReadField(name, type);
+	}).nonull();
+
+	var ptr = opts.cc4;
 
 	return Func(
-		'Read'+opts.fnName,
+		'Read'+opts.type,
 		[['r', '*io.LimitedReader']],
-		[[opts.resIsPtr?'res':'self', (opts.resIsPtr?'*':'')+opts.atomType], ['err', 'error']],
-		stmts
+		[[ptr?'res':'self', (ptr?'*':'')+opts.type], ['err', 'error']],
+		[ 
+			ptr && StrStmt(`self := &${opts.type}{}`),
+			!opts.atoms ? ReadFields() : ReadAtoms(),
+			ptr && StrStmt(`res = self`),
+		]
 	);
 };
 
@@ -237,16 +312,21 @@ var D = (cls, ...fields) => {
 };
 
 D('Func', 'name', 'args', 'rets', 'body');
-D('CallCheckAssign', 'fn', 'args', 'rets');
+D('CallCheckAssign', 'fn', 'args', 'rets', 'action');
 D('DeclVar', 'name', 'type');
 D('For', 'cond', 'body');
 D('RangeN', 'i', 'n');
 D('DeclStruct', 'name', 'body');
 D('StrStmt', 'content');
+D('Switch', 'cond', 'cases', 'default');
+
+var showlog = false;
+var S = s => s && s || '';
 
 var dumpFn = f => {
 	var dumpArgs = x => x.map(x => x.join(' ')).join(',');
 	return `func ${f.name}(${dumpArgs(f.args)}) (${dumpArgs(f.rets)}) {
+		${S(showlog && 'log.Println("'+f.name+'")')}
 		${dumpStmts(f.body)}
 		return
 	}`;
@@ -258,7 +338,7 @@ var dumpStmts = stmts => {
 			return dumpStmts(stmt);
 		} if (stmt.cls == 'CallCheckAssign') {
 			return `if ${stmt.rets.concat(['err']).join(',')} = ${stmt.fn}(${stmt.args.join(',')}); err != nil {
-				return
+				${stmt.action ? stmt.action : 'return'}
 			}`;
 		} else if (stmt.cls == 'DeclVar') {
 			return `var ${stmt.name} ${stmt.type}`;
@@ -276,68 +356,103 @@ var dumpStmts = stmts => {
 			return dumpFn(stmt);
 		} else if (stmt.cls == 'StrStmt') {
 			return stmt.content;
+		} else if (stmt.cls == 'Switch') {
+			var dumpCase = c => `case ${c[0]}: { ${dumpStmts(c[1])} }`;
+			var dumpDefault = c => `default: { ${dumpStmts(c)} }`;
+			return `switch ${stmt.cond} {
+				${stmt.cases.map(dumpCase).join('\n')}
+				${stmt.default && dumpDefault(stmt.default) || ''}
+			}`;
 		}
 	};
-	return stmts.map(dumpStmt).join('\n')
+	return stmts.nonull().map(dumpStmt).join('\n')
 };
 
-(() => {
-	var len = 3;
-	var f = Func('Readxx', [['f', '*io.LimitedReader']], [['res', '*xx'], ['err', 'error']], [
-		CallCheckAssign('ReadInt', ['f', len], ['self.xx']),
-		CallCheckAssign('WriteInt', ['f', len], ['self.xx']),
-		DeclVar('n', 'int'),
-		For(RangeN('i', 'n'), [
-			CallCheckAssign('WriteInt', ['f', len], ['self.xx']),
-			DeclStruct('hi', [['a', 'b'], ['c', 'd'], ['e', 'f']]),
-		]),
-	]);
-	console.log(dumpFn(f));
-});
+var parseType = s => {
+	var r = {};
+	var bracket = /^\[(.*)\]/;
+	if (s.match(bracket)) {
+		var count = s.match(bracket)[1];
+		if (count.substr(0,3) == 'int') {
+			r.varcount = +count.substr(3)/8;
+		} else {
+			r.count = +count;
+		}
+		r.arr = true;
+		s = s.replace(bracket, '');
+	}
+	if (s.substr(0,1) == '*') {
+		r.ptr = true;
+		s = s.slice(1);
+	}
+	var types = /^(int|TimeStamp|byte|cc)/;
+	if (s.match(types)) {
+		r.type = s.match(types)[0];
+		r.fn = uc(r.type);
+		s = s.replace(types, '');
+	}
+	if (r.type == 'byte' && r.arr) {
+		r.len = r.count;
+		r.fn = 'Bytes';
+	}
+	var lenDiv = 8;
+	if (r.type == 'cc') {
+		r.fn = 'String';
+		r.type = 'string';
+		lenDiv = 1;
+	}
+	var number = /[0-9]+/;
+	if (s.match(number)) {
+		r.len = +s.match(number)[0]/lenDiv;
+		s = s.replace(number, '');
+	}
+	if (s != '') {
+		r.struct = s;
+		r.Struct = uc(s);
+	}
+	return r;
+};
+
+var typeStr = (t) => {
+	var s = '';
+	if (t.arr) 
+		s += '['+(t.count||'')+']';
+	if (t.ptr)
+		s += '*';
+	if (t.struct)
+		s += t.Struct;
+	if (t.type)
+		s += t.type;
+	return s;
+};
+
+var nameShouldHide = (name) => name == '_'
 
 var allStmts = () => {
 	var stmts = [];
 
-	var convStructFields = fields => {
-		var typeStr = field => (
-			field.cls == 'AtomPtr' || field.cls == 'StructPtr') ? '*'+field.type : field.type;
-
-		return fields.filter(field => !field.hide)
-		.map(field => {
-			if (field.cls == 'Arr' || field.cls == 'LenArr')
-				return [field.name, '[]'+typeStr(field.elem)];
-			return [field.name, typeStr(field)];
-		});
-	};
-
 	for (var k in atoms) {
-		var list = atoms[k];
-		var name = uc(k)+'Atom';
-		var cc4 = list[0];
-		var fields = list.slice(1);
+		var atom = atoms[k];
 
-		stmts = stmts.concat([
-			DeclStruct(name, convStructFields(fields)),
-			genReadStmts({
-				cc4: cc4,
-				fields: fields,
-				fnName: name,
-				atomType: name,
-				resIsPtr: true,
-			}),
-		]);
-	}
-
-	for (var k in structs) {
-		var fields = structs[k];
 		var name = uc(k);
+		var fields = (atom.fields || atom.atoms).map(field => {
+			return {
+				name: uc(field[0]),
+				type: parseType(field[1]),
+			};
+		});
 
 		stmts = stmts.concat([
-			DeclStruct(name, convStructFields(fields)),
-			genReadStmts({
+			DeclStruct(name, fields.map(field => !nameShouldHide(field.name) && [
+				uc(field.name),
+				typeStr(field.type),
+			]).nonull()),
+
+			DeclReadFunc({
+				type: name,
 				fields: fields,
-				fnName: name,
-				atomType: name,
+				cc4: atom.cc4,
+				atoms: atom.atoms != null,
 			}),
 		]);
 	}
@@ -345,10 +460,12 @@ var allStmts = () => {
 	return stmts;
 };
 
-console.log(`// THIS FILE IS AUTO GENERATED
+console.log(`
+// THIS FILE IS AUTO GENERATED
 package atom
 import (
 	"io"
+	${showlog && '"log"' || ''}
 )
 `, dumpStmts(allStmts()));
 
