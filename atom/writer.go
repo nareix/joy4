@@ -48,18 +48,39 @@ type Writer struct {
 	sizePos int64
 }
 
+func (self *Writer) WriteEmptyInt(n int) (pos int64, err error) {
+	if pos, err = self.Seek(0, 1); err != nil {
+		return
+	}
+	if err = WriteInt(self, 0, n); err != nil {
+		return
+	}
+	return
+}
+
+func (self *Writer) RefillInt(pos int64, val int, n int) (err error) {
+	var curPos int64
+	if curPos, err = self.Seek(0, 1); err != nil {
+		return
+	}
+	if _, err = self.Seek(pos, 0); err != nil {
+		return
+	}
+	if err = WriteInt(self, val, n); err != nil {
+		return
+	}
+	if _, err = self.Seek(curPos, 0); err != nil {
+		return
+	}
+	return
+}
+
 func (self *Writer) Close() (err error) {
 	var curPos int64
 	if curPos, err = self.Seek(0, 1); err != nil {
 		return
 	}
-	if _, err = self.Seek(self.sizePos, 0); err != nil {
-		return
-	}
-	if err = WriteInt(self, int(curPos - self.sizePos), 4); err != nil {
-		return
-	}
-	if _, err = self.Seek(curPos, 0); err != nil {
+	if err = self.RefillInt(self.sizePos, int(curPos - self.sizePos), 4); err != nil {
 		return
 	}
 	if false {
@@ -71,10 +92,7 @@ func (self *Writer) Close() (err error) {
 func WriteAtomHeader(w io.WriteSeeker, cc4 string) (res *Writer, err error) {
 	self := &Writer{WriteSeeker: w}
 
-	if self.sizePos, err = w.Seek(0, 1); err != nil {
-		return
-	}
-	if err = WriteDummy(self, 4); err != nil {
+	if self.sizePos, err = self.WriteEmptyInt(4); err != nil {
 		return
 	}
 	if err = WriteString(self, cc4, 4); err != nil {
