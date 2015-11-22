@@ -5,6 +5,49 @@ import (
 	"io"
 )
 
+type Test struct {
+	Version int
+	Flags   int
+	Left    string
+}
+
+func ReadTest(r *io.LimitedReader) (res *Test, err error) {
+
+	self := &Test{}
+	if self.Version, err = ReadInt(r, 1); err != nil {
+		return
+	}
+	if self.Flags, err = ReadInt(r, 3); err != nil {
+		return
+	}
+	if self.Left, err = ReadString(r, int(r.N)); err != nil {
+		return
+	}
+	res = self
+	return
+}
+func WriteTest(w io.WriteSeeker, self *Test) (err error) {
+
+	var aw *Writer
+	if aw, err = WriteAtomHeader(w, "sbss"); err != nil {
+		return
+	}
+	w = aw
+	if err = WriteInt(w, self.Version, 1); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Flags, 3); err != nil {
+		return
+	}
+	if err = WriteString(w, self.Left, len(self.Left)); err != nil {
+		return
+	}
+	if err = aw.Close(); err != nil {
+		return
+	}
+	return
+}
+
 type Movie struct {
 	Header *MovieHeader
 	Tracks []*Track
@@ -391,6 +434,63 @@ func WriteTrackHeader(w io.WriteSeeker, self *TrackHeader) (err error) {
 		return
 	}
 	if err = WriteFixed(w, self.TrackHeight, 4); err != nil {
+		return
+	}
+	if err = aw.Close(); err != nil {
+		return
+	}
+	return
+}
+
+type HandlerRefer struct {
+	Version int
+	Flags   int
+	Type    string
+	SubType string
+	Name    string
+}
+
+func ReadHandlerRefer(r *io.LimitedReader) (res *HandlerRefer, err error) {
+
+	self := &HandlerRefer{}
+	if self.Version, err = ReadInt(r, 1); err != nil {
+		return
+	}
+	if self.Flags, err = ReadInt(r, 3); err != nil {
+		return
+	}
+	if self.Type, err = ReadString(r, 4); err != nil {
+		return
+	}
+	if self.SubType, err = ReadString(r, 4); err != nil {
+		return
+	}
+	if self.Name, err = ReadString(r, int(r.N)); err != nil {
+		return
+	}
+	res = self
+	return
+}
+func WriteHandlerRefer(w io.WriteSeeker, self *HandlerRefer) (err error) {
+
+	var aw *Writer
+	if aw, err = WriteAtomHeader(w, "hdlr"); err != nil {
+		return
+	}
+	w = aw
+	if err = WriteInt(w, self.Version, 1); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Flags, 3); err != nil {
+		return
+	}
+	if err = WriteString(w, self.Type, 4); err != nil {
+		return
+	}
+	if err = WriteString(w, self.SubType, 4); err != nil {
+		return
+	}
+	if err = WriteString(w, self.Name, len(self.Name)); err != nil {
 		return
 	}
 	if err = aw.Close(); err != nil {

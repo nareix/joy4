@@ -5,6 +5,15 @@ Array.prototype.nonull = function () {
 };
 
 var atoms = {
+	test: {
+		cc4: 'sbss',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['left', '[]char'],
+		],
+	},
+
 	movie: {
 		cc4: 'moov',
 		fields: [
@@ -71,6 +80,13 @@ var atoms = {
 
 	handlerRefer: {
 		cc4: 'hdlr',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['type', '[4]char'],
+			['subType', '[4]char'],
+			['name', '[]char'],
+		],
 	},
 
 	media: {
@@ -299,7 +315,7 @@ var DeclReadFunc = (opts) => {
 		return [
 			//DebugStmt(type),
 			CallCheckAssign(
-				'Read'+type.fn, ['r', type.len].nonull(), [name]),
+				'Read'+type.fn, ['r', type.len||'int(r.N)'], [name]),
 		]
 	};
 
@@ -368,7 +384,7 @@ var DeclWriteFunc = (opts) => {
 				'Write'+type.Struct, ['w', name], []);
 		return [
 			CallCheckAssign(
-				'Write'+type.fn, ['w', name, type.len].nonull(), []),
+				'Write'+type.fn, ['w', name, type.len||`len(${name})`], []),
 		]
 	};
 
