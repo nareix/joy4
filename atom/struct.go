@@ -5,30 +5,6 @@ import (
 	"io"
 )
 
-type FileType struct {
-}
-
-func ReadFileType(r *io.LimitedReader) (res *FileType, err error) {
-
-	self := &FileType{}
-
-	res = self
-	return
-}
-func WriteFileType(w io.WriteSeeker, self *FileType) (err error) {
-
-	var aw *Writer
-	if aw, err = WriteAtomHeader(w, "ftyp"); err != nil {
-		return
-	}
-	w = aw
-
-	if err = aw.Close(); err != nil {
-		return
-	}
-	return
-}
-
 type Movie struct {
 	Header *MovieHeader
 	Tracks []*Track

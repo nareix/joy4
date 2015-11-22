@@ -5,17 +5,13 @@ Array.prototype.nonull = function () {
 };
 
 var atoms = {
-	fileType: {
-		cc4: 'ftyp',
-		fields: [
-		],
-	},
-
 	movie: {
 		cc4: 'moov',
-		atoms: [
-			['header', '*movieHeader'],
-			['tracks', '[]*track'],
+		fields: [
+			['$atoms', [
+				['header', '*movieHeader'],
+				['tracks', '[]*track'],
+			]],
 		],
 	},
 
@@ -44,9 +40,11 @@ var atoms = {
 
 	track: {
 		cc4: 'trak',
-		atoms: [
-			['header', '*trackHeader'],
-			['media', '*media'],
+		fields: [
+			['$atoms', [
+				['header', '*trackHeader'],
+				['media', '*media'],
+			]],
 		],
 	},
 
@@ -77,10 +75,12 @@ var atoms = {
 
 	media: {
 		cc4: 'mdia',
-		atoms: [
-			['header', '*mediaHeader'],
-			['info', '*mediaInfo'],
-			['hdlr', '*handlerRefer'],
+		fields: [
+			['$atoms', [
+				['header', '*mediaHeader'],
+				['info', '*mediaInfo'],
+				['hdlr', '*handlerRefer'],
+			]],
 		],
 	},
 
@@ -100,10 +100,12 @@ var atoms = {
 
 	mediaInfo: {
 		cc4: 'minf',
-		atoms: [
-			['sound', '*soundMediaInfo'],
-			['video', '*videoMediaInfo'],
-			['sample', '*sampleTable'],
+		fields: [
+			['$atoms', [
+				['sound', '*soundMediaInfo'],
+				['video', '*videoMediaInfo'],
+				['sample', '*sampleTable'],
+			]],
 		],
 	},
 
@@ -129,14 +131,16 @@ var atoms = {
 
 	sampleTable: {
 		cc4: 'stbl',
-		atoms: [
-			['sampleDesc', '*sampleDesc'],
-			['timeToSample', '*timeToSample'],
-			['compositionOffset', '*compositionOffset'],
-			['sampleToChunk', '*sampleToChunk'],
-			['syncSample', '*syncSample'],
-			['chunkOffset', '*chunkOffset'],
-			['sampleSize', '*sampleSize'],
+		fields: [
+			['$atoms', [
+				['sampleDesc', '*sampleDesc'],
+				['timeToSample', '*timeToSample'],
+				['compositionOffset', '*compositionOffset'],
+				['sampleToChunk', '*sampleToChunk'],
+				['syncSample', '*syncSample'],
+				['chunkOffset', '*chunkOffset'],
+				['sampleSize', '*sampleSize'],
+			]],
 		],
 	},
 
@@ -268,12 +272,12 @@ var DeclReadFunc = (opts) => {
 	};
 
 	var elemTypeStr = type => typeStr(Object.assign({}, type, {arr: false}));
-	var ReadAtoms = () => [
+	var ReadAtoms = fields => [
 		For(`r.N > 0`, [
 			DeclVar('cc4', 'string'),
 			DeclVar('ar', '*io.LimitedReader'),
 			CallCheckAssign('ReadAtomHeader', ['r', '""'], ['ar', 'cc4']),
-			Switch('cc4', opts.fields.map(field => [
+			Switch('cc4', fields.map(field => [
 				`"${atoms[field.type.struct].cc4}"`, [
 					field.type.arr ? [
 						DeclVar('item', elemTypeStr(field.type)),
@@ -302,6 +306,8 @@ var DeclReadFunc = (opts) => {
 	var ReadField = (name, type) => {
 		if (name == '_')
 			return CallCheckAssign('ReadDummy', ['r', type.len], ['_']);
+		if (name == '$atoms')
+			return ReadAtoms(type.list);
 		if (type.arr && type.fn != 'Bytes')
 			return ReadArr('self.'+name, type);
 		return ReadCommnType('self.'+name, type);
@@ -321,7 +327,7 @@ var DeclReadFunc = (opts) => {
 		[[ptr?'res':'self', (ptr?'*':'')+opts.type], ['err', 'error']],
 		[ 
 			ptr && `self := &${opts.type}{}`,
-			!opts.atoms ? ReadFields() : ReadAtoms(),
+			ReadFields(),
 			ptr && `res = self`,
 		]
 	);
@@ -338,7 +344,7 @@ var DeclWriteFunc = (opts) => {
 		CallCheckAssign('aw.Close', [], []),
 	];
 
-	var WriteAtoms = () => opts.fields.map(field => {
+	var WriteAtoms = fields => fields.map(field => {
 		var name = 'self.'+field.name;
 		return [
 			`if ${name} != nil {`,
@@ -369,6 +375,8 @@ var DeclWriteFunc = (opts) => {
 	var WriteField = (name, type) => {
 		if (name == '_')
 			return CallCheckAssign('WriteDummy', ['w', type.len], []);
+		if (name == '$atoms')
+			return WriteAtoms(type.list);
 		if (type.arr && type.fn != 'Bytes')
 			return WriteArr('self.'+name, type);
 		return WriteCommnType('self.'+name, type);
@@ -382,7 +390,7 @@ var DeclWriteFunc = (opts) => {
 		[['err', 'error']],
 		[
 			opts.cc4 && SavePos,
-			opts.atoms ? WriteAtoms() : WriteFields(),
+			WriteFields(),
 			opts.cc4 && RestorePosSetSize,
 		]
 	);
@@ -527,39 +535,44 @@ var nameShouldHide = (name) => name == '_'
 var allStmts = () => {
 	var stmts = [];
 
+	var parseFields = fields => fields.map(field => {
+		return {
+			name: uc(field[0]),
+			type: field[0] == '$atoms' ? {list: parseFields(field[1])} : parseType(field[1]),
+		};
+	});
+
+	var genStructFields = fields => fields.map(field => {
+		if (field.name == '_')
+			return;
+		if (field.name == '$atoms')
+			return field.type.list;
+		return [field];
+	}).nonull().reduce((prev, cur) => prev.concat(cur)).map(field => [
+		field.name, typeStr(field.type)]);
+
 	for (var k in atoms) {
 		var atom = atoms[k];
 		var name = uc(k);
 
-		var fields = (atom.fields || atom.atoms);
-		if (fields == null)
+		if (atom.fields == null)
 			continue;
 
-		fields = fields.map(field => {
-			return {
-				name: uc(field[0]),
-				type: parseType(field[1]),
-			};
-		});
+		var fields = parseFields(atom.fields);
 
 		stmts = stmts.concat([
-			DeclStruct(name, fields.map(field => !nameShouldHide(field.name) && [
-				uc(field.name),
-				typeStr(field.type),
-			]).nonull()),
+			DeclStruct(name, genStructFields(fields)),
 
 			DeclReadFunc({
 				type: name,
 				fields: fields,
 				cc4: atom.cc4,
-				atoms: atom.atoms != null,
 			}),
 
 			DeclWriteFunc({
 				type: name,
 				fields: fields,
 				cc4: atom.cc4,
-				atoms: atom.atoms != null,
 			}),
 		]);
 	}
