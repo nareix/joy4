@@ -167,6 +167,26 @@ var atoms = {
 	mp4aDesc: {
 		cc4: 'mp4a',
 		fields: [
+			['_', '[6]byte'],
+			['dataRefIdx', 'int16'],
+			['version', 'int16'],
+			['revisionLevel', 'int16'],
+			['vendor', 'int32'],
+			['numberOfChannels', 'int16'],
+			['sampleSize', 'int16'],
+			['compressionId', 'int16'],
+			['_', 'int16'],
+			['sampleRate', 'Fixed32'],
+			['$atoms', [
+				['conf', '*elemStreamDesc'],
+			]],
+		],
+	},
+
+	elemStreamDesc: {
+		cc4: 'esds',
+		fields: [
+			['version', 'int32'],
 			['data', '[]byte'],
 		],
 	},

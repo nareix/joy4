@@ -984,14 +984,68 @@ func WriteSampleDesc(w io.WriteSeeker, self *SampleDesc) (err error) {
 }
 
 type Mp4aDesc struct {
-	Data []byte
+	DataRefIdx       int
+	Version          int
+	RevisionLevel    int
+	Vendor           int
+	NumberOfChannels int
+	SampleSize       int
+	CompressionId    int
+	SampleRate       Fixed
+	Conf             *ElemStreamDesc
 }
 
 func ReadMp4aDesc(r *io.LimitedReader) (res *Mp4aDesc, err error) {
 
 	self := &Mp4aDesc{}
-	if self.Data, err = ReadBytes(r, int(r.N)); err != nil {
+	if _, err = ReadDummy(r, 6); err != nil {
 		return
+	}
+	if self.DataRefIdx, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.Version, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.RevisionLevel, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.Vendor, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	if self.NumberOfChannels, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.SampleSize, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.CompressionId, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if _, err = ReadDummy(r, 2); err != nil {
+		return
+	}
+	if self.SampleRate, err = ReadFixed(r, 4); err != nil {
+		return
+	}
+	for r.N > 0 {
+		var cc4 string
+		var ar *io.LimitedReader
+		if ar, cc4, err = ReadAtomHeader(r, ""); err != nil {
+			return
+		}
+		switch cc4 {
+		case "esds":
+			{
+				if self.Conf, err = ReadElemStreamDesc(ar); err != nil {
+					return
+				}
+			}
+
+		}
+		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
+			return
+		}
 	}
 	res = self
 	return
@@ -1003,6 +1057,74 @@ func WriteMp4aDesc(w io.WriteSeeker, self *Mp4aDesc) (err error) {
 		return
 	}
 	w = aw
+	if err = WriteDummy(w, 6); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.DataRefIdx, 2); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Version, 2); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.RevisionLevel, 2); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Vendor, 4); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.NumberOfChannels, 2); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.SampleSize, 2); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.CompressionId, 2); err != nil {
+		return
+	}
+	if err = WriteDummy(w, 2); err != nil {
+		return
+	}
+	if err = WriteFixed(w, self.SampleRate, 4); err != nil {
+		return
+	}
+	if self.Conf != nil {
+		if err = WriteElemStreamDesc(w, self.Conf); err != nil {
+			return
+		}
+	}
+	if err = aw.Close(); err != nil {
+		return
+	}
+	return
+}
+
+type ElemStreamDesc struct {
+	Version int
+	Data    []byte
+}
+
+func ReadElemStreamDesc(r *io.LimitedReader) (res *ElemStreamDesc, err error) {
+
+	self := &ElemStreamDesc{}
+	if self.Version, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	if self.Data, err = ReadBytes(r, int(r.N)); err != nil {
+		return
+	}
+	res = self
+	return
+}
+func WriteElemStreamDesc(w io.WriteSeeker, self *ElemStreamDesc) (err error) {
+
+	var aw *Writer
+	if aw, err = WriteAtomHeader(w, "esds"); err != nil {
+		return
+	}
+	w = aw
+	if err = WriteInt(w, self.Version, 4); err != nil {
+		return
+	}
 	if err = WriteBytes(w, self.Data, len(self.Data)); err != nil {
 		return
 	}

@@ -64,13 +64,11 @@ func changeMoov(moov *atom.Movie) {
 						}
 					}
 
-					/*
 					if mp4a := desc.Mp4aDesc; mp4a != nil {
 						if conf := mp4a.Conf; conf != nil {
 							log.Println("mp4a", hex.Dump(conf.Data))
 						}
 					}
-					*/
 
 				}
 			}
@@ -78,7 +76,7 @@ func changeMoov(moov *atom.Movie) {
 	}
 }
 
-func Open(filename string) (file *File, err error) {
+func TestConvert(filename string) (file *File, err error) {
 	var osfile *os.File
 	if osfile, err = os.Open(filename); err != nil {
 		return
