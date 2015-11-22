@@ -11,6 +11,13 @@ var atoms = {
 			['version', 'int8'],
 			['flags', 'int24'],
 			['left', '[]char'],
+
+			['$atomsCount', 'int32'],
+
+			['$atoms', [
+				['header', '*movieHeader'],
+				['tracks', '[]*track'],
+			]],
 		],
 	},
 
@@ -324,6 +331,8 @@ var DeclReadFunc = (opts) => {
 			return CallCheckAssign('ReadDummy', ['r', type.len], ['_']);
 		if (name == '$atoms')
 			return ReadAtoms(type.list);
+		if (name == '$atomsCount')
+			return CallCheckAssign('ReadDummy', ['r', type.len], ['_']);
 		if (type.arr && type.fn != 'Bytes')
 			return ReadArr('self.'+name, type);
 		return ReadCommnType('self.'+name, type);
@@ -365,6 +374,7 @@ var DeclWriteFunc = (opts) => {
 		return [
 			`if ${name} != nil {`,
 			field.type.arr ? WriteArr(name, field.type) : WriteCommnType(name, field.type),
+			atomsCount && `${atomsCount.name}++`,
 			`}`,
 		];
 	});
@@ -388,17 +398,45 @@ var DeclWriteFunc = (opts) => {
 		]
 	};
 
+	var atomsCount;
+
+	var WriteAtomsCountStart = (type) => {
+		atomsCount = {
+			name: 'atomsCount',
+			namePos: 'atomsCountPos',
+			type: type,
+		}
+		return [
+			DeclVar(atomsCount.name, 'int'),
+			DeclVar(atomsCount.namePos, 'int64'),
+			CallCheckAssign('WriteEmptyInt', ['w', type.len], [atomsCount.namePos]),
+		];
+	};
+
+	var WriteAtomsCountEnd = (type) => {
+		return [
+			CallCheckAssign('RefillInt', 
+				['w', atomsCount.namePos, atomsCount.name, atomsCount.type.len],
+				[]
+			),
+		];
+	};
+
 	var WriteField = (name, type) => {
 		if (name == '_')
 			return CallCheckAssign('WriteDummy', ['w', type.len], []);
 		if (name == '$atoms')
 			return WriteAtoms(type.list);
+		if (name == '$atomsCount')
+			return WriteAtomsCountStart(type);
 		if (type.arr && type.fn != 'Bytes')
 			return WriteArr('self.'+name, type);
 		return WriteCommnType('self.'+name, type);
 	};
 
-	var WriteFields = () => opts.fields.map(field => WriteField(field.name, field.type));
+	var WriteFields = () => opts.fields
+		.map(field => WriteField(field.name, field.type))
+		.concat(atomsCount && WriteAtomsCountEnd())
 
 	return Func(
 		'Write'+opts.type,
@@ -560,6 +598,8 @@ var allStmts = () => {
 
 	var genStructFields = fields => fields.map(field => {
 		if (field.name == '_')
+			return;
+		if (field.name == '$atomsCount')
 			return;
 		if (field.name == '$atoms')
 			return field.type.list;

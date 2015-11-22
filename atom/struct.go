@@ -9,6 +9,8 @@ type Test struct {
 	Version int
 	Flags   int
 	Left    string
+	Header  *MovieHeader
+	Tracks  []*Track
 }
 
 func ReadTest(r *io.LimitedReader) (res *Test, err error) {
@@ -22,6 +24,36 @@ func ReadTest(r *io.LimitedReader) (res *Test, err error) {
 	}
 	if self.Left, err = ReadString(r, int(r.N)); err != nil {
 		return
+	}
+	if _, err = ReadDummy(r, 4); err != nil {
+		return
+	}
+	for r.N > 0 {
+		var cc4 string
+		var ar *io.LimitedReader
+		if ar, cc4, err = ReadAtomHeader(r, ""); err != nil {
+			return
+		}
+		switch cc4 {
+		case "mvhd":
+			{
+				if self.Header, err = ReadMovieHeader(ar); err != nil {
+					return
+				}
+			}
+		case "trak":
+			{
+				var item *Track
+				if item, err = ReadTrack(ar); err != nil {
+					return
+				}
+				self.Tracks = append(self.Tracks, item)
+			}
+
+		}
+		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
+			return
+		}
 	}
 	res = self
 	return
@@ -40,6 +72,28 @@ func WriteTest(w io.WriteSeeker, self *Test) (err error) {
 		return
 	}
 	if err = WriteString(w, self.Left, len(self.Left)); err != nil {
+		return
+	}
+	var atomsCount int
+	var atomsCountPos int64
+	if atomsCountPos, err = WriteEmptyInt(w, 4); err != nil {
+		return
+	}
+	if self.Header != nil {
+		if err = WriteMovieHeader(w, self.Header); err != nil {
+			return
+		}
+		atomsCount++
+	}
+	if self.Tracks != nil {
+		for _, elem := range self.Tracks {
+			if err = WriteTrack(w, elem); err != nil {
+				return
+			}
+		}
+		atomsCount++
+	}
+	if err = RefillInt(w, atomsCountPos, atomsCount, 4); err != nil {
 		return
 	}
 	if err = aw.Close(); err != nil {
