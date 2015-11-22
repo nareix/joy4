@@ -5,103 +5,6 @@ import (
 	"io"
 )
 
-type Test struct {
-	Version int
-	Flags   int
-	Left    string
-	Header  *MovieHeader
-	Tracks  []*Track
-}
-
-func ReadTest(r *io.LimitedReader) (res *Test, err error) {
-
-	self := &Test{}
-	if self.Version, err = ReadInt(r, 1); err != nil {
-		return
-	}
-	if self.Flags, err = ReadInt(r, 3); err != nil {
-		return
-	}
-	if self.Left, err = ReadString(r, int(r.N)); err != nil {
-		return
-	}
-	if _, err = ReadDummy(r, 4); err != nil {
-		return
-	}
-	for r.N > 0 {
-		var cc4 string
-		var ar *io.LimitedReader
-		if ar, cc4, err = ReadAtomHeader(r, ""); err != nil {
-			return
-		}
-		switch cc4 {
-		case "mvhd":
-			{
-				if self.Header, err = ReadMovieHeader(ar); err != nil {
-					return
-				}
-			}
-		case "trak":
-			{
-				var item *Track
-				if item, err = ReadTrack(ar); err != nil {
-					return
-				}
-				self.Tracks = append(self.Tracks, item)
-			}
-
-		}
-		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
-			return
-		}
-	}
-	res = self
-	return
-}
-func WriteTest(w io.WriteSeeker, self *Test) (err error) {
-
-	var aw *Writer
-	if aw, err = WriteAtomHeader(w, "sbss"); err != nil {
-		return
-	}
-	w = aw
-	if err = WriteInt(w, self.Version, 1); err != nil {
-		return
-	}
-	if err = WriteInt(w, self.Flags, 3); err != nil {
-		return
-	}
-	if err = WriteString(w, self.Left, len(self.Left)); err != nil {
-		return
-	}
-	var atomsCount int
-	var atomsCountPos int64
-	if atomsCountPos, err = WriteEmptyInt(w, 4); err != nil {
-		return
-	}
-	if self.Header != nil {
-		if err = WriteMovieHeader(w, self.Header); err != nil {
-			return
-		}
-		atomsCount++
-	}
-	if self.Tracks != nil {
-		for _, elem := range self.Tracks {
-			if err = WriteTrack(w, elem); err != nil {
-				return
-			}
-		}
-		atomsCount++
-	}
-	if err = RefillInt(w, atomsCountPos, atomsCount, 4); err != nil {
-		return
-	}
-	if err = aw.Close(); err != nil {
-		return
-	}
-	return
-}
-
 type Movie struct {
 	Header *MovieHeader
 	Tracks []*Track
@@ -996,9 +899,9 @@ func WriteSampleTable(w io.WriteSeeker, self *SampleTable) (err error) {
 }
 
 type SampleDesc struct {
-	Version int
-	Flags   int
-	Entries []*SampleDescEntry
+	Version  int
+	Avc1Desc *Avc1Desc
+	Mp4aDesc *Mp4aDesc
 }
 
 func ReadSampleDesc(r *io.LimitedReader) (res *SampleDesc, err error) {
@@ -1007,16 +910,34 @@ func ReadSampleDesc(r *io.LimitedReader) (res *SampleDesc, err error) {
 	if self.Version, err = ReadInt(r, 1); err != nil {
 		return
 	}
-	if self.Flags, err = ReadInt(r, 3); err != nil {
+	if _, err = ReadDummy(r, 3); err != nil {
 		return
 	}
-	var count int
-	if count, err = ReadInt(r, 4); err != nil {
+	if _, err = ReadDummy(r, 4); err != nil {
 		return
 	}
-	self.Entries = make([]*SampleDescEntry, count)
-	for i := 0; i < count; i++ {
-		if self.Entries[i], err = ReadSampleDescEntry(r); err != nil {
+	for r.N > 0 {
+		var cc4 string
+		var ar *io.LimitedReader
+		if ar, cc4, err = ReadAtomHeader(r, ""); err != nil {
+			return
+		}
+		switch cc4 {
+		case "avc1":
+			{
+				if self.Avc1Desc, err = ReadAvc1Desc(ar); err != nil {
+					return
+				}
+			}
+		case "mp4a":
+			{
+				if self.Mp4aDesc, err = ReadMp4aDesc(ar); err != nil {
+					return
+				}
+			}
+
+		}
+		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
 			return
 		}
 	}
@@ -1033,16 +954,243 @@ func WriteSampleDesc(w io.WriteSeeker, self *SampleDesc) (err error) {
 	if err = WriteInt(w, self.Version, 1); err != nil {
 		return
 	}
-	if err = WriteInt(w, self.Flags, 3); err != nil {
+	if err = WriteDummy(w, 3); err != nil {
 		return
 	}
-	if err = WriteInt(w, len(self.Entries), 4); err != nil {
+	var atomsCount int
+	var atomsCountPos int64
+	if atomsCountPos, err = WriteEmptyInt(w, 4); err != nil {
 		return
 	}
-	for _, elem := range self.Entries {
-		if err = WriteSampleDescEntry(w, elem); err != nil {
+	if self.Avc1Desc != nil {
+		if err = WriteAvc1Desc(w, self.Avc1Desc); err != nil {
 			return
 		}
+		atomsCount++
+	}
+	if self.Mp4aDesc != nil {
+		if err = WriteMp4aDesc(w, self.Mp4aDesc); err != nil {
+			return
+		}
+		atomsCount++
+	}
+	if err = RefillInt(w, atomsCountPos, atomsCount, 4); err != nil {
+		return
+	}
+	if err = aw.Close(); err != nil {
+		return
+	}
+	return
+}
+
+type Mp4aDesc struct {
+	Data []byte
+}
+
+func ReadMp4aDesc(r *io.LimitedReader) (res *Mp4aDesc, err error) {
+
+	self := &Mp4aDesc{}
+	if self.Data, err = ReadBytes(r, int(r.N)); err != nil {
+		return
+	}
+	res = self
+	return
+}
+func WriteMp4aDesc(w io.WriteSeeker, self *Mp4aDesc) (err error) {
+
+	var aw *Writer
+	if aw, err = WriteAtomHeader(w, "mp4a"); err != nil {
+		return
+	}
+	w = aw
+	if err = WriteBytes(w, self.Data, len(self.Data)); err != nil {
+		return
+	}
+	if err = aw.Close(); err != nil {
+		return
+	}
+	return
+}
+
+type Avc1Desc struct {
+	DataRefIdx           int
+	Version              int
+	Revision             int
+	Vendor               int
+	TemporalQuality      int
+	SpatialQuality       int
+	Width                int
+	Height               int
+	HorizontalResolution Fixed
+	VorizontalResolution Fixed
+	FrameCount           int
+	CompressorName       string
+	Depth                int
+	ColorTableId         int
+	Conf                 *Avc1Conf
+}
+
+func ReadAvc1Desc(r *io.LimitedReader) (res *Avc1Desc, err error) {
+
+	self := &Avc1Desc{}
+	if _, err = ReadDummy(r, 6); err != nil {
+		return
+	}
+	if self.DataRefIdx, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.Version, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.Revision, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.Vendor, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	if self.TemporalQuality, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	if self.SpatialQuality, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	if self.Width, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.Height, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.HorizontalResolution, err = ReadFixed(r, 4); err != nil {
+		return
+	}
+	if self.VorizontalResolution, err = ReadFixed(r, 4); err != nil {
+		return
+	}
+	if _, err = ReadDummy(r, 4); err != nil {
+		return
+	}
+	if self.FrameCount, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.CompressorName, err = ReadString(r, 32); err != nil {
+		return
+	}
+	if self.Depth, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	if self.ColorTableId, err = ReadInt(r, 2); err != nil {
+		return
+	}
+	for r.N > 0 {
+		var cc4 string
+		var ar *io.LimitedReader
+		if ar, cc4, err = ReadAtomHeader(r, ""); err != nil {
+			return
+		}
+		switch cc4 {
+		case "avcC":
+			{
+				if self.Conf, err = ReadAvc1Conf(ar); err != nil {
+					return
+				}
+			}
+
+		}
+		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
+			return
+		}
+	}
+	res = self
+	return
+}
+func WriteAvc1Desc(w io.WriteSeeker, self *Avc1Desc) (err error) {
+
+	var aw *Writer
+	if aw, err = WriteAtomHeader(w, "avc1"); err != nil {
+		return
+	}
+	w = aw
+	if err = WriteDummy(w, 6); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.DataRefIdx, 2); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Version, 2); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Revision, 2); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Vendor, 4); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.TemporalQuality, 4); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.SpatialQuality, 4); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Width, 2); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Height, 2); err != nil {
+		return
+	}
+	if err = WriteFixed(w, self.HorizontalResolution, 4); err != nil {
+		return
+	}
+	if err = WriteFixed(w, self.VorizontalResolution, 4); err != nil {
+		return
+	}
+	if err = WriteDummy(w, 4); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.FrameCount, 2); err != nil {
+		return
+	}
+	if err = WriteString(w, self.CompressorName, 32); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Depth, 2); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.ColorTableId, 2); err != nil {
+		return
+	}
+	if self.Conf != nil {
+		if err = WriteAvc1Conf(w, self.Conf); err != nil {
+			return
+		}
+	}
+	if err = aw.Close(); err != nil {
+		return
+	}
+	return
+}
+
+type Avc1Conf struct {
+	Data []byte
+}
+
+func ReadAvc1Conf(r *io.LimitedReader) (res *Avc1Conf, err error) {
+
+	self := &Avc1Conf{}
+	if self.Data, err = ReadBytes(r, int(r.N)); err != nil {
+		return
+	}
+	res = self
+	return
+}
+func WriteAvc1Conf(w io.WriteSeeker, self *Avc1Conf) (err error) {
+
+	var aw *Writer
+	if aw, err = WriteAtomHeader(w, "avcC"); err != nil {
+		return
+	}
+	w = aw
+	if err = WriteBytes(w, self.Data, len(self.Data)); err != nil {
+		return
 	}
 	if err = aw.Close(); err != nil {
 		return
@@ -1467,115 +1615,6 @@ func WriteChunkOffset(w io.WriteSeeker, self *ChunkOffset) (err error) {
 		}
 	}
 	if err = aw.Close(); err != nil {
-		return
-	}
-	return
-}
-
-type VideoSampleDescHeader struct {
-	Version              int
-	Revision             int
-	Vendor               int
-	TemporalQuality      int
-	SpatialQuality       int
-	Width                int
-	Height               int
-	HorizontalResolution Fixed
-	VorizontalResolution Fixed
-	CompressorName       string
-	FrameCount           int
-	Depth                int
-	ColorTableId         int
-}
-
-func ReadVideoSampleDescHeader(r *io.LimitedReader) (self VideoSampleDescHeader, err error) {
-
-	if self.Version, err = ReadInt(r, 2); err != nil {
-		return
-	}
-	if self.Revision, err = ReadInt(r, 2); err != nil {
-		return
-	}
-	if self.Vendor, err = ReadInt(r, 4); err != nil {
-		return
-	}
-	if self.TemporalQuality, err = ReadInt(r, 4); err != nil {
-		return
-	}
-	if self.SpatialQuality, err = ReadInt(r, 4); err != nil {
-		return
-	}
-	if self.Width, err = ReadInt(r, 2); err != nil {
-		return
-	}
-	if self.Height, err = ReadInt(r, 2); err != nil {
-		return
-	}
-	if self.HorizontalResolution, err = ReadFixed(r, 4); err != nil {
-		return
-	}
-	if self.VorizontalResolution, err = ReadFixed(r, 4); err != nil {
-		return
-	}
-	if _, err = ReadDummy(r, 4); err != nil {
-		return
-	}
-	if self.CompressorName, err = ReadString(r, 32); err != nil {
-		return
-	}
-	if self.FrameCount, err = ReadInt(r, 2); err != nil {
-		return
-	}
-	if self.Depth, err = ReadInt(r, 2); err != nil {
-		return
-	}
-	if self.ColorTableId, err = ReadInt(r, 2); err != nil {
-		return
-	}
-	return
-}
-func WriteVideoSampleDescHeader(w io.WriteSeeker, self VideoSampleDescHeader) (err error) {
-
-	if err = WriteInt(w, self.Version, 2); err != nil {
-		return
-	}
-	if err = WriteInt(w, self.Revision, 2); err != nil {
-		return
-	}
-	if err = WriteInt(w, self.Vendor, 4); err != nil {
-		return
-	}
-	if err = WriteInt(w, self.TemporalQuality, 4); err != nil {
-		return
-	}
-	if err = WriteInt(w, self.SpatialQuality, 4); err != nil {
-		return
-	}
-	if err = WriteInt(w, self.Width, 2); err != nil {
-		return
-	}
-	if err = WriteInt(w, self.Height, 2); err != nil {
-		return
-	}
-	if err = WriteFixed(w, self.HorizontalResolution, 4); err != nil {
-		return
-	}
-	if err = WriteFixed(w, self.VorizontalResolution, 4); err != nil {
-		return
-	}
-	if err = WriteDummy(w, 4); err != nil {
-		return
-	}
-	if err = WriteString(w, self.CompressorName, 32); err != nil {
-		return
-	}
-	if err = WriteInt(w, self.FrameCount, 2); err != nil {
-		return
-	}
-	if err = WriteInt(w, self.Depth, 2); err != nil {
-		return
-	}
-	if err = WriteInt(w, self.ColorTableId, 2); err != nil {
 		return
 	}
 	return

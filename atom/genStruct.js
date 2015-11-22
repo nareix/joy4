@@ -5,22 +5,6 @@ Array.prototype.nonull = function () {
 };
 
 var atoms = {
-	test: {
-		cc4: 'sbss',
-		fields: [
-			['version', 'int8'],
-			['flags', 'int24'],
-			['left', '[]char'],
-
-			['$atomsCount', 'int32'],
-
-			['$atoms', [
-				['header', '*movieHeader'],
-				['tracks', '[]*track'],
-			]],
-		],
-	},
-
 	movie: {
 		cc4: 'moov',
 		fields: [
@@ -171,8 +155,52 @@ var atoms = {
 		cc4: 'stsd',
 		fields: [
 			['version', 'int8'],
-			['flags', 'int24'],
-			['entries', '[int32]*sampleDescEntry'],
+			['_', '[3]byte'],
+			['$atomsCount', 'int32'],
+			['$atoms', [
+				['avc1Desc', '*avc1Desc'],
+				['mp4aDesc', '*mp4aDesc'],
+			]],
+		],
+	},
+
+	mp4aDesc: {
+		cc4: 'mp4a',
+		fields: [
+			['data', '[]byte'],
+		],
+	},
+
+	avc1Desc: {
+		cc4: 'avc1',
+		fields: [
+			['_', '[6]byte'],
+			['dataRefIdx', 'int16'],
+			['version', 'int16'],
+			['revision', 'int16'],
+			['vendor', 'int32'],
+			['temporalQuality', 'int32'],
+			['spatialQuality', 'int32'],
+			['width', 'int16'],
+			['height', 'int16'],
+			['horizontalResolution', 'Fixed32'],
+			['vorizontalResolution', 'Fixed32'],
+			['_', 'int32'],
+			['frameCount', 'int16'],
+			['compressorName', '[32]char'],
+			['depth', 'int16'],
+			['colorTableId', 'int16'],
+
+			['$atoms', [
+				['conf', '*avc1Conf'],
+			]],
+		],
+	},
+
+	avc1Conf: {
+		cc4: 'avcC',
+		fields: [
+			['data', '[]byte'],
 		],
 	},
 
@@ -250,25 +278,6 @@ var atoms = {
 			['version', 'int8'],
 			['flags', 'int24'],
 			['entries', '[int32]int32'],
-		],
-	},
-
-	videoSampleDescHeader: {
-		fields: [
-			['version', 'int16'],
-			['revision', 'int16'],
-			['vendor', 'int32'],
-			['temporalQuality', 'int32'],
-			['spatialQuality', 'int32'],
-			['width', 'int16'],
-			['height', 'int16'],
-			['horizontalResolution', 'Fixed32'],
-			['vorizontalResolution', 'Fixed32'],
-			['_', 'int32'],
-			['compressorName', '[32]char'],
-			['frameCount', 'int16'],
-			['depth', 'int16'],
-			['colorTableId', 'int16'],
 		],
 	},
 
@@ -522,7 +531,7 @@ var parseType = s => {
 	var bracket = /^\[(.*)\]/;
 	var lenDiv = 8;
 	var types = /^(int|TimeStamp|byte|Fixed|char)/;
-	var number = /[0-9]+/;
+	var number = /^[0-9]+/;
 
 	if (s.match(bracket)) {
 		var count = s.match(bracket)[1];

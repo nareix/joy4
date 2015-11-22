@@ -6,6 +6,7 @@ import (
 	"os"
 	"io"
 	"log"
+	"encoding/hex"
 )
 
 type File struct {
@@ -52,7 +53,28 @@ func changeMoov(moov *atom.Movie) {
 		log.Println("track", i, ":", track.Header.TrackWidth, track.Header.TrackHeight)
 		log.Println("track", i, ":", track.Header.Matrix)
 
-		//media := track.Media
+		media := track.Media
+
+		if minf := media.Info; minf != nil {
+			if sample := minf.Sample; sample != nil {
+				if desc := sample.SampleDesc; desc != nil {
+					if avc1Desc := desc.Avc1Desc; avc1Desc != nil {
+						if conf := avc1Desc.Conf; conf != nil {
+							log.Println("avc1", hex.Dump(conf.Data))
+						}
+					}
+
+					/*
+					if mp4a := desc.Mp4aDesc; mp4a != nil {
+						if conf := mp4a.Conf; conf != nil {
+							log.Println("mp4a", hex.Dump(conf.Data))
+						}
+					}
+					*/
+
+				}
+			}
+		}
 	}
 }
 

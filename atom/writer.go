@@ -6,8 +6,11 @@ import (
 	"log"
 )
 
-func WriteBytes(w io.Writer, b []byte) (err error) {
-	_, err = w.Write(b)
+func WriteBytes(w io.Writer, b []byte, n int) (err error) {
+	if len(b) < n {
+		b = append(b, make([]byte, n-len(b))...)
+	}
+	_, err = w.Write(b[:n])
 	return
 }
 
@@ -17,7 +20,7 @@ func WriteUInt(w io.Writer, val uint, n int) (err error) {
 		b[i] = byte(val)
 		val >>= 8
 	}
-	return WriteBytes(w, b[0:n])
+	return WriteBytes(w, b[:], n)
 }
 
 func WriteInt(w io.Writer, val int, n int) (err error) {
@@ -33,14 +36,11 @@ func WriteTimeStamp(w io.Writer, ts TimeStamp, n int) (err error) {
 }
 
 func WriteString(w io.Writer, val string, n int) (err error) {
-	wb := make([]byte, n)
-	sb := []byte(val)
-	copy(wb, sb)
-	return WriteBytes(w, wb)
+	return WriteBytes(w, []byte(val), n)
 }
 
 func WriteDummy(w io.Writer, n int) (err error) {
-	return WriteBytes(w, make([]byte, n))
+	return WriteBytes(w, []byte{}, n)
 }
 
 type Writer struct {
