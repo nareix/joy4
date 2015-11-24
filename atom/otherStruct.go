@@ -20,11 +20,13 @@ func CreateAVCDecoderConfRecord(
 	PictureParamSet []byte,
 ) (self AVCDecoderConfRecord, err error) {
 	if len(SeqenceParamSet) < 4 {
-		err = fmt.Errorf("invalid SeqenceParamSet")
+		err = fmt.Errorf("invalid SeqenceParamSet data")
 		return
 	}
 	self.AVCProfileIndication = int(SeqenceParamSet[1])
 	self.AVCLevelIndication = int(SeqenceParamSet[3])
+	self.SeqenceParamSet = [][]byte{SeqenceParamSet}
+	self.PictureParamSet = [][]byte{PictureParamSet}
 	self.LengthSizeMinusOne = 3
 	return
 }

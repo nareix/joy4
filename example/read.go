@@ -13,14 +13,14 @@ func main() {
 	flag.Parse()
 
 	if *testconv {
-		if _, err := mp4.TestConvert(flag.Arg(0)); err != nil {
+		if err := mp4.TestConvert(flag.Arg(0)); err != nil {
 			log.Println(err)
 			return
 		}
 	}
 
 	if *testrewrite {
-		if _, err := mp4.TestRewrite(flag.Arg(0)); err != nil {
+		if err := mp4.TestRewrite(flag.Arg(0)); err != nil {
 			log.Println(err)
 			return
 		}

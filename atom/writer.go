@@ -34,7 +34,17 @@ func WriteInt(w io.Writer, val int, n int) (err error) {
 }
 
 func WriteFixed(w io.Writer, val Fixed, n int) (err error) {
-	return WriteUInt(w, uint(val), n)
+	var uval uint
+
+	if n == 2 {
+		uval = uint(val)>>8
+	} else if n == 4 {
+		uval = uint(val)
+	} else {
+		panic("only fixed32 and fixed16 is supported")
+	}
+
+	return WriteUInt(w, uval, n)
 }
 
 func WriteTimeStamp(w io.Writer, ts TimeStamp, n int) (err error) {

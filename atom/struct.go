@@ -73,10 +73,10 @@ type MovieHeader struct {
 	Flags             int
 	CreateTime        TimeStamp
 	ModifyTime        TimeStamp
-	TimeScale         TimeStamp
-	Duration          TimeStamp
-	PreferredRate     int
-	PreferredVolume   int
+	TimeScale         int
+	Duration          int
+	PreferredRate     Fixed
+	PreferredVolume   Fixed
 	Matrix            [9]int
 	PreviewTime       TimeStamp
 	PreviewDuration   TimeStamp
@@ -102,16 +102,16 @@ func ReadMovieHeader(r *io.LimitedReader) (res *MovieHeader, err error) {
 	if self.ModifyTime, err = ReadTimeStamp(r, 4); err != nil {
 		return
 	}
-	if self.TimeScale, err = ReadTimeStamp(r, 4); err != nil {
+	if self.TimeScale, err = ReadInt(r, 4); err != nil {
 		return
 	}
-	if self.Duration, err = ReadTimeStamp(r, 4); err != nil {
+	if self.Duration, err = ReadInt(r, 4); err != nil {
 		return
 	}
-	if self.PreferredRate, err = ReadInt(r, 4); err != nil {
+	if self.PreferredRate, err = ReadFixed(r, 4); err != nil {
 		return
 	}
-	if self.PreferredVolume, err = ReadInt(r, 2); err != nil {
+	if self.PreferredVolume, err = ReadFixed(r, 2); err != nil {
 		return
 	}
 	if _, err = ReadDummy(r, 10); err != nil {
@@ -165,16 +165,16 @@ func WriteMovieHeader(w io.WriteSeeker, self *MovieHeader) (err error) {
 	if err = WriteTimeStamp(w, self.ModifyTime, 4); err != nil {
 		return
 	}
-	if err = WriteTimeStamp(w, self.TimeScale, 4); err != nil {
+	if err = WriteInt(w, self.TimeScale, 4); err != nil {
 		return
 	}
-	if err = WriteTimeStamp(w, self.Duration, 4); err != nil {
+	if err = WriteInt(w, self.Duration, 4); err != nil {
 		return
 	}
-	if err = WriteInt(w, self.PreferredRate, 4); err != nil {
+	if err = WriteFixed(w, self.PreferredRate, 4); err != nil {
 		return
 	}
-	if err = WriteInt(w, self.PreferredVolume, 2); err != nil {
+	if err = WriteFixed(w, self.PreferredVolume, 2); err != nil {
 		return
 	}
 	if err = WriteDummy(w, 10); err != nil {
@@ -277,10 +277,10 @@ type TrackHeader struct {
 	CreateTime     TimeStamp
 	ModifyTime     TimeStamp
 	TrackId        int
-	Duration       TimeStamp
+	Duration       int
 	Layer          int
 	AlternateGroup int
-	Volume         int
+	Volume         Fixed
 	Matrix         [9]int
 	TrackWidth     Fixed
 	TrackHeight    Fixed
@@ -307,7 +307,7 @@ func ReadTrackHeader(r *io.LimitedReader) (res *TrackHeader, err error) {
 	if _, err = ReadDummy(r, 4); err != nil {
 		return
 	}
-	if self.Duration, err = ReadTimeStamp(r, 4); err != nil {
+	if self.Duration, err = ReadInt(r, 4); err != nil {
 		return
 	}
 	if _, err = ReadDummy(r, 8); err != nil {
@@ -319,7 +319,7 @@ func ReadTrackHeader(r *io.LimitedReader) (res *TrackHeader, err error) {
 	if self.AlternateGroup, err = ReadInt(r, 2); err != nil {
 		return
 	}
-	if self.Volume, err = ReadInt(r, 2); err != nil {
+	if self.Volume, err = ReadFixed(r, 2); err != nil {
 		return
 	}
 	if _, err = ReadDummy(r, 2); err != nil {
@@ -364,7 +364,7 @@ func WriteTrackHeader(w io.WriteSeeker, self *TrackHeader) (err error) {
 	if err = WriteDummy(w, 4); err != nil {
 		return
 	}
-	if err = WriteTimeStamp(w, self.Duration, 4); err != nil {
+	if err = WriteInt(w, self.Duration, 4); err != nil {
 		return
 	}
 	if err = WriteDummy(w, 8); err != nil {
@@ -376,7 +376,7 @@ func WriteTrackHeader(w io.WriteSeeker, self *TrackHeader) (err error) {
 	if err = WriteInt(w, self.AlternateGroup, 2); err != nil {
 		return
 	}
-	if err = WriteInt(w, self.Volume, 2); err != nil {
+	if err = WriteFixed(w, self.Volume, 2); err != nil {
 		return
 	}
 	if err = WriteDummy(w, 2); err != nil {
@@ -530,8 +530,8 @@ func WriteMedia(w io.WriteSeeker, self *Media) (err error) {
 type MediaHeader struct {
 	Version    int
 	Flags      int
-	CreateTime int
-	ModifyTime int
+	CreateTime TimeStamp
+	ModifyTime TimeStamp
 	TimeScale  int
 	Duration   int
 	Language   int
@@ -547,10 +547,10 @@ func ReadMediaHeader(r *io.LimitedReader) (res *MediaHeader, err error) {
 	if self.Flags, err = ReadInt(r, 3); err != nil {
 		return
 	}
-	if self.CreateTime, err = ReadInt(r, 4); err != nil {
+	if self.CreateTime, err = ReadTimeStamp(r, 4); err != nil {
 		return
 	}
-	if self.ModifyTime, err = ReadInt(r, 4); err != nil {
+	if self.ModifyTime, err = ReadTimeStamp(r, 4); err != nil {
 		return
 	}
 	if self.TimeScale, err = ReadInt(r, 4); err != nil {
@@ -581,10 +581,10 @@ func WriteMediaHeader(w io.WriteSeeker, self *MediaHeader) (err error) {
 	if err = WriteInt(w, self.Flags, 3); err != nil {
 		return
 	}
-	if err = WriteInt(w, self.CreateTime, 4); err != nil {
+	if err = WriteTimeStamp(w, self.CreateTime, 4); err != nil {
 		return
 	}
-	if err = WriteInt(w, self.ModifyTime, 4); err != nil {
+	if err = WriteTimeStamp(w, self.ModifyTime, 4); err != nil {
 		return
 	}
 	if err = WriteInt(w, self.TimeScale, 4); err != nil {

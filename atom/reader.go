@@ -45,7 +45,15 @@ func ReadFixed(r io.Reader, n int) (res Fixed, err error) {
 	if ui, err = ReadUInt(r, n); err != nil {
 		return
 	}
-	res = Fixed(ui)
+
+	if n == 2 {
+		res = Fixed(ui<<8)
+	} else if n == 4 {
+		res = Fixed(ui)
+	} else {
+		panic("only fixed32 and fixed16 is supported")
+	}
+
 	return
 }
 
