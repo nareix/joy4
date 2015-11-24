@@ -276,7 +276,7 @@ type TrackHeader struct {
 	Flags          int
 	CreateTime     TimeStamp
 	ModifyTime     TimeStamp
-	TrackId        TimeStamp
+	TrackId        int
 	Duration       TimeStamp
 	Layer          int
 	AlternateGroup int
@@ -301,7 +301,7 @@ func ReadTrackHeader(r *io.LimitedReader) (res *TrackHeader, err error) {
 	if self.ModifyTime, err = ReadTimeStamp(r, 4); err != nil {
 		return
 	}
-	if self.TrackId, err = ReadTimeStamp(r, 4); err != nil {
+	if self.TrackId, err = ReadInt(r, 4); err != nil {
 		return
 	}
 	if _, err = ReadDummy(r, 4); err != nil {
@@ -358,7 +358,7 @@ func WriteTrackHeader(w io.WriteSeeker, self *TrackHeader) (err error) {
 	if err = WriteTimeStamp(w, self.ModifyTime, 4); err != nil {
 		return
 	}
-	if err = WriteTimeStamp(w, self.TrackId, 4); err != nil {
+	if err = WriteInt(w, self.TrackId, 4); err != nil {
 		return
 	}
 	if err = WriteDummy(w, 4); err != nil {
@@ -457,9 +457,9 @@ func WriteHandlerRefer(w io.WriteSeeker, self *HandlerRefer) (err error) {
 }
 
 type Media struct {
-	Header *MediaHeader
-	Info   *MediaInfo
-	Hdlr   *HandlerRefer
+	Header  *MediaHeader
+	Info    *MediaInfo
+	Handler *HandlerRefer
 }
 
 func ReadMedia(r *io.LimitedReader) (res *Media, err error) {
@@ -486,7 +486,7 @@ func ReadMedia(r *io.LimitedReader) (res *Media, err error) {
 			}
 		case "hdlr":
 			{
-				if self.Hdlr, err = ReadHandlerRefer(ar); err != nil {
+				if self.Handler, err = ReadHandlerRefer(ar); err != nil {
 					return
 				}
 			}
@@ -516,8 +516,8 @@ func WriteMedia(w io.WriteSeeker, self *Media) (err error) {
 			return
 		}
 	}
-	if self.Hdlr != nil {
-		if err = WriteHandlerRefer(w, self.Hdlr); err != nil {
+	if self.Handler != nil {
+		if err = WriteHandlerRefer(w, self.Handler); err != nil {
 			return
 		}
 	}

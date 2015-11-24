@@ -24,7 +24,13 @@ func WriteUInt(w io.Writer, val uint, n int) (err error) {
 }
 
 func WriteInt(w io.Writer, val int, n int) (err error) {
-	return WriteUInt(w, uint(val), n)
+	var uval uint
+	if val < 0 {
+		uval = uint((1<<uint(n*8))+val)
+	} else {
+		uval = uint(val)
+	}
+	return WriteUInt(w, uval, n)
 }
 
 func WriteFixed(w io.Writer, val Fixed, n int) (err error) {

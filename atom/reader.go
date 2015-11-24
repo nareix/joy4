@@ -28,11 +28,15 @@ func ReadUInt(r io.Reader, n int) (res uint, err error) {
 }
 
 func ReadInt(r io.Reader, n int) (res int, err error) {
-	var ui uint
-	if ui, err = ReadUInt(r, n); err != nil {
+	var uval uint
+	if uval, err = ReadUInt(r, n); err != nil {
 		return
 	}
-	res = int(ui)
+	if uval&(1<<uint(n*8-1)) != 0 {
+		res = -int((1<<uint(n*8))-uval)
+	} else {
+		res = int(uval)
+	}
 	return
 }
 

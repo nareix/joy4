@@ -55,7 +55,7 @@ var atoms = {
 			['flags', 'int24'],
 			['createTime', 'TimeStamp32'],
 			['modifyTime', 'TimeStamp32'],
-			['trackId', 'TimeStamp32'],
+			['trackId', 'int32'],
 			['_', '[4]byte'],
 			['duration', 'TimeStamp32'],
 			['_', '[8]byte'],
@@ -86,7 +86,7 @@ var atoms = {
 			['$atoms', [
 				['header', '*mediaHeader'],
 				['info', '*mediaInfo'],
-				['hdlr', '*handlerRefer'],
+				['handler', '*handlerRefer'],
 			]],
 		],
 	},
