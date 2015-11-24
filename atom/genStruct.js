@@ -220,7 +220,7 @@ var atoms = {
 	avc1Conf: {
 		cc4: 'avcC',
 		fields: [
-			['data', '[]byte'],
+			['record', 'AVCDecoderConfRecord'],
 		],
 	},
 

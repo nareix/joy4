@@ -1292,13 +1292,13 @@ func WriteAvc1Desc(w io.WriteSeeker, self *Avc1Desc) (err error) {
 }
 
 type Avc1Conf struct {
-	Data []byte
+	Record AVCDecoderConfRecord
 }
 
 func ReadAvc1Conf(r *io.LimitedReader) (res *Avc1Conf, err error) {
 
 	self := &Avc1Conf{}
-	if self.Data, err = ReadBytes(r, int(r.N)); err != nil {
+	if self.Record, err = ReadAVCDecoderConfRecord(r); err != nil {
 		return
 	}
 	res = self
@@ -1311,7 +1311,7 @@ func WriteAvc1Conf(w io.WriteSeeker, self *Avc1Conf) (err error) {
 		return
 	}
 	w = aw
-	if err = WriteBytes(w, self.Data, len(self.Data)); err != nil {
+	if err = WriteAVCDecoderConfRecord(w, self.Record); err != nil {
 		return
 	}
 	if err = aw.Close(); err != nil {

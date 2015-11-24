@@ -106,8 +106,10 @@ func changeMoov(moov *atom.Movie) {
 					if avc1Desc := desc.Avc1Desc; avc1Desc != nil {
 						if conf := avc1Desc.Conf; conf != nil {
 							if true {
-								log.Println("avc1", hex.Dump(conf.Data))
-								log.Println("avc1desc", avc1Desc)
+								//log.Println("avc1", hex.Dump(conf.Data))
+								log.Println("avc1desc", conf)
+								//avcconf, _ := atom.ReadAVCDecoderConfRecord(bytes.NewReader(conf.Data))
+								//log.Println("avcconf", avcconf)
 							}
 						}
 					}
@@ -225,6 +227,8 @@ func rewrite(moov *atom.Movie, mdat io.ReadSeeker, outfile io.WriteSeeker) (err 
 	sampleCh := make(chan Sample)
 	go readSamples(vsample, mdat, sampleCh)
 
+	log.Println("avc1Desc.conf", vsample.SampleDesc.Avc1Desc.Conf)
+
 	newsample := &atom.SampleTable{
 		SampleDesc: &atom.SampleDesc{
 			Avc1Desc: &atom.Avc1Desc{
@@ -311,8 +315,8 @@ func rewrite(moov *atom.Movie, mdat io.ReadSeeker, outfile io.WriteSeeker) (err 
 			Duration: vtrack.Header.Duration,
 			Volume: vtrack.Header.Volume,
 			Matrix: [9]int{0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000},
-			TrackWidth: vtrack.Header.TrackWidth,
-			TrackHeight: vtrack.Header.TrackHeight,
+			//TrackWidth: vtrack.Header.TrackWidth,
+			//TrackHeight: vtrack.Header.TrackHeight,
 			TrackId: 1,
 		},
 
@@ -400,7 +404,6 @@ func TestRewrite(filename string) (file *File, err error) {
 
 	return
 }
-
 
 func TestConvert(filename string) (file *File, err error) {
 	var osfile *os.File
