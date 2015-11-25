@@ -57,13 +57,30 @@ func (self *SimpleH264Writer) prepare() (err error) {
 }
 
 func (self *SimpleH264Writer) WriteSample(sync bool, duration int, data []byte) (err error) {
+	return self.writeSample(func (w io.Writer, data []byte) (int, error) {
+		if _, err = self.mdatWriter.Write(data); err != nil {
+			return 0, err
+		}
+		return len(data), nil
+	}, sync, duration, data)
+}
+
+func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, data []byte) (err error) {
+	return self.writeSample(atom.WriteSampleByNALU, sync, duration, data)
+}
+
+func (self *SimpleH264Writer) writeSample(
+	writeFunc func(io.Writer, []byte) (int,error),
+	sync bool, duration int, data []byte,
+) (err error) {
 	if self.mdatWriter == nil {
 		if err = self.prepare(); err != nil {
 			return
 		}
 	}
 
-	if _, err = self.mdatWriter.Write(data); err != nil {
+	var sampleSize int
+	if sampleSize, err = writeFunc(self.mdatWriter, data); err != nil {
 		return
 	}
 
@@ -85,7 +102,7 @@ func (self *SimpleH264Writer) WriteSample(sync bool, duration int, data []byte) 
 	self.sampleIdx++
 	self.timeToSample.Count++
 	self.sampleToChunk.SamplesPerChunk++
-	self.sample.SampleSize.Entries = append(self.sample.SampleSize.Entries, len(data))
+	self.sample.SampleSize.Entries = append(self.sample.SampleSize.Entries, sampleSize)
 
 	return
 }

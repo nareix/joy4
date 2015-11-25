@@ -15,6 +15,18 @@ type AVCDecoderConfRecord struct {
 	PictureParamSet [][]byte
 }
 
+func WriteSampleByNALU(w io.Writer, nalu []byte) (size int, err error) {
+	if err = WriteInt(w, len(nalu), 4); err != nil {
+		return
+	}
+	size += 4
+	if _, err = w.Write(nalu); err != nil {
+		return
+	}
+	size += len(nalu)
+	return
+}
+
 func CreateAVCDecoderConfRecord(
 	SeqenceParamSet []byte,
 	PictureParamSet []byte,
