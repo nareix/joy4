@@ -2,7 +2,7 @@
 package mp4
 
 import (
-	"./atom"
+	"github.com/nareix/mp4/atom"
 	"io"
 )
 
