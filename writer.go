@@ -57,22 +57,29 @@ func (self *SimpleH264Writer) prepare() (err error) {
 }
 
 func (self *SimpleH264Writer) WriteSample(sync bool, duration int, data []byte) (err error) {
-	return self.writeSample(func (w io.Writer, data []byte) (int, error) {
-		if _, err = self.mdatWriter.Write(data); err != nil {
-			return 0, err
-		}
-		return len(data), nil
-	}, sync, duration, data)
+	return self.writeSample(false, sync, duration, data)
 }
 
 func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, data []byte) (err error) {
-	return self.writeSample(atom.WriteSampleByNALU, sync, duration, data)
+	return self.writeSample(true, sync, duration, data)
 }
 
-func (self *SimpleH264Writer) writeSample(
-	writeFunc func(io.Writer, []byte) (int,error),
-	sync bool, duration int, data []byte,
-) (err error) {
+func splitNALUByStartCode(data []byte) (out [][]byte) {
+	last := 0
+	for i := 0; i < len(data)-3; {
+		if data[i] == 0 && data[i+1] == 0 && data[i+2] == 1 {
+			out = append(out, data[last:i])
+			i += 3
+			last = i
+		} else {
+			i++
+		}
+	}
+	out = append(out, data[last:])
+	return
+}
+
+func (self *SimpleH264Writer) writeSample(isNALU, sync bool, duration int, data []byte) (err error) {
 	if self.mdatWriter == nil {
 		if err = self.prepare(); err != nil {
 			return
@@ -80,8 +87,16 @@ func (self *SimpleH264Writer) writeSample(
 	}
 
 	var sampleSize int
-	if sampleSize, err = writeFunc(self.mdatWriter, data); err != nil {
-		return
+
+	if isNALU {
+		if sampleSize, err = atom.WriteSampleByNALU(self.mdatWriter, data); err != nil {
+			return
+		}
+	} else {
+		sampleSize = len(data)
+		if _, err = self.mdatWriter.Write(data); err != nil {
+			return
+		}
 	}
 
 	if sync {
