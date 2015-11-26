@@ -7,6 +7,7 @@ import (
 
 type Movie struct {
 	Header *MovieHeader
+	Iods   *Iods
 	Tracks []*Track
 }
 
@@ -23,6 +24,12 @@ func ReadMovie(r *io.LimitedReader) (res *Movie, err error) {
 		case "mvhd":
 			{
 				if self.Header, err = ReadMovieHeader(ar); err != nil {
+					return
+				}
+			}
+		case "iods":
+			{
+				if self.Iods, err = ReadIods(ar); err != nil {
 					return
 				}
 			}
@@ -55,12 +62,46 @@ func WriteMovie(w io.WriteSeeker, self *Movie) (err error) {
 			return
 		}
 	}
+	if self.Iods != nil {
+		if err = WriteIods(w, self.Iods); err != nil {
+			return
+		}
+	}
 	if self.Tracks != nil {
 		for _, elem := range self.Tracks {
 			if err = WriteTrack(w, elem); err != nil {
 				return
 			}
 		}
+	}
+	if err = aw.Close(); err != nil {
+		return
+	}
+	return
+}
+
+type Iods struct {
+	Data []byte
+}
+
+func ReadIods(r *io.LimitedReader) (res *Iods, err error) {
+
+	self := &Iods{}
+	if self.Data, err = ReadBytes(r, int(r.N)); err != nil {
+		return
+	}
+	res = self
+	return
+}
+func WriteIods(w io.WriteSeeker, self *Iods) (err error) {
+
+	var aw *Writer
+	if aw, err = WriteAtomHeader(w, "iods"); err != nil {
+		return
+	}
+	w = aw
+	if err = WriteBytes(w, self.Data, len(self.Data)); err != nil {
+		return
 	}
 	if err = aw.Close(); err != nil {
 		return

@@ -10,8 +10,16 @@ var atoms = {
 		fields: [
 			['$atoms', [
 				['header', '*movieHeader'],
+				['iods', '*iods'],
 				['tracks', '[]*track'],
 			]],
+		],
+	},
+
+	iods: {
+		cc4: 'iods',
+		fields: [
+			['data', '[]byte'],
 		],
 	},
 
