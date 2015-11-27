@@ -9,7 +9,7 @@ import (
 
 func main() {
 	testconv := flag.Bool("testconv", false, "")
-	testrewrite := flag.Bool("testrewrite", false, "")
+	probe := flag.Bool("probe", false, "")
 	flag.Parse()
 
 	if *testconv {
@@ -19,8 +19,8 @@ func main() {
 		}
 	}
 
-	if *testrewrite {
-		if err := mp4.TestRewrite(flag.Arg(0)); err != nil {
+	if *probe {
+		if err := mp4.ProbeFile(flag.Arg(0)); err != nil {
 			log.Println(err)
 			return
 		}

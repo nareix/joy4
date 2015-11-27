@@ -79,6 +79,24 @@ func WriteMovie(w io.WriteSeeker, self *Movie) (err error) {
 	}
 	return
 }
+func WalkMovie(w Walker, self *Movie) {
+
+	w.Log("[Movie]")
+	w.Start()
+	if self.Header != nil {
+		WalkMovieHeader(w, self.Header)
+	}
+	if self.Iods != nil {
+		WalkIods(w, self.Iods)
+	}
+	for _, item := range self.Tracks {
+		if item != nil {
+			WalkTrack(w, item)
+		}
+	}
+	w.End()
+	return
+}
 
 type Iods struct {
 	Data []byte
@@ -106,6 +124,15 @@ func WriteIods(w io.WriteSeeker, self *Iods) (err error) {
 	if err = aw.Close(); err != nil {
 		return
 	}
+	return
+}
+func WalkIods(w Walker, self *Iods) {
+
+	w.Log("[Iods]")
+	w.Start()
+	w.Name("Data")
+	w.Bytes(self.Data)
+	w.End()
 	return
 }
 
@@ -252,6 +279,47 @@ func WriteMovieHeader(w io.WriteSeeker, self *MovieHeader) (err error) {
 	}
 	return
 }
+func WalkMovieHeader(w Walker, self *MovieHeader) {
+
+	w.Log("[MovieHeader]")
+	w.Start()
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Flags")
+	w.Int(self.Flags)
+	w.Name("CreateTime")
+	w.TimeStamp(self.CreateTime)
+	w.Name("ModifyTime")
+	w.TimeStamp(self.ModifyTime)
+	w.Name("TimeScale")
+	w.Int(self.TimeScale)
+	w.Name("Duration")
+	w.Int(self.Duration)
+	w.Name("PreferredRate")
+	w.Fixed(self.PreferredRate)
+	w.Name("PreferredVolume")
+	w.Fixed(self.PreferredVolume)
+	for _, item := range self.Matrix {
+		w.Name("Matrix")
+		w.Int(item)
+	}
+	w.Name("PreviewTime")
+	w.TimeStamp(self.PreviewTime)
+	w.Name("PreviewDuration")
+	w.TimeStamp(self.PreviewDuration)
+	w.Name("PosterTime")
+	w.TimeStamp(self.PosterTime)
+	w.Name("SelectionTime")
+	w.TimeStamp(self.SelectionTime)
+	w.Name("SelectionDuration")
+	w.TimeStamp(self.SelectionDuration)
+	w.Name("CurrentTime")
+	w.TimeStamp(self.CurrentTime)
+	w.Name("NextTrackId")
+	w.Int(self.NextTrackId)
+	w.End()
+	return
+}
 
 type Track struct {
 	Header *TrackHeader
@@ -309,6 +377,19 @@ func WriteTrack(w io.WriteSeeker, self *Track) (err error) {
 	if err = aw.Close(); err != nil {
 		return
 	}
+	return
+}
+func WalkTrack(w Walker, self *Track) {
+
+	w.Log("[Track]")
+	w.Start()
+	if self.Header != nil {
+		WalkTrackHeader(w, self.Header)
+	}
+	if self.Media != nil {
+		WalkMedia(w, self.Media)
+	}
+	w.End()
 	return
 }
 
@@ -439,6 +520,39 @@ func WriteTrackHeader(w io.WriteSeeker, self *TrackHeader) (err error) {
 	}
 	return
 }
+func WalkTrackHeader(w Walker, self *TrackHeader) {
+
+	w.Log("[TrackHeader]")
+	w.Start()
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Flags")
+	w.Int(self.Flags)
+	w.Name("CreateTime")
+	w.TimeStamp(self.CreateTime)
+	w.Name("ModifyTime")
+	w.TimeStamp(self.ModifyTime)
+	w.Name("TrackId")
+	w.Int(self.TrackId)
+	w.Name("Duration")
+	w.Int(self.Duration)
+	w.Name("Layer")
+	w.Int(self.Layer)
+	w.Name("AlternateGroup")
+	w.Int(self.AlternateGroup)
+	w.Name("Volume")
+	w.Fixed(self.Volume)
+	for _, item := range self.Matrix {
+		w.Name("Matrix")
+		w.Int(item)
+	}
+	w.Name("TrackWidth")
+	w.Fixed(self.TrackWidth)
+	w.Name("TrackHeight")
+	w.Fixed(self.TrackHeight)
+	w.End()
+	return
+}
 
 type HandlerRefer struct {
 	Version int
@@ -494,6 +608,23 @@ func WriteHandlerRefer(w io.WriteSeeker, self *HandlerRefer) (err error) {
 	if err = aw.Close(); err != nil {
 		return
 	}
+	return
+}
+func WalkHandlerRefer(w Walker, self *HandlerRefer) {
+
+	w.Log("[HandlerRefer]")
+	w.Start()
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Flags")
+	w.Int(self.Flags)
+	w.Name("Type")
+	w.String(self.Type)
+	w.Name("SubType")
+	w.String(self.SubType)
+	w.Name("Name")
+	w.String(self.Name)
+	w.End()
 	return
 }
 
@@ -565,6 +696,22 @@ func WriteMedia(w io.WriteSeeker, self *Media) (err error) {
 	if err = aw.Close(); err != nil {
 		return
 	}
+	return
+}
+func WalkMedia(w Walker, self *Media) {
+
+	w.Log("[Media]")
+	w.Start()
+	if self.Header != nil {
+		WalkMediaHeader(w, self.Header)
+	}
+	if self.Info != nil {
+		WalkMediaInfo(w, self.Info)
+	}
+	if self.Handler != nil {
+		WalkHandlerRefer(w, self.Handler)
+	}
+	w.End()
 	return
 }
 
@@ -645,10 +792,34 @@ func WriteMediaHeader(w io.WriteSeeker, self *MediaHeader) (err error) {
 	}
 	return
 }
+func WalkMediaHeader(w Walker, self *MediaHeader) {
+
+	w.Log("[MediaHeader]")
+	w.Start()
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Flags")
+	w.Int(self.Flags)
+	w.Name("CreateTime")
+	w.TimeStamp(self.CreateTime)
+	w.Name("ModifyTime")
+	w.TimeStamp(self.ModifyTime)
+	w.Name("TimeScale")
+	w.Int(self.TimeScale)
+	w.Name("Duration")
+	w.Int(self.Duration)
+	w.Name("Language")
+	w.Int(self.Language)
+	w.Name("Quality")
+	w.Int(self.Quality)
+	w.End()
+	return
+}
 
 type MediaInfo struct {
 	Sound  *SoundMediaInfo
 	Video  *VideoMediaInfo
+	Data   *DataInfo
 	Sample *SampleTable
 }
 
@@ -671,6 +842,12 @@ func ReadMediaInfo(r *io.LimitedReader) (res *MediaInfo, err error) {
 		case "vmhd":
 			{
 				if self.Video, err = ReadVideoMediaInfo(ar); err != nil {
+					return
+				}
+			}
+		case "dinf":
+			{
+				if self.Data, err = ReadDataInfo(ar); err != nil {
 					return
 				}
 			}
@@ -706,6 +883,11 @@ func WriteMediaInfo(w io.WriteSeeker, self *MediaInfo) (err error) {
 			return
 		}
 	}
+	if self.Data != nil {
+		if err = WriteDataInfo(w, self.Data); err != nil {
+			return
+		}
+	}
 	if self.Sample != nil {
 		if err = WriteSampleTable(w, self.Sample); err != nil {
 			return
@@ -714,6 +896,216 @@ func WriteMediaInfo(w io.WriteSeeker, self *MediaInfo) (err error) {
 	if err = aw.Close(); err != nil {
 		return
 	}
+	return
+}
+func WalkMediaInfo(w Walker, self *MediaInfo) {
+
+	w.Log("[MediaInfo]")
+	w.Start()
+	if self.Sound != nil {
+		WalkSoundMediaInfo(w, self.Sound)
+	}
+	if self.Video != nil {
+		WalkVideoMediaInfo(w, self.Video)
+	}
+	if self.Data != nil {
+		WalkDataInfo(w, self.Data)
+	}
+	if self.Sample != nil {
+		WalkSampleTable(w, self.Sample)
+	}
+	w.End()
+	return
+}
+
+type DataInfo struct {
+	Refer *DataRefer
+}
+
+func ReadDataInfo(r *io.LimitedReader) (res *DataInfo, err error) {
+
+	self := &DataInfo{}
+	for r.N > 0 {
+		var cc4 string
+		var ar *io.LimitedReader
+		if ar, cc4, err = ReadAtomHeader(r, ""); err != nil {
+			return
+		}
+		switch cc4 {
+		case "dref":
+			{
+				if self.Refer, err = ReadDataRefer(ar); err != nil {
+					return
+				}
+			}
+
+		}
+		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
+			return
+		}
+	}
+	res = self
+	return
+}
+func WriteDataInfo(w io.WriteSeeker, self *DataInfo) (err error) {
+
+	var aw *Writer
+	if aw, err = WriteAtomHeader(w, "dinf"); err != nil {
+		return
+	}
+	w = aw
+	if self.Refer != nil {
+		if err = WriteDataRefer(w, self.Refer); err != nil {
+			return
+		}
+	}
+	if err = aw.Close(); err != nil {
+		return
+	}
+	return
+}
+func WalkDataInfo(w Walker, self *DataInfo) {
+
+	w.Log("[DataInfo]")
+	w.Start()
+	if self.Refer != nil {
+		WalkDataRefer(w, self.Refer)
+	}
+	w.End()
+	return
+}
+
+type DataRefer struct {
+	Version int
+	Flags   int
+	Url     *DataReferUrl
+}
+
+func ReadDataRefer(r *io.LimitedReader) (res *DataRefer, err error) {
+
+	self := &DataRefer{}
+	if self.Version, err = ReadInt(r, 1); err != nil {
+		return
+	}
+	if self.Flags, err = ReadInt(r, 3); err != nil {
+		return
+	}
+	if _, err = ReadDummy(r, 4); err != nil {
+		return
+	}
+	for r.N > 0 {
+		var cc4 string
+		var ar *io.LimitedReader
+		if ar, cc4, err = ReadAtomHeader(r, ""); err != nil {
+			return
+		}
+		switch cc4 {
+		case "url ":
+			{
+				if self.Url, err = ReadDataReferUrl(ar); err != nil {
+					return
+				}
+			}
+
+		}
+		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
+			return
+		}
+	}
+	res = self
+	return
+}
+func WriteDataRefer(w io.WriteSeeker, self *DataRefer) (err error) {
+
+	var aw *Writer
+	if aw, err = WriteAtomHeader(w, "dref"); err != nil {
+		return
+	}
+	w = aw
+	if err = WriteInt(w, self.Version, 1); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Flags, 3); err != nil {
+		return
+	}
+	var atomsCount int
+	var atomsCountPos int64
+	if atomsCountPos, err = WriteEmptyInt(w, 4); err != nil {
+		return
+	}
+	if self.Url != nil {
+		if err = WriteDataReferUrl(w, self.Url); err != nil {
+			return
+		}
+		atomsCount++
+	}
+	if err = RefillInt(w, atomsCountPos, atomsCount, 4); err != nil {
+		return
+	}
+	if err = aw.Close(); err != nil {
+		return
+	}
+	return
+}
+func WalkDataRefer(w Walker, self *DataRefer) {
+
+	w.Log("[DataRefer]")
+	w.Start()
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Flags")
+	w.Int(self.Flags)
+	if self.Url != nil {
+		WalkDataReferUrl(w, self.Url)
+	}
+	w.End()
+	return
+}
+
+type DataReferUrl struct {
+	Version int
+	Flags   int
+}
+
+func ReadDataReferUrl(r *io.LimitedReader) (res *DataReferUrl, err error) {
+
+	self := &DataReferUrl{}
+	if self.Version, err = ReadInt(r, 1); err != nil {
+		return
+	}
+	if self.Flags, err = ReadInt(r, 3); err != nil {
+		return
+	}
+	res = self
+	return
+}
+func WriteDataReferUrl(w io.WriteSeeker, self *DataReferUrl) (err error) {
+
+	var aw *Writer
+	if aw, err = WriteAtomHeader(w, "url "); err != nil {
+		return
+	}
+	w = aw
+	if err = WriteInt(w, self.Version, 1); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Flags, 3); err != nil {
+		return
+	}
+	if err = aw.Close(); err != nil {
+		return
+	}
+	return
+}
+func WalkDataReferUrl(w Walker, self *DataReferUrl) {
+
+	w.Log("[DataReferUrl]")
+	w.Start()
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Flags")
+	w.Int(self.Flags)
+	w.End()
 	return
 }
 
@@ -763,6 +1155,19 @@ func WriteSoundMediaInfo(w io.WriteSeeker, self *SoundMediaInfo) (err error) {
 	if err = aw.Close(); err != nil {
 		return
 	}
+	return
+}
+func WalkSoundMediaInfo(w Walker, self *SoundMediaInfo) {
+
+	w.Log("[SoundMediaInfo]")
+	w.Start()
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Flags")
+	w.Int(self.Flags)
+	w.Name("Balance")
+	w.Int(self.Balance)
+	w.End()
 	return
 }
 
@@ -817,6 +1222,23 @@ func WriteVideoMediaInfo(w io.WriteSeeker, self *VideoMediaInfo) (err error) {
 	if err = aw.Close(); err != nil {
 		return
 	}
+	return
+}
+func WalkVideoMediaInfo(w Walker, self *VideoMediaInfo) {
+
+	w.Log("[VideoMediaInfo]")
+	w.Start()
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Flags")
+	w.Int(self.Flags)
+	w.Name("GraphicsMode")
+	w.Int(self.GraphicsMode)
+	for _, item := range self.Opcolor {
+		w.Name("Opcolor")
+		w.Int(item)
+	}
+	w.End()
 	return
 }
 
@@ -938,6 +1360,34 @@ func WriteSampleTable(w io.WriteSeeker, self *SampleTable) (err error) {
 	}
 	return
 }
+func WalkSampleTable(w Walker, self *SampleTable) {
+
+	w.Log("[SampleTable]")
+	w.Start()
+	if self.SampleDesc != nil {
+		WalkSampleDesc(w, self.SampleDesc)
+	}
+	if self.TimeToSample != nil {
+		WalkTimeToSample(w, self.TimeToSample)
+	}
+	if self.CompositionOffset != nil {
+		WalkCompositionOffset(w, self.CompositionOffset)
+	}
+	if self.SampleToChunk != nil {
+		WalkSampleToChunk(w, self.SampleToChunk)
+	}
+	if self.SyncSample != nil {
+		WalkSyncSample(w, self.SyncSample)
+	}
+	if self.ChunkOffset != nil {
+		WalkChunkOffset(w, self.ChunkOffset)
+	}
+	if self.SampleSize != nil {
+		WalkSampleSize(w, self.SampleSize)
+	}
+	w.End()
+	return
+}
 
 type SampleDesc struct {
 	Version  int
@@ -1021,6 +1471,21 @@ func WriteSampleDesc(w io.WriteSeeker, self *SampleDesc) (err error) {
 	if err = aw.Close(); err != nil {
 		return
 	}
+	return
+}
+func WalkSampleDesc(w Walker, self *SampleDesc) {
+
+	w.Log("[SampleDesc]")
+	w.Start()
+	w.Name("Version")
+	w.Int(self.Version)
+	if self.Avc1Desc != nil {
+		WalkAvc1Desc(w, self.Avc1Desc)
+	}
+	if self.Mp4aDesc != nil {
+		WalkMp4aDesc(w, self.Mp4aDesc)
+	}
+	w.End()
 	return
 }
 
@@ -1138,6 +1603,32 @@ func WriteMp4aDesc(w io.WriteSeeker, self *Mp4aDesc) (err error) {
 	}
 	return
 }
+func WalkMp4aDesc(w Walker, self *Mp4aDesc) {
+
+	w.Log("[Mp4aDesc]")
+	w.Start()
+	w.Name("DataRefIdx")
+	w.Int(self.DataRefIdx)
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("RevisionLevel")
+	w.Int(self.RevisionLevel)
+	w.Name("Vendor")
+	w.Int(self.Vendor)
+	w.Name("NumberOfChannels")
+	w.Int(self.NumberOfChannels)
+	w.Name("SampleSize")
+	w.Int(self.SampleSize)
+	w.Name("CompressionId")
+	w.Int(self.CompressionId)
+	w.Name("SampleRate")
+	w.Fixed(self.SampleRate)
+	if self.Conf != nil {
+		WalkElemStreamDesc(w, self.Conf)
+	}
+	w.End()
+	return
+}
 
 type ElemStreamDesc struct {
 	Version int
@@ -1172,6 +1663,17 @@ func WriteElemStreamDesc(w io.WriteSeeker, self *ElemStreamDesc) (err error) {
 	if err = aw.Close(); err != nil {
 		return
 	}
+	return
+}
+func WalkElemStreamDesc(w Walker, self *ElemStreamDesc) {
+
+	w.Log("[ElemStreamDesc]")
+	w.Start()
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Data")
+	w.Bytes(self.Data)
+	w.End()
 	return
 }
 
@@ -1331,6 +1833,44 @@ func WriteAvc1Desc(w io.WriteSeeker, self *Avc1Desc) (err error) {
 	}
 	return
 }
+func WalkAvc1Desc(w Walker, self *Avc1Desc) {
+
+	w.Log("[Avc1Desc]")
+	w.Start()
+	w.Name("DataRefIdx")
+	w.Int(self.DataRefIdx)
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Revision")
+	w.Int(self.Revision)
+	w.Name("Vendor")
+	w.Int(self.Vendor)
+	w.Name("TemporalQuality")
+	w.Int(self.TemporalQuality)
+	w.Name("SpatialQuality")
+	w.Int(self.SpatialQuality)
+	w.Name("Width")
+	w.Int(self.Width)
+	w.Name("Height")
+	w.Int(self.Height)
+	w.Name("HorizontalResolution")
+	w.Fixed(self.HorizontalResolution)
+	w.Name("VorizontalResolution")
+	w.Fixed(self.VorizontalResolution)
+	w.Name("FrameCount")
+	w.Int(self.FrameCount)
+	w.Name("CompressorName")
+	w.String(self.CompressorName)
+	w.Name("Depth")
+	w.Int(self.Depth)
+	w.Name("ColorTableId")
+	w.Int(self.ColorTableId)
+	if self.Conf != nil {
+		WalkAvc1Conf(w, self.Conf)
+	}
+	w.End()
+	return
+}
 
 type Avc1Conf struct {
 	Record AVCDecoderConfRecord
@@ -1358,6 +1898,14 @@ func WriteAvc1Conf(w io.WriteSeeker, self *Avc1Conf) (err error) {
 	if err = aw.Close(); err != nil {
 		return
 	}
+	return
+}
+func WalkAvc1Conf(w Walker, self *Avc1Conf) {
+
+	w.Log("[Avc1Conf]")
+	w.Start()
+	WalkAVCDecoderConfRecord(w, self.Record)
+	w.End()
 	return
 }
 
@@ -1415,6 +1963,20 @@ func WriteTimeToSample(w io.WriteSeeker, self *TimeToSample) (err error) {
 	}
 	return
 }
+func WalkTimeToSample(w Walker, self *TimeToSample) {
+
+	w.Log("[TimeToSample]")
+	w.Start()
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Flags")
+	w.Int(self.Flags)
+	for _, item := range self.Entries {
+		WalkTimeToSampleEntry(w, item)
+	}
+	w.End()
+	return
+}
 
 type TimeToSampleEntry struct {
 	Count    int
@@ -1439,6 +2001,17 @@ func WriteTimeToSampleEntry(w io.WriteSeeker, self TimeToSampleEntry) (err error
 	if err = WriteInt(w, self.Duration, 4); err != nil {
 		return
 	}
+	return
+}
+func WalkTimeToSampleEntry(w Walker, self TimeToSampleEntry) {
+
+	w.Log("[TimeToSampleEntry]")
+	w.Start()
+	w.Name("Count")
+	w.Int(self.Count)
+	w.Name("Duration")
+	w.Int(self.Duration)
+	w.End()
 	return
 }
 
@@ -1496,6 +2069,20 @@ func WriteSampleToChunk(w io.WriteSeeker, self *SampleToChunk) (err error) {
 	}
 	return
 }
+func WalkSampleToChunk(w Walker, self *SampleToChunk) {
+
+	w.Log("[SampleToChunk]")
+	w.Start()
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Flags")
+	w.Int(self.Flags)
+	for _, item := range self.Entries {
+		WalkSampleToChunkEntry(w, item)
+	}
+	w.End()
+	return
+}
 
 type SampleToChunkEntry struct {
 	FirstChunk      int
@@ -1527,6 +2114,19 @@ func WriteSampleToChunkEntry(w io.WriteSeeker, self SampleToChunkEntry) (err err
 	if err = WriteInt(w, self.SampleDescId, 4); err != nil {
 		return
 	}
+	return
+}
+func WalkSampleToChunkEntry(w Walker, self SampleToChunkEntry) {
+
+	w.Log("[SampleToChunkEntry]")
+	w.Start()
+	w.Name("FirstChunk")
+	w.Int(self.FirstChunk)
+	w.Name("SamplesPerChunk")
+	w.Int(self.SamplesPerChunk)
+	w.Name("SampleDescId")
+	w.Int(self.SampleDescId)
+	w.End()
 	return
 }
 
@@ -1584,6 +2184,20 @@ func WriteCompositionOffset(w io.WriteSeeker, self *CompositionOffset) (err erro
 	}
 	return
 }
+func WalkCompositionOffset(w Walker, self *CompositionOffset) {
+
+	w.Log("[CompositionOffset]")
+	w.Start()
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Flags")
+	w.Int(self.Flags)
+	for _, item := range self.Entries {
+		WalkCompositionOffsetEntry(w, item)
+	}
+	w.End()
+	return
+}
 
 type CompositionOffsetEntry struct {
 	Count  int
@@ -1608,6 +2222,17 @@ func WriteCompositionOffsetEntry(w io.WriteSeeker, self CompositionOffsetEntry) 
 	if err = WriteInt(w, self.Offset, 4); err != nil {
 		return
 	}
+	return
+}
+func WalkCompositionOffsetEntry(w Walker, self CompositionOffsetEntry) {
+
+	w.Log("[CompositionOffsetEntry]")
+	w.Start()
+	w.Name("Count")
+	w.Int(self.Count)
+	w.Name("Offset")
+	w.Int(self.Offset)
+	w.End()
 	return
 }
 
@@ -1663,6 +2288,21 @@ func WriteSyncSample(w io.WriteSeeker, self *SyncSample) (err error) {
 	if err = aw.Close(); err != nil {
 		return
 	}
+	return
+}
+func WalkSyncSample(w Walker, self *SyncSample) {
+
+	w.Log("[SyncSample]")
+	w.Start()
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Flags")
+	w.Int(self.Flags)
+	for _, item := range self.Entries {
+		w.Name("Entries")
+		w.Int(item)
+	}
+	w.End()
 	return
 }
 
@@ -1727,6 +2367,23 @@ func WriteSampleSize(w io.WriteSeeker, self *SampleSize) (err error) {
 	}
 	return
 }
+func WalkSampleSize(w Walker, self *SampleSize) {
+
+	w.Log("[SampleSize]")
+	w.Start()
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Flags")
+	w.Int(self.Flags)
+	w.Name("SampleSize")
+	w.Int(self.SampleSize)
+	for _, item := range self.Entries {
+		w.Name("Entries")
+		w.Int(item)
+	}
+	w.End()
+	return
+}
 
 type ChunkOffset struct {
 	Version int
@@ -1780,5 +2437,20 @@ func WriteChunkOffset(w io.WriteSeeker, self *ChunkOffset) (err error) {
 	if err = aw.Close(); err != nil {
 		return
 	}
+	return
+}
+func WalkChunkOffset(w Walker, self *ChunkOffset) {
+
+	w.Log("[ChunkOffset]")
+	w.Start()
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Flags")
+	w.Int(self.Flags)
+	for _, item := range self.Entries {
+		w.Name("Entries")
+		w.Int(item)
+	}
+	w.End()
 	return
 }

@@ -119,8 +119,39 @@ var atoms = {
 			['$atoms', [
 				['sound', '*soundMediaInfo'],
 				['video', '*videoMediaInfo'],
+				['data', '*dataInfo'],
 				['sample', '*sampleTable'],
 			]],
+		],
+	},
+
+	dataInfo: {
+		cc4: 'dinf',
+		fields: [
+			['$atoms', [
+				['refer', '*dataRefer'],
+			]],
+		],
+	},
+
+	dataRefer: {
+		cc4: 'dref',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+
+			['$atomsCount', 'int32'],
+			['$atoms', [
+				['url', '*dataReferUrl'],
+			]],
+		],
+	},
+
+	dataReferUrl: {
+		cc4: 'url ',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
 		],
 	},
 
@@ -487,6 +518,57 @@ var DeclWriteFunc = (opts) => {
 	);
 };
 
+var DeclDumpFunc = (opts) => {
+	var dumpStruct = (name, type) => {
+		if (type.ptr)
+			return If(`${name} != nil`, Call('Walk'+type.Struct, ['w', name]));
+		return Call('Walk'+type.Struct, ['w', name]);
+	};
+
+	var dumpArr = (name, type, id) => {
+		return For(`_, item := range(${name})`, [
+			dumpCommonType('item', type, id),
+		]);
+	};
+
+	var dumpCommonType = (name, type, id) => {
+		if (type.struct)
+			return dumpStruct(name, type);
+		return [
+			Call('w.Name', [`"${id}"`]),
+			Call('w.'+type.fn, [name]),
+		];
+	};
+
+	var dumpField = (name, type, noarr) => {
+		if (name == '_')
+			return;
+		if (name == '$atomsCount')
+			return;
+		if (name == '$atoms') {
+			return type.list.map(field => dumpField(field.name, field.type));
+		}
+		if (!noarr && type.arr && type.fn != 'Bytes')
+			return dumpArr('self.'+name, type, name);
+		return dumpCommonType('self.'+name, type, name);
+	};
+
+	var dumpFields = fields => 
+		[
+			Call('w.Log', [`"[${opts.type}]"`]),
+			Call('w.Start', []),
+		]
+		.concat(fields.map(field => dumpField(field.name, field.type)))
+		.concat([Call('w.End', [])]);
+
+	return Func(
+		'Walk'+opts.type,
+		[['w', 'Walker'], ['self', (opts.cc4?'*':'')+opts.type]],
+		[],
+		dumpFields(opts.fields)
+	)
+};
+
 var D = (cls, ...fields) => {
 	global[cls] = (...args) => {
 		var obj = {cls: cls};
@@ -496,6 +578,8 @@ var D = (cls, ...fields) => {
 };
 
 D('Func', 'name', 'args', 'rets', 'body');
+D('If', 'cond', 'action', 'else');
+D('Call', 'fn', 'args');
 D('CallCheckAssign', 'fn', 'args', 'rets', 'action');
 D('DeclVar', 'name', 'type');
 D('For', 'cond', 'body');
@@ -516,42 +600,51 @@ var dumpFn = f => {
 	}`;
 };
 
-var dumpStmts = stmts => {
-	var dumpStmt = stmt => {
-		if (typeof(stmt) == 'string') {
-			return stmt;
-		} else if (stmt instanceof Array) {
-			return dumpStmts(stmt);
-		} if (stmt.cls == 'CallCheckAssign') {
-			return `if ${stmt.rets.concat(['err']).join(',')} = ${stmt.fn}(${stmt.args.join(',')}); err != nil {
-				${stmt.action ? stmt.action : 'return'}
-			}`;
-		} else if (stmt.cls == 'DeclVar') {
-			return `var ${stmt.name} ${stmt.type}`;
-		} else if (stmt.cls == 'For') {
-			return `for ${dumpStmt(stmt.cond)} {
-				${dumpStmts(stmt.body)}
-			}`;
-		} else if (stmt.cls == 'RangeN') {
-			return `${stmt.i} := 0; ${stmt.i} < ${stmt.n}; ${stmt.i}++`;
-		} else if (stmt.cls == 'DeclStruct') {
-			return `type ${stmt.name} struct {
-				${stmt.body.map(line => line.join(' ')).join('\n')}
-			}`;
-		} else if (stmt.cls == 'Func') {
-			return dumpFn(stmt);
-		} else if (stmt.cls == 'StrStmt') {
-			return stmt.content;
-		} else if (stmt.cls == 'Switch') {
-			var dumpCase = c => `case ${c[0]}: { ${dumpStmts(c[1])} }`;
-			var dumpDefault = c => `default: { ${dumpStmts(c)} }`;
-			return `switch ${stmt.cond} {
-				${stmt.cases.map(dumpCase).join('\n')}
-				${stmt.default && dumpDefault(stmt.default) || ''}
+var dumpStmts = stmt => {
+	if (typeof(stmt) == 'string') {
+		return stmt;
+	} else if (stmt instanceof Array) {
+		return stmt.nonull().map(dumpStmts).join('\n');
+	} else if (stmt.cls == 'If') {
+		var s = `if ${stmt.cond} {
+			${dumpStmts(stmt.action)}
+		}`;
+		if (stmt.else) {
+			s += ` else {
+				${dumpStmts(stmt.else)}
 			}`;
 		}
-	};
-	return stmts.nonull().map(dumpStmt).join('\n')
+		return s;
+	} else if (stmt.cls == 'Call') {
+		return `${stmt.fn}(${stmt.args.join(',')})`;
+	} else if (stmt.cls == 'CallCheckAssign') {
+		return `if ${stmt.rets.concat(['err']).join(',')} = ${stmt.fn}(${stmt.args.join(',')}); err != nil {
+			${stmt.action ? stmt.action : 'return'}
+		}`;
+	} else if (stmt.cls == 'DeclVar') {
+		return `var ${stmt.name} ${stmt.type}`;
+	} else if (stmt.cls == 'For') {
+		return `for ${dumpStmts(stmt.cond)} {
+			${dumpStmts(stmt.body)}
+		}`;
+	} else if (stmt.cls == 'RangeN') {
+		return `${stmt.i} := 0; ${stmt.i} < ${stmt.n}; ${stmt.i}++`;
+	} else if (stmt.cls == 'DeclStruct') {
+		return `type ${stmt.name} struct {
+			${stmt.body.map(line => line.join(' ')).join('\n')}
+		}`;
+	} else if (stmt.cls == 'Func') {
+		return dumpFn(stmt);
+	} else if (stmt.cls == 'StrStmt') {
+		return stmt.content;
+	} else if (stmt.cls == 'Switch') {
+		var dumpCase = c => `case ${c[0]}: { ${dumpStmts(c[1])} }`;
+		var dumpDefault = c => `default: { ${dumpStmts(c)} }`;
+		return `switch ${stmt.cond} {
+			${stmt.cases.map(dumpCase).join('\n')}
+			${stmt.default && dumpDefault(stmt.default) || ''}
+		}`;
+	}
 };
 
 var parseType = s => {
@@ -663,6 +756,12 @@ var allStmts = () => {
 			}),
 
 			DeclWriteFunc({
+				type: name,
+				fields: fields,
+				cc4: atom.cc4,
+			}),
+
+			DeclDumpFunc({
 				type: name,
 				fields: fields,
 				cc4: atom.cc4,

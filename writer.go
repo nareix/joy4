@@ -170,6 +170,13 @@ func (self *SimpleH264Writer) Finish() (err error) {
 					Flags: 0x000001,
 				},
 				Sample: self.sample,
+				Data: &atom.DataInfo{
+					Refer: &atom.DataRefer{
+						Url: &atom.DataReferUrl{
+							Flags: 0x000001, // Self reference
+						},
+					},
+				},
 			},
 			Handler: &atom.HandlerRefer{
 				SubType: "vide",

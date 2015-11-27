@@ -87,6 +87,9 @@ func WriteAVCDecoderConfRecord(w io.Writer, self AVCDecoderConfRecord) (err erro
 	return
 }
 
+func WalkAVCDecoderConfRecord(w Walker, self AVCDecoderConfRecord) {
+}
+
 func ReadAVCDecoderConfRecord(r *io.LimitedReader) (self AVCDecoderConfRecord, err error) {
 	if _, err = ReadDummy(r, 1); err != nil {
 		return
