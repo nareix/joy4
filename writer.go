@@ -4,6 +4,7 @@ package mp4
 import (
 	"github.com/nareix/mp4/atom"
 	"io"
+	"fmt"
 )
 
 type SimpleH264Writer struct {
@@ -29,6 +30,25 @@ type SimpleH264Writer struct {
 func (self *SimpleH264Writer) prepare() (err error) {
 	if self.mdatWriter, err = atom.WriteAtomHeader(self.W, "mdat"); err != nil {
 		return
+	}
+
+	if len(self.SPS) == 0 {
+		err = fmt.Errorf("invalid SPS")
+		return
+	}
+
+	if len(self.PPS) == 0 {
+		err = fmt.Errorf("invalid PPS")
+		return
+	}
+
+	if self.Width == 0 || self.Height == 0 {
+		var info *atom.H264SPSInfo
+		if info, err = atom.ParseH264SPS(self.SPS[1:]); err != nil {
+			return
+		}
+		self.Width = int(info.Width)
+		self.Height = int(info.Height)
 	}
 
 	self.sampleIdx = 1
@@ -151,15 +171,6 @@ func (self *SimpleH264Writer) Finish() (err error) {
 
 	if err = self.mdatWriter.Close(); err != nil {
 		return
-	}
-
-	if self.Width == 0 || self.Height == 0 {
-		var info *atom.H264SPSInfo
-		if info, err = atom.ParseH264SPS(self.SPS); err != nil {
-			return
-		}
-		self.Width = int(info.Width)
-		self.Height = int(info.Height)
 	}
 
 	moov := &atom.Movie{}
