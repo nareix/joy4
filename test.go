@@ -36,6 +36,7 @@ func ProbeFile(filename string) (err error) {
 		return
 	}
 
+	dumper := &atom.Dumper{}
 	var moov *atom.Movie
 
 	lr := &io.LimitedReader{R: osfile, N: finfo.Size()}
@@ -53,6 +54,9 @@ func ProbeFile(filename string) (err error) {
 				log.Println("read '%s' atom failed", cc4)
 				return
 			}
+			atom.WalkMovie(dumper, moov)
+		} else {
+			fmt.Println("atom:", cc4)
 		}
 
 		if _, err = atom.ReadDummy(lr, int(ar.N)); err != nil {
@@ -65,9 +69,6 @@ func ProbeFile(filename string) (err error) {
 		log.Println("'moov' atom not found")
 		return
 	}
-
-	dumper := &atom.Dumper{}
-	atom.WalkMovie(dumper, moov)
 
 	return
 }

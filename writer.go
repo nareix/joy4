@@ -13,6 +13,9 @@ type SimpleH264Writer struct {
 	SPS []byte
 	PPS []byte
 
+	Width int
+	Height int
+
 	duration int
 
 	sample *atom.SampleTable
@@ -33,6 +36,14 @@ func (self *SimpleH264Writer) prepare() (err error) {
 	self.sample = &atom.SampleTable{
 		SampleDesc: &atom.SampleDesc{
 			Avc1Desc: &atom.Avc1Desc{
+				DataRefIdx: 1,
+				HorizontalResolution: 72,
+				VorizontalResolution: 72,
+				Width: self.Width,
+				Height: self.Height,
+				FrameCount: 1,
+				Depth: 24,
+				ColorTableId: -1,
 				Conf: &atom.Avc1Conf{},
 			},
 		},
@@ -149,15 +160,18 @@ func (self *SimpleH264Writer) Finish() (err error) {
 		PreferredRate: atom.IntToFixed(1),
 		PreferredVolume: atom.IntToFixed(1),
 		Matrix: [9]int{0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000},
+		NextTrackId: 2,
 	}
 
 	track := &atom.Track{
 		Header: &atom.TrackHeader{
-			Flags: 0x0001, // enabled
+			TrackId: 1,
+			Flags: 0x0003, // Track enabled | Track in movie
 			Duration: self.duration,
 			Volume: atom.IntToFixed(1),
 			Matrix: [9]int{0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000},
-			TrackId: 1,
+			TrackWidth: atom.IntToFixed(self.Width),
+			TrackHeight: atom.IntToFixed(self.Height),
 		},
 
 		Media: &atom.Media{
