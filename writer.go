@@ -153,6 +153,15 @@ func (self *SimpleH264Writer) Finish() (err error) {
 		return
 	}
 
+	if self.Width == 0 || self.Height == 0 {
+		var info *atom.H264SPSInfo
+		if info, err = atom.ParseH264SPS(self.SPS); err != nil {
+			return
+		}
+		self.Width = int(info.Width)
+		self.Height = int(info.Height)
+	}
+
 	moov := &atom.Movie{}
 	moov.Header = &atom.MovieHeader{
 		TimeScale: self.TimeScale,
