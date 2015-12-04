@@ -74,12 +74,13 @@ func main() {
 		if header, n, err = ts.ReadTSPacket(file, data[:]); err != nil {
 			return
 		}
-		//fmt.Println(header, n)
+		fmt.Println(header, n)
 
 		payload = data[:n]
+		pr := bytes.NewReader(payload)
 
 		if header.PID == 0 {
-			if pat, err = ts.ReadPAT(bytes.NewReader(payload)); err != nil {
+			if pat, err = ts.ReadPAT(pr); err != nil {
 				return
 			}
 		}
@@ -87,11 +88,11 @@ func main() {
 		for _, entry := range(pat.Entries) {
 			if entry.ProgramMapPID == header.PID {
 				//fmt.Println("matchs", entry)
-				if pmt, err = ts.ReadPMT(bytes.NewReader(payload)); err != nil {
+				if pmt, err = ts.ReadPMT(pr); err != nil {
 					return
 				}
 				//fmt.Println("pmt", pmt)
-				if false {
+				if true {
 					fmt.Println(hex.Dump(payload))
 				}
 			}
