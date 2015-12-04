@@ -20,7 +20,7 @@ type Stream struct {
 func main() {
 	var file *os.File
 	var err error
-	if file, err = os.Open("tiny2.ts"); err != nil {
+	if file, err = os.Open("/tmp/out.ts"); err != nil {
 		return
 	}
 

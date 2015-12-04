@@ -30,7 +30,7 @@ func ReadUInt64(r io.Reader, n int) (res uint64, err error) {
 		if res32, err = ReadUInt(r, n-4); err != nil {
 			return
 		}
-		res |= uint64(res32)<<(uint(n-4)*8)
+		res |= uint64(res32)<<32
 		n = 4
 	}
 	if res32, err = ReadUInt(r, n); err != nil {
@@ -119,16 +119,24 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 
 		// PCR
 		if flags & 0x10 != 0 {
-			if self.PCR, err = ReadUInt64(lr, 6); err != nil {
+			var v uint64
+			if v, err = ReadUInt64(lr, 6); err != nil {
 				return
+			}
+			// clock is 27MHz
+			self.PCR = UIntToPCR(v)
+			if debug {
+				fmt.Printf("ts: PCR %d %f\n", self.PCR, float64(self.PCR)/27000000)
 			}
 		}
 
 		// OPCR
 		if flags & 0x08 != 0 {
-			if self.OPCR, err = ReadUInt64(lr, 6); err != nil {
+			var v uint64
+			if v, err = ReadUInt64(lr, 6); err != nil {
 				return
 			}
+			self.OPCR = UIntToPCR(v)
 		}
 
 		// Splice countdown
@@ -506,6 +514,10 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 			return
 		}
 		self.PTS = PESUIntToTs(v)
+
+		if debug {
+			fmt.Printf("pes: pts %d %f\n", self.PTS, float64(self.PTS)/90000)
+		}
 	}
 
 	if flags & 0x40 != 0 && flags & 0x80 != 0 {
@@ -514,6 +526,7 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 			return
 		}
 		self.DTS = PESUIntToTs(v)
+		fmt.Printf("pes: dts %d\n", self.PTS)
 	}
 
 	// ESCR flag

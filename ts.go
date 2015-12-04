@@ -7,6 +7,11 @@ import (
 
 const debug = true
 
+const (
+	ElementaryStreamTypeH264 = 0x1B
+	ElementaryStreamTypeAdtsAAC = 0x0F
+)
+
 type TSHeader struct {
 	PID uint
 	PCR uint64
@@ -14,11 +19,6 @@ type TSHeader struct {
 	ContinuityCounter uint
 	PayloadUnitStart bool
 }
-
-const (
-	ElementaryStreamTypeH264 = 0x1B
-	ElementaryStreamTypeAdtsAAC = 0x0F
-)
 
 type PATEntry struct {
 	ProgramNumber uint
@@ -65,6 +65,13 @@ type PESHeader struct {
 func PESUIntToTs(v uint64) (ts uint64) {
 	// 0010	PTS 32..30 1	PTS 29..15 1 PTS 14..00 1
 	return (((v>>33)&0x7)<<30) | (((v>>17)&0xef)<<15) | ((v>>1)&0xef)
+}
+
+func UIntToPCR(v uint64) uint64 {
+	// base(33)+resverd(6)+ext(9)
+	base := v>>15
+	ext := v&0x1ff
+	return base*300+ext
 }
 
 type FieldsDumper struct {
