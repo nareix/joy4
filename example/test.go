@@ -15,6 +15,7 @@ type Stream struct {
 	Header *ts.PESHeader
 	Title string
 	Data bytes.Buffer
+	Type uint
 }
 
 func main() {
@@ -39,10 +40,11 @@ func main() {
 		if stream == nil {
 			stream = &Stream{
 				PID: pid,
+				Type: info.StreamType,
 			}
-			if info.StreamType == ts.ElementaryStreamTypeH264 {
+			if stream.Type == ts.ElementaryStreamTypeH264 {
 				stream.Title = "h264"
-			} else if info.StreamType == ts.ElementaryStreamTypeAdtsAAC {
+			} else if stream.Type == ts.ElementaryStreamTypeAdtsAAC {
 				stream.Title = "aac"
 			}
 			streams[pid] = stream
@@ -64,7 +66,7 @@ func main() {
 			return
 		}
 		if stream.Data.Len() == int(stream.Header.DataLength) {
-			fmt.Println(stream.Title, stream.Data.Len(), "total")
+			fmt.Println(stream.Type, stream.Title, stream.Data.Len(), "total")
 			fmt.Println(hex.Dump(stream.Data.Bytes()))
 		}
 		return

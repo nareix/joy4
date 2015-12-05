@@ -64,7 +64,7 @@ type PESHeader struct {
 
 func PESUIntToTs(v uint64) (ts uint64) {
 	// 0010	PTS 32..30 1	PTS 29..15 1 PTS 14..00 1
-	return (((v>>33)&0x7)<<30) | (((v>>17)&0xef)<<15) | ((v>>1)&0xef)
+	return (((v>>33)&0x7)<<30) | (((v>>17)&0x7fff)<<15) | ((v>>1)&0x7fff)
 }
 
 func UIntToPCR(v uint64) uint64 {

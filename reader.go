@@ -516,7 +516,8 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		self.PTS = PESUIntToTs(v)
 
 		if debug {
-			fmt.Printf("pes: pts %d %f\n", self.PTS, float64(self.PTS)/90000)
+			fmt.Printf("pes: pts %x(%x)=>%x %f\n",
+				v, (v>>1)&0xef, self.PTS, float64(self.PTS)/90000)
 		}
 	}
 
