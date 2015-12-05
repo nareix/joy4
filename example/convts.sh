@@ -1,2 +1,4 @@
 
-avconv -i tiny2.mov -acodec aac -vcodec h264 -strict experimental tiny2.ts
+./avconv -loglevel debug -y -i /tmp/tiny2.mov \
+	-bsf h264_mp4toannexb -acodec copy -vcodec copy -strict experimental /tmp/out.ts 2>&1
+

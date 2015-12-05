@@ -68,6 +68,7 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 				{13, "pid"},
 				{2, "scrambling_control"},
 				{1, "adaptation_field_flag"},
+				{1, "payload_flag"},
 				{4, "continuity_counter"},
 			},
 			Val: flags,
@@ -76,6 +77,7 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 	}
 
 	if flags & 0x400000 != 0 {
+		//  When set to '1' it indicates that this TS packet contains the first PES packet.
 		self.PayloadUnitStart = true
 	}
 
@@ -516,8 +518,8 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		self.PTS = PESUIntToTs(v)
 
 		if debug {
-			fmt.Printf("pes: pts %x(%x)=>%x %f\n",
-				v, (v>>1)&0xef, self.PTS, float64(self.PTS)/90000)
+			fmt.Printf("pes: pts %x=>%x %f\n",
+				v, self.PTS, float64(self.PTS)/90000)
 		}
 	}
 
