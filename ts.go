@@ -68,6 +68,11 @@ func PESUIntToTs(v uint64) (ts uint64) {
 	return (((v>>33)&0x7)<<30) | (((v>>17)&0x7fff)<<15) | ((v>>1)&0x7fff)
 }
 
+func PESTsToUInt(ts uint64) (v uint64) {
+	// 0010	PTS 32..30 1	PTS 29..15 1 PTS 14..00 1
+	return ((ts>>30)&0x7)<<33 | ((ts>>15)&0x7fff)<<17 | (v&0x7fff)<<1 | 0x100010001
+}
+
 func UIntToPCR(v uint64) uint64 {
 	// base(33)+resverd(6)+ext(9)
 	base := v>>15

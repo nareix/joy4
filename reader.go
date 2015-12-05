@@ -202,7 +202,7 @@ func ReadPSI(r io.Reader) (self PSI, lr *io.LimitedReader, cr *Crc32Reader, err 
 		}
 	}
 
-	cr = NewCrc32Reader(r)
+	cr = &Crc32Reader{R: r, Crc32: 0xffffffff}
 
 	// table_id
 	if self.TableId, err = ReadUInt(cr, 1); err != nil {
@@ -463,8 +463,8 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 				Length int
 				Desc string
 			}{
-				{2, "PES_scrambling_control"},
-				{1, "PES_priority"},
+				{2, "scrambling_control"},
+				{1, "priority"},
 				{1, "data_alignment_indicator"},
 				{1, "copyright"},
 				{1, "original_or_copy"},

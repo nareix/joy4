@@ -67,10 +67,6 @@ type Crc32Reader struct {
 
 var debugCrc32 = false
 
-func NewCrc32Reader(r io.Reader) *Crc32Reader {
-	return &Crc32Reader{R: r, Crc32: 0xffffffff}
-}
-
 func (self *Crc32Reader) Read(b []byte) (n int, err error) {
 	if n, err = self.R.Read(b); err != nil {
 		return
@@ -90,6 +86,19 @@ func (self *Crc32Reader) ReadCrc32UIntAndCheck() (err error) {
 		err = fmt.Errorf("crc32 != 0")
 		return
 	}
+	return
+}
+
+type Crc32Writer struct {
+	W io.Writer
+	Crc32 uint32
+}
+
+func (self *Crc32Writer) Write(b []byte) (n int, err error) {
+	if n, err = self.W.Write(b); err != nil {
+		return
+	}
+	self.Crc32 = updateIeeeCrc32(self.Crc32, b)
 	return
 }
 
