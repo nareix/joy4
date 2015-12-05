@@ -18,6 +18,7 @@ type TSHeader struct {
 	OPCR uint64
 	ContinuityCounter uint
 	PayloadUnitStart bool
+	RandomAccessIndicator bool
 }
 
 type PATEntry struct {
@@ -72,6 +73,12 @@ func UIntToPCR(v uint64) uint64 {
 	base := v>>15
 	ext := v&0x1ff
 	return base*300+ext
+}
+
+func PCRToUInt(pcr uint64) uint64 {
+	base := pcr/300
+	ext := pcr%300
+	return base<<15|0x3f<<9|ext
 }
 
 type FieldsDumper struct {

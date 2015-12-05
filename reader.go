@@ -56,7 +56,7 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 	}
 
 	if debug {
-		fmt.Printf("ts: %s\n", FieldsDumper{
+		fmt.Printf("ts: flags %s\n", FieldsDumper{
 			Fields: []struct{
 				Length int
 				Desc string
@@ -100,7 +100,7 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 		}
 
 		if debug {
-			fmt.Printf("ts: %s\n", FieldsDumper{
+			fmt.Printf("ts: ext_flags %s\n", FieldsDumper{
 				Fields: []struct{
 					Length int
 					Desc string

@@ -16,9 +16,25 @@ type Stream struct {
 	Title string
 	Data bytes.Buffer
 	Type uint
+	PTS uint
+	PCR uint
 }
 
-func main() {
+type Sample struct {
+	Type uint
+	PCR uint64
+	PTS uint64
+	DTS uint64
+	Data []byte
+}
+
+func readSamples(ch chan Sample) {
+	defer func() {
+		close(ch)
+	}()
+
+	debug := false
+
 	var file *os.File
 	var err error
 	if file, err = os.Open("/tmp/out.ts"); err != nil {
@@ -66,8 +82,14 @@ func main() {
 			return
 		}
 		if stream.Data.Len() == int(stream.Header.DataLength) {
-			fmt.Println(stream.Type, stream.Title, stream.Data.Len(), "total")
-			fmt.Println(hex.Dump(stream.Data.Bytes()))
+			if debug {
+				fmt.Println(stream.Type, stream.Title, stream.Data.Len(), "total")
+				fmt.Println(hex.Dump(stream.Data.Bytes()))
+			}
+			ch <- Sample{
+				Type: stream.Type,
+				Data: stream.Data.Bytes(),
+			}
 		}
 		return
 	}
@@ -76,7 +98,9 @@ func main() {
 		if header, n, err = ts.ReadTSPacket(file, data[:]); err != nil {
 			return
 		}
-		fmt.Println(header, n)
+		if debug {
+			fmt.Println(header, n)
+		}
 
 		payload = data[:n]
 		pr := bytes.NewReader(payload)
@@ -94,7 +118,7 @@ func main() {
 					return
 				}
 				//fmt.Println("pmt", pmt)
-				if true {
+				if debug {
 					fmt.Println(hex.Dump(payload))
 				}
 			}
@@ -106,6 +130,21 @@ func main() {
 			}
 		}
 
+	}
+}
+
+func main() {
+	ch := make(chan Sample)
+	go readSamples(ch)
+
+	for {
+		var sample Sample
+		var ok bool
+		if sample, ok = <-ch; !ok {
+			break
+		}
+		if sample.Type == ts.ElementaryStreamTypeH264 {
+		}
 	}
 }
 
