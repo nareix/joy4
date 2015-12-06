@@ -8,6 +8,7 @@ import (
 	ts "../"
 	"fmt"
 	"encoding/hex"
+	"flag"
 )
 
 type Stream struct {
@@ -27,7 +28,7 @@ type Sample struct {
 	Data []byte
 }
 
-func readSamples(ch chan Sample) {
+func readSamples(filename string, ch chan Sample) {
 	defer func() {
 		close(ch)
 	}()
@@ -36,7 +37,7 @@ func readSamples(ch chan Sample) {
 
 	var file *os.File
 	var err error
-	if file, err = os.Open("/tmp/out.ts"); err != nil {
+	if file, err = os.Open(filename); err != nil {
 		return
 	}
 
@@ -137,8 +138,46 @@ func readSamples(ch chan Sample) {
 }
 
 func main() {
+	input := flag.String("i", "", "input file")
+	output := flag.String("o", "", "output file")
+	flag.Parse()
+
+	var file *os.File
+	var err error
+
 	ch := make(chan Sample, 0)
-	go readSamples(ch)
+	go readSamples(*input, ch)
+
+	if *output != "" {
+		if file, err = os.Create(*output); err != nil {
+			return
+		}
+	}
+
+	writePAT := func() (err error) {
+		w := &ts.TSWriter{
+			W: file,
+			PID: 0,
+		}
+		pat := ts.PAT {
+			Entries: []ts.PATEntry{
+				{ProgramNumber: 1, ProgramMapPID: 4096},
+			},
+		}
+		bw := &bytes.Buffer{}
+		if err = ts.WritePAT(bw, pat); err != nil {
+			return
+		}
+		if err = w.Write(bw.Bytes(), false); err != nil {
+			return
+		}
+		return
+	}
+
+	if file != nil {
+		writePAT()
+		file.Close()
+	}
 
 	for {
 		var sample Sample
@@ -147,8 +186,10 @@ func main() {
 			break
 		}
 		if sample.Type == ts.ElementaryStreamTypeH264 {
-			fmt.Println("sample", len(sample.Data), "PCR", sample.PCR)
-			fmt.Print(hex.Dump(sample.Data))
+			if false {
+				fmt.Println("sample: ", len(sample.Data), "PCR", sample.PCR)
+				//fmt.Print(hex.Dump(sample.Data))
+			}
 		}
 	}
 }

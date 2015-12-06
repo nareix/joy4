@@ -2,16 +2,12 @@
 package ts
 
 import (
-	_ "fmt"
+	"fmt"
 	"io"
 	"bytes"
 )
 
-type TSWriter struct {
-	W io.Writer
-	ContinuityCounter uint
-	PayloadUnitStart bool
-}
+const DebugWriter = true
 
 func WriteUInt64(w io.Writer, val uint64, n int) (err error) {
 	var b [8]byte
@@ -19,7 +15,7 @@ func WriteUInt64(w io.Writer, val uint64, n int) (err error) {
 		b[i] = byte(val)
 		val >>= 8
 	}
-	if _, err = w.Write(b[:]); err != nil {
+	if _, err = w.Write(b[:n]); err != nil {
 		return
 	}
 	return
@@ -108,6 +104,63 @@ func WriteTSHeader(w io.Writer, self TSHeader) (err error) {
 	return
 }
 
+type TSWriter struct {
+	W io.Writer
+	PID uint
+	PCR uint64
+	OPCR uint64
+	ContinuityCounter uint
+}
+
+func (self *TSWriter) Write(b []byte, RandomAccessIndicator bool) (err error) {
+	for i := 0; len(b) > 0; i++ {
+		header := TSHeader{
+			PID: self.PID,
+			PCR: self.PCR,
+			OPCR: self.OPCR,
+			ContinuityCounter: self.ContinuityCounter,
+			RandomAccessIndicator: RandomAccessIndicator,
+		}
+		if i == 0 {
+			header.PayloadUnitStart = true
+		}
+		bw := &bytes.Buffer{}
+		if err = WriteTSHeader(bw, header); err != nil {
+			return
+		}
+
+		var data []byte
+		dataLen := 188-bw.Len()
+
+		if DebugWriter {
+			fmt.Printf("tsw: datalen=%d blen=%d\n", dataLen, len(b))
+		}
+
+		if len(b) > dataLen {
+			data = b[:dataLen]
+			b = b[dataLen:]
+		} else {
+			data = make([]byte, dataLen)
+			copy(data, b)
+			for i := len(b); i < dataLen; i++ {
+				data[i] = 0xff
+			}
+			b = b[len(b):]
+		}
+
+		if _, err = self.W.Write(bw.Bytes()); err != nil {
+			return
+		}
+		if _, err = self.W.Write(data); err != nil {
+			return
+		}
+
+		self.ContinuityCounter++
+	}
+
+	return
+}
+
 func WritePSI(w io.Writer, self PSI, data []byte) (err error) {
 	// pointer(8)
 	// table_id(8)
@@ -135,8 +188,12 @@ func WritePSI(w io.Writer, self PSI, data []byte) (err error) {
 	var flags, length uint
 	length = 2+3+4+uint(len(data))
 	flags = 0xb<<10|length
-	if err = WriteUInt(cw, flags, 1); err != nil {
+	if err = WriteUInt(cw, flags, 2); err != nil {
 		return
+	}
+
+	if DebugWriter {
+		fmt.Printf("wpsi: flags=%x\n", flags)
 	}
 
 	// Table ID extension(16)
@@ -166,11 +223,15 @@ func WritePSI(w io.Writer, self PSI, data []byte) (err error) {
 	}
 
 	// crc(32)
-	if err = WriteUInt(w, uint(cw.Crc32), 4); err != nil {
+	if err = WriteUInt(w, bswap32(uint(cw.Crc32)), 4); err != nil {
 		return
 	}
 
 	return
+}
+
+func bswap32(v uint) uint {
+	return (v>>24)|((v>>16)&0xff)<<8|((v>>8)&0xff)<<16|(v&0xff)<<24
 }
 
 func WritePES(w io.Writer, self PESHeader, data []byte) (err error) {

@@ -5,8 +5,6 @@ import (
 	"fmt"
 )
 
-const debug = true
-
 const (
 	ElementaryStreamTypeH264 = 0x1B
 	ElementaryStreamTypeAdtsAAC = 0x0F
