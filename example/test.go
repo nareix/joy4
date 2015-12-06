@@ -159,9 +159,9 @@ func main() {
 			W: file,
 			PID: 0,
 		}
-		pat := ts.PAT {
+		pat := ts.PAT{
 			Entries: []ts.PATEntry{
-				{ProgramNumber: 1, ProgramMapPID: 4096},
+				{ProgramNumber: 1, ProgramMapPID: 0x1000},
 			},
 		}
 		bw := &bytes.Buffer{}
@@ -174,8 +174,30 @@ func main() {
 		return
 	}
 
+	writePMT := func() (err error) {
+		w := &ts.TSWriter{
+			W: file,
+			PID: 0x1000,
+		}
+		pmt := ts.PMT{
+			PCRPID: 0x100,
+			ElementaryStreamInfos: []ts.ElementaryStreamInfo{
+				{StreamType: ts.ElementaryStreamTypeH264, ElementaryPID: 0x100},
+			},
+		}
+		bw := &bytes.Buffer{}
+		if err = ts.WritePMT(bw, pmt); err != nil {
+			return
+		}
+		if err = w.Write(bw.Bytes(), false); err != nil {
+			return
+		}
+		return
+	}
+
 	if file != nil {
 		writePAT()
+		writePMT()
 		file.Close()
 	}
 

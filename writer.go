@@ -367,7 +367,19 @@ func WritePMT(w io.Writer, self PMT) (err error) {
 	}
 
 	writeBody := func(w io.Writer) (err error) {
-		if err = writeDescs(w, self.ProgramDescriptors); err != nil {
+		if err = WriteUInt(w, self.PCRPID|7<<13, 2); err != nil {
+			return
+		}
+
+		bw := &bytes.Buffer{}
+		if err = writeDescs(bw, self.ProgramDescriptors); err != nil {
+			return
+		}
+
+		if err = WriteUInt(w, 0xf<<12|uint(bw.Len()), 2); err != nil {
+			return
+		}
+		if _, err = w.Write(bw.Bytes()); err != nil {
 			return
 		}
 
@@ -401,20 +413,8 @@ func WritePMT(w io.Writer, self PMT) (err error) {
 		return
 	}
 
-	writeAll := func(w io.Writer) (err error) {
-		if err = WriteUInt(w, self.PCRPID|7<<13, 2); err != nil {
-			return
-		}
-
-		bw := &bytes.Buffer{}
-		if err = writeBody(bw); err != nil {
-			return
-		}
-		return
-	}
-
 	bw := &bytes.Buffer{}
-	if err = writeAll(bw); err != nil {
+	if err = writeBody(bw); err != nil {
 		return
 	}
 

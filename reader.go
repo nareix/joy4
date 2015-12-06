@@ -275,6 +275,25 @@ func ReadPSI(r io.Reader) (self PSI, lr *io.LimitedReader, cr *Crc32Reader, err 
 }
 
 func ReadPMT(r io.Reader) (self PMT, err error) {
+	readDescs := func(lr *io.LimitedReader) (res []Descriptor, err error) {
+		var desc Descriptor
+		for lr.N > 0 {
+			if desc.Tag, err = ReadUInt(lr, 1); err != nil {
+				return
+			}
+			var length uint
+			if length, err = ReadUInt(lr, 1); err != nil {
+				return
+			}
+			desc.Data = make([]byte, length)
+			if _, err = lr.Read(desc.Data); err != nil {
+				return
+			}
+			res = append(res, desc)
+		}
+		return
+	}
+
 	var lr *io.LimitedReader
 	var cr *Crc32Reader
 	//var psi PSI
@@ -306,30 +325,16 @@ func ReadPMT(r io.Reader) (self PMT, err error) {
 		})
 	}
 
-	// Reserved(6)
+	// Reserved(4)=0xf
+	// Reserved(2)=0x0
 	// Program info length(10)
 	if flags, err = ReadUInt(lr, 2); err != nil {
 		return
 	}
 	length = flags & 0x3ff
 
-	readDescs := func(lr *io.LimitedReader) (res []Descriptor, err error) {
-		var desc Descriptor
-		for lr.N > 0 {
-			if desc.Tag, err = ReadUInt(lr, 1); err != nil {
-				return
-			}
-			var length uint
-			if length, err = ReadUInt(lr, 1); err != nil {
-				return
-			}
-			desc.Data = make([]byte, length)
-			if _, err = lr.Read(desc.Data); err != nil {
-				return
-			}
-			res = append(res, desc)
-		}
-		return
+	if DebugReader {
+		fmt.Printf("pmt: ProgramDescriptorsLen=%d\n", length)
 	}
 
 	if length > 0 {
