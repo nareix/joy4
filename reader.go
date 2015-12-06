@@ -419,6 +419,10 @@ func ReadPAT(r io.Reader) (self PAT, err error) {
 		return
 	}
 
+	if debug {
+		fmt.Printf("pat: %v\n", self)
+	}
+
 	return
 }
 
@@ -529,7 +533,9 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 			return
 		}
 		self.DTS = PESUIntToTs(v)
-		fmt.Printf("pes: dts %d\n", self.PTS)
+		if debug {
+			fmt.Printf("pes: dts %d\n", self.PTS)
+		}
 	}
 
 	// ESCR flag

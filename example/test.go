@@ -16,8 +16,7 @@ type Stream struct {
 	Title string
 	Data bytes.Buffer
 	Type uint
-	PTS uint
-	PCR uint
+	PCR uint64
 }
 
 type Sample struct {
@@ -77,6 +76,7 @@ func readSamples(ch chan Sample) {
 			if stream.Header, err = ts.ReadPESHeader(lr); err != nil {
 				return
 			}
+			stream.PCR = header.PCR
 		}
 		if _, err = io.CopyN(&stream.Data, lr, lr.N); err != nil {
 			return
@@ -89,6 +89,9 @@ func readSamples(ch chan Sample) {
 			ch <- Sample{
 				Type: stream.Type,
 				Data: stream.Data.Bytes(),
+				PTS: stream.Header.PTS,
+				DTS: stream.Header.DTS,
+				PCR: stream.PCR,
 			}
 		}
 		return
@@ -134,7 +137,7 @@ func readSamples(ch chan Sample) {
 }
 
 func main() {
-	ch := make(chan Sample)
+	ch := make(chan Sample, 0)
 	go readSamples(ch)
 
 	for {
@@ -144,6 +147,8 @@ func main() {
 			break
 		}
 		if sample.Type == ts.ElementaryStreamTypeH264 {
+			fmt.Println("sample", len(sample.Data), "PCR", sample.PCR)
+			fmt.Print(hex.Dump(sample.Data))
 		}
 	}
 }
