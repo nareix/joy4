@@ -376,8 +376,8 @@ func ReadPMT(r io.Reader) (self PMT, err error) {
 	}
 
 	if debug {
+		fmt.Printf("pmt: ProgramDescriptors %v\n", self.ProgramDescriptors)
 		fmt.Printf("pmt: ElementaryStreamInfos %v\n", self.ElementaryStreamInfos)
-
 	}
 
 	if err = cr.ReadCrc32UIntAndCheck(); err != nil {

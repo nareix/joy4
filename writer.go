@@ -4,6 +4,7 @@ package ts
 import (
 	_ "fmt"
 	"io"
+	"bytes"
 )
 
 type TSWriter struct {
@@ -260,13 +261,116 @@ func WritePES(w io.Writer, self PESHeader, data []byte) (err error) {
 	return
 }
 
+func WritePAT(w io.Writer, self PAT) (err error) {
+	bw := &bytes.Buffer{}
+
+	for _, entry := range self.Entries {
+		if err = WriteUInt(bw, entry.ProgramNumber, 2); err != nil {
+			return
+		}
+		if entry.ProgramNumber == 0 {
+			if err = WriteUInt(bw, entry.NetworkPID&0x1fff|7<<13, 2); err != nil {
+				return
+			}
+		} else {
+			if err = WriteUInt(bw, entry.ProgramMapPID&0x1fff|7<<13, 2); err != nil {
+				return
+			}
+		}
+	}
+
+	psi := PSI {
+		TableIdExtension: 1,
+	}
+	if err = WritePSI(w, psi, bw.Bytes()); err != nil {
+		return
+	}
+
+	return
+}
+
+func WritePMT(w io.Writer, self PMT) (err error) {
+	writeDescs := func(w io.Writer, descs []Descriptor) (err error) {
+		for _, desc := range descs {
+			if err = WriteUInt(w, desc.Tag, 1); err != nil {
+				return
+			}
+			if err = WriteUInt(w, uint(len(desc.Data)), 1); err != nil {
+				return
+			}
+			if _, err = w.Write(desc.Data); err != nil {
+				return
+			}
+		}
+		return
+	}
+
+	writeBody := func(w io.Writer) (err error) {
+		if err = writeDescs(w, self.ProgramDescriptors); err != nil {
+			return
+		}
+
+		for _, info := range self.ElementaryStreamInfos {
+			if err = WriteUInt(w, info.StreamType, 1); err != nil {
+				return
+			}
+
+			// Reserved(3)
+			// Elementary PID(13)
+			if err = WriteUInt(w, info.ElementaryPID|7<<13, 2); err != nil {
+				return
+			}
+
+			bw := &bytes.Buffer{}
+			if err = writeDescs(bw, info.Descriptors); err != nil {
+				return
+			}
+
+			// Reserved(6)
+			// ES Info length length(10)
+			if err = WriteUInt(w, uint(bw.Len())|0x3f<<10, 2); err != nil {
+				return
+			}
+
+			if _, err = w.Write(bw.Bytes()); err != nil {
+				return
+			}
+		}
+
+		return
+	}
+
+	writeAll := func(w io.Writer) (err error) {
+		if err = WriteUInt(w, self.PCRPID|7<<13, 2); err != nil {
+			return
+		}
+
+		bw := &bytes.Buffer{}
+		if err = writeBody(bw); err != nil {
+			return
+		}
+		return
+	}
+
+	bw := &bytes.Buffer{}
+	if err = writeAll(bw); err != nil {
+		return
+	}
+
+	psi := PSI {
+		TableId: 2,
+		TableIdExtension: 1,
+	}
+	if err = WritePSI(w, psi, bw.Bytes()); err != nil {
+		return
+	}
+
+	return
+}
+
 type SimpleH264Writer struct {
 	W io.Writer
 	headerHasWritten bool
-}
-
-func WritePAT(w io.Writer, self PAT) (err error) {
-	return
 }
 
 func (self *SimpleH264Writer) WriteSample(data []byte) (err error) {
