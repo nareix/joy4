@@ -77,6 +77,11 @@ func PESTsToUInt(ts uint64) (v uint64) {
 	return ((ts>>30)&0x7)<<33 | ((ts>>15)&0x7fff)<<17 | (ts&0x7fff)<<1 | 0x100010001
 }
 
+const (
+	PTS_HZ = 90000
+	PCR_HZ = 27000000
+)
+
 func UIntToPCR(v uint64) uint64 {
 	// base(33)+resverd(6)+ext(9)
 	base := v>>15

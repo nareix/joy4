@@ -130,7 +130,7 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 			// clock is 27MHz
 			self.PCR = UIntToPCR(v)
 			if DebugReader {
-				fmt.Printf("ts: PCR %d %f\n", self.PCR, float64(self.PCR)/27000000)
+				fmt.Printf("ts: PCR %d %f\n", self.PCR, float64(self.PCR)/PCR_HZ)
 			}
 		}
 
@@ -533,7 +533,7 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		self.PTS = PESUIntToTs(v)
 
 		if DebugReader {
-			fmt.Printf("pes: pts %d %f\n", self.PTS, float64(self.PTS)/90000)
+			fmt.Printf("pes: pts %d %f\n", self.PTS, float64(self.PTS)/float64(PTS_HZ))
 		}
 	}
 
@@ -544,7 +544,7 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		}
 		self.DTS = PESUIntToTs(v)
 		if DebugReader {
-			fmt.Printf("pes: dts %d %f\n", self.DTS, float64(self.DTS)/90000)
+			fmt.Printf("pes: dts %d %f\n", self.DTS, float64(self.DTS)/float64(PTS_HZ))
 		}
 	}
 
