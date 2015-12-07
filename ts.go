@@ -53,6 +53,11 @@ type PSI struct {
 	LastSecNum uint
 }
 
+const (
+	StreamIdH264 = 0xe0
+	StreamIdAAC = 0xc0
+)
+
 type PESHeader struct {
 	StreamId uint // H264=0xe0 AAC=0xc0
 	DataLength uint

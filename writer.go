@@ -46,25 +46,29 @@ func WriteTSHeader(w io.Writer, self TSHeader) (err error) {
 	flags |= (self.PID&0x1fff00)<<8
 	flags |= self.ContinuityCounter&0xf
 
+	const PCR = 0x10
+	const OPCR = 0x08
+	const EXT = 0x20
+
 	if self.PCR != 0 {
-		extFlags |= 0x20
+		extFlags |= PCR
 	}
 	if self.OPCR != 0 {
-		extFlags |= 0x08
+		extFlags |= OPCR
 	}
 	if self.RandomAccessIndicator {
 		extFlags |= 0x40
 	}
 
 	if extFlags != 0 {
-		flags |= 0x20
+		flags |= EXT
 	}
 
 	if err = WriteUInt(w, flags, 4); err != nil {
 		return
 	}
 
-	if flags & 0x20 != 0 {
+	if flags & EXT != 0 {
 		var length uint
 
 		// Discontinuity indicator	1	0x80	
@@ -74,10 +78,10 @@ func WriteTSHeader(w io.Writer, self TSHeader) (err error) {
 		// OPCR flag	1	0x08	
 
 		length = 1
-		if extFlags & 0x10 != 0 {
+		if extFlags & PCR != 0 {
 			length += 6
 		}
-		if extFlags & 0x08 != 0 {
+		if extFlags & OPCR != 0 {
 			length += 6
 		}
 
@@ -88,13 +92,13 @@ func WriteTSHeader(w io.Writer, self TSHeader) (err error) {
 			return
 		}
 
-		if extFlags & 0x10 != 0 {
+		if extFlags & PCR != 0 {
 			if err = WriteUInt64(w, PCRToUInt(self.PCR), 6); err != nil {
 				return
 			}
 		}
 
-		if extFlags & 0x08 != 0 {
+		if extFlags & OPCR != 0 {
 			if err = WriteUInt64(w, PCRToUInt(self.OPCR), 6); err != nil {
 				return
 			}

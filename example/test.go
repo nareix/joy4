@@ -195,22 +195,47 @@ func main() {
 		return
 	}
 
+	var w *ts.TSWriter
+	var sample Sample
+	writePES := func() (err error) {
+		pes := ts.PESHeader{
+			StreamId: ts.StreamIdH264,
+			PTS: sample.PTS,
+			DTS: sample.DTS,
+		}
+		w.PCR = sample.PCR
+		bw := &bytes.Buffer{}
+		if err = ts.WritePES(bw, pes, sample.Data); err != nil {
+			return
+		}
+		if err = w.Write(bw.Bytes(), false); err != nil {
+			return
+		}
+		return
+	}
+
 	if file != nil {
 		writePAT()
 		writePMT()
-		file.Close()
+		w = &ts.TSWriter{
+			W: file,
+			PID: 0x100,
+		}
 	}
 
 	for {
-		var sample Sample
 		var ok bool
 		if sample, ok = <-ch; !ok {
 			break
 		}
 		if sample.Type == ts.ElementaryStreamTypeH264 {
-			if false {
+			if true {
 				fmt.Println("sample: ", len(sample.Data), "PCR", sample.PCR)
 				//fmt.Print(hex.Dump(sample.Data))
+			}
+
+			if file != nil {
+				writePES()
 			}
 		}
 	}

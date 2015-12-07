@@ -449,6 +449,10 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		return
 	}
 
+	if DebugReader {
+		fmt.Printf("pes: StreamId=%x\n", self.StreamId)
+	}
+
 	if length, err = ReadUInt(r, 2); err != nil {
 		return
 	}
