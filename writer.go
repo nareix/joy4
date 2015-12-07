@@ -206,7 +206,7 @@ func WritePSI(w io.Writer, self PSI, data []byte) (err error) {
 	// table_id(8)
 	// reserved(4)=0xb,section_length(10)
 	// Table ID extension(16)
-	// resverd(2)=3,version(5),Current_next_indicator(1)
+	// section_syntax_indicator(1)=1,private_bit(1)=1,reserved(2)=3,unused(2)=0,section_length(10)
 	// section_number(8)
 	// last_section_number(8)
 	// data
@@ -224,16 +224,16 @@ func WritePSI(w io.Writer, self PSI, data []byte) (err error) {
 		return
 	}
 
-	// reserved(4)=0xb,section_length(10)
+	// section_syntax_indicator(1)=1,private_bit(1)=0,reserved(2)=3,unused(2)=0,section_length(10)
 	var flags, length uint
 	length = 2+3+4+uint(len(data))
-	flags = 0xb<<10|length
+	flags = 0xa<<12|length
 	if err = WriteUInt(cw, flags, 2); err != nil {
 		return
 	}
 
 	if DebugWriter {
-		fmt.Printf("wpsi: flags=%x\n", flags)
+		fmt.Printf("wpsi: length=%d\n", length)
 	}
 
 	// Table ID extension(16)
