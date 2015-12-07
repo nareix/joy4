@@ -216,7 +216,7 @@ func main() {
 		}
 		w.PCR = sample.PCR
 		bw := &bytes.Buffer{}
-		if err = ts.WritePES(bw, pes, sample.Data); err != nil {
+		if err = ts.WritePES(bw, pes, bytes.NewReader(sample.Data)); err != nil {
 			return
 		}
 		if err = w.Write(bw.Bytes(), false); err != nil {
@@ -253,5 +253,6 @@ func main() {
 			}
 		}
 	}
+
 }
 
