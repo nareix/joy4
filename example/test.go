@@ -74,6 +74,7 @@ func readSamples(filename string, ch chan Sample) {
 		stream := findOrCreateStream(header.PID)
 		r := bytes.NewReader(payload)
 		lr := &io.LimitedReader{R: r, N: int64(len(payload))}
+
 		if header.PayloadUnitStart {
 			stream.Data = bytes.Buffer{}
 			if stream.Header, err = ts.ReadPESHeader(lr); err != nil {
@@ -81,6 +82,7 @@ func readSamples(filename string, ch chan Sample) {
 			}
 			stream.PCR = header.PCR
 		}
+
 		if _, err = io.CopyN(&stream.Data, lr, lr.N); err != nil {
 			return
 		}

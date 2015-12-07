@@ -533,8 +533,7 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		self.PTS = PESUIntToTs(v)
 
 		if DebugReader {
-			fmt.Printf("pes: pts %x=>%x %f\n",
-				v, self.PTS, float64(self.PTS)/90000)
+			fmt.Printf("pes: pts %d %f\n", self.PTS, float64(self.PTS)/90000)
 		}
 	}
 
@@ -545,7 +544,7 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		}
 		self.DTS = PESUIntToTs(v)
 		if DebugReader {
-			fmt.Printf("pes: dts %d\n", self.PTS)
+			fmt.Printf("pes: dts %d %f\n", self.DTS, float64(self.DTS)/90000)
 		}
 	}
 

@@ -74,7 +74,7 @@ func PESUIntToTs(v uint64) (ts uint64) {
 
 func PESTsToUInt(ts uint64) (v uint64) {
 	// 0010	PTS 32..30 1	PTS 29..15 1 PTS 14..00 1
-	return ((ts>>30)&0x7)<<33 | ((ts>>15)&0x7fff)<<17 | (v&0x7fff)<<1 | 0x100010001
+	return ((ts>>30)&0x7)<<33 | ((ts>>15)&0x7fff)<<17 | (ts&0x7fff)<<1 | 0x100010001
 }
 
 func UIntToPCR(v uint64) uint64 {
