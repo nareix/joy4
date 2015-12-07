@@ -17,6 +17,7 @@ type TSHeader struct {
 	ContinuityCounter uint
 	PayloadUnitStart bool
 	RandomAccessIndicator bool
+	HeaderLength uint
 }
 
 type PATEntry struct {

@@ -25,7 +25,16 @@ func WriteUInt(w io.Writer, val uint, n int) (err error) {
 	return WriteUInt64(w, uint64(val), n)
 }
 
-func WriteTSHeader(w io.Writer, self TSHeader) (err error) {
+func WriteRepeatVal(w io.Writer, val byte, n int) (err error) {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = val
+	}
+	_, err = w.Write(b)
+	return
+}
+
+func WriteTSHeader(w io.Writer, self TSHeader, dataLength int) (err error) {
 	var flags, extFlags uint
 
 	// sync(8)
@@ -64,6 +73,11 @@ func WriteTSHeader(w io.Writer, self TSHeader) (err error) {
 		flags |= EXT
 	}
 
+	// need padding
+	if dataLength < 184 {
+		flags |= EXT
+	}
+
 	if err = WriteUInt(w, flags, 4); err != nil {
 		return
 	}
@@ -77,12 +91,23 @@ func WriteTSHeader(w io.Writer, self TSHeader) (err error) {
 		// PCR flag	1	0x10
 		// OPCR flag	1	0x08	
 
-		length = 1
+		length = 1 // extFlags
 		if extFlags & PCR != 0 {
 			length += 6
 		}
 		if extFlags & OPCR != 0 {
 			length += 6
+		}
+
+		paddingLength := 0
+		// need padding
+		if int(length) + 5 + dataLength < 188 {
+			paddingLength = 188 - dataLength - 5 - int(length)
+			length = 188 - uint(dataLength) - 5
+		}
+
+		if DebugWriter {
+			fmt.Printf("tsw: dataLength=%d paddingLength=%d\n", dataLength, paddingLength)
 		}
 
 		if err = WriteUInt(w, length, 1); err != nil {
@@ -103,6 +128,12 @@ func WriteTSHeader(w io.Writer, self TSHeader) (err error) {
 				return
 			}
 		}
+
+		if paddingLength > 0 {
+			if err = WriteRepeatVal(w, 0xff, paddingLength); err != nil {
+				return
+			}
+		}
 	}
 
 	return
@@ -120,36 +151,26 @@ func (self *TSWriter) Write(b []byte, RandomAccessIndicator bool) (err error) {
 	for i := 0; len(b) > 0; i++ {
 		header := TSHeader{
 			PID: self.PID,
-			PCR: self.PCR,
-			OPCR: self.OPCR,
 			ContinuityCounter: self.ContinuityCounter,
-			RandomAccessIndicator: RandomAccessIndicator,
 		}
+
 		if i == 0 {
 			header.PayloadUnitStart = true
+			header.PCR = self.PCR
+			header.OPCR = self.OPCR
+			header.RandomAccessIndicator = RandomAccessIndicator
 		}
+
 		bw := &bytes.Buffer{}
-		if err = WriteTSHeader(bw, header); err != nil {
+		if err = WriteTSHeader(bw, header, len(b)); err != nil {
 			return
 		}
 
-		var data []byte
-		dataLen := 188-bw.Len()
+		data := b[:188-bw.Len()]
+		b = b[len(data):]
 
 		if DebugWriter {
-			fmt.Printf("tsw: datalen=%d blen=%d\n", dataLen, len(b))
-		}
-
-		if len(b) > dataLen {
-			data = b[:dataLen]
-			b = b[dataLen:]
-		} else {
-			data = make([]byte, dataLen)
-			copy(data, b)
-			for i := len(b); i < dataLen; i++ {
-				data[i] = 0xff
-			}
-			b = b[len(b):]
+			fmt.Printf("tsw: datalen=%d blen=%d\n", len(data), len(b))
 		}
 
 		if _, err = self.W.Write(bw.Bytes()); err != nil {
@@ -280,6 +301,10 @@ func WritePES(w io.Writer, self PESHeader, data []byte) (err error) {
 		header_length += 5
 	}
 	packet_length = 3+header_length+uint(len(data))
+
+	if DebugWriter {
+		fmt.Printf("pesw: packet_length=%d\n", packet_length)
+	}
 
 	// packet_length(16)
 	if err = WriteUInt(w, packet_length, 2); err != nil {

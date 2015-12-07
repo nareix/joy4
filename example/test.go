@@ -68,6 +68,8 @@ func readSamples(filename string, ch chan Sample) {
 		return
 	}
 
+	debugStream := true
+
 	onStreamPayload := func() (err error) {
 		stream := findOrCreateStream(header.PID)
 		r := bytes.NewReader(payload)
@@ -82,6 +84,11 @@ func readSamples(filename string, ch chan Sample) {
 		if _, err = io.CopyN(&stream.Data, lr, lr.N); err != nil {
 			return
 		}
+
+		if debugStream {
+			fmt.Printf("stream: %d/%d\n", stream.Data.Len(), stream.Header.DataLength)
+		}
+
 		if stream.Data.Len() == int(stream.Header.DataLength) {
 			if debug {
 				fmt.Println(stream.Type, stream.Title, stream.Data.Len(), "total")
@@ -197,7 +204,7 @@ func main() {
 
 	var w *ts.TSWriter
 	var sample Sample
-	writePES := func() (err error) {
+	writeSample := func() (err error) {
 		pes := ts.PESHeader{
 			StreamId: ts.StreamIdH264,
 			PTS: sample.PTS,
@@ -230,12 +237,15 @@ func main() {
 		}
 		if sample.Type == ts.ElementaryStreamTypeH264 {
 			if true {
-				fmt.Println("sample: ", len(sample.Data), "PCR", sample.PCR)
+				fmt.Println("sample: ", len(sample.Data),
+					"PCR", sample.PCR, "PTS", sample.PTS,
+					"DTS", sample.DTS,
+				)
 				//fmt.Print(hex.Dump(sample.Data))
 			}
 
 			if file != nil {
-				writePES()
+				writeSample()
 			}
 		}
 	}

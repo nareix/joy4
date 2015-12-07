@@ -165,15 +165,15 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 
 		// Adaptation extension
 		if lr.N > 0 {
-			data := make([]byte, lr.N)
-			if _, err = lr.Read(data); err != nil {
+			if DebugReader {
+				// rubish
+				fmt.Println("ts: skip", lr.N)
+			}
+
+			if err = ReadDummy(lr, int(lr.N)); err != nil {
 				return
 			}
 
-			if DebugReader {
-				// rubish
-				//fmt.Println("ts: ", data)
-			}
 		}
 	}
 
@@ -184,6 +184,9 @@ func ReadTSPacket(r io.Reader, data []byte) (self TSHeader, n int, err error) {
 	lr := &io.LimitedReader{R: r, N: 188}
 	if self, err = ReadTSHeader(lr); err != nil {
 		return
+	}
+	if DebugReader {
+		fmt.Println("ts: data", lr.N)
 	}
 	if n, err = lr.Read(data[:lr.N]); err != nil {
 		return
@@ -449,15 +452,15 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		return
 	}
 
-	if DebugReader {
-		fmt.Printf("pes: StreamId=%x\n", self.StreamId)
-	}
-
 	if length, err = ReadUInt(r, 2); err != nil {
 		return
 	}
 	lrAll := &io.LimitedReader{R: r, N: int64(length)}
 	lr := lrAll
+
+	if DebugReader {
+		fmt.Printf("pes: StreamId=%x length=%d\n", self.StreamId, length)
+	}
 
 	// 10(2)
 	// PES scrambling control(2)
