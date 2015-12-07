@@ -25,12 +25,16 @@ func WriteUInt(w io.Writer, val uint, n int) (err error) {
 	return WriteUInt64(w, uint64(val), n)
 }
 
-func WriteRepeatVal(w io.Writer, val byte, n int) (err error) {
+func makeRepeatValBytes(val byte, n int) []byte {
 	b := make([]byte, n)
 	for i := range b {
 		b[i] = val
 	}
-	_, err = w.Write(b)
+	return b
+}
+
+func WriteRepeatVal(w io.Writer, val byte, n int) (err error) {
+	_, err = w.Write(makeRepeatValBytes(val, n))
 	return
 }
 
@@ -145,6 +149,7 @@ type TSWriter struct {
 	PCR uint64
 	OPCR uint64
 	ContinuityCounter uint
+	DisableHeaderPadding bool
 }
 
 func (self *TSWriter) Write(b []byte, RandomAccessIndicator bool) (err error) {
@@ -161,16 +166,26 @@ func (self *TSWriter) Write(b []byte, RandomAccessIndicator bool) (err error) {
 			header.RandomAccessIndicator = RandomAccessIndicator
 		}
 
+		requestLength := len(b)
+		if self.DisableHeaderPadding {
+			requestLength = 188
+		}
+
 		bw := &bytes.Buffer{}
-		if err = WriteTSHeader(bw, header, len(b)); err != nil {
+		if err = WriteTSHeader(bw, header, requestLength); err != nil {
 			return
 		}
 
-		data := b[:188-bw.Len()]
-		b = b[len(data):]
+		dataLen := 188-bw.Len()
+		if self.DisableHeaderPadding && len(b) < dataLen {
+			b = append(b, makeRepeatValBytes(0xff, dataLen - len(b))...)
+		}
+
+		data := b[:dataLen]
+		b = b[dataLen:]
 
 		if DebugWriter {
-			fmt.Printf("tsw: datalen=%d blen=%d\n", len(data), len(b))
+			fmt.Printf("tsw: datalen=%d blen=%d\n", dataLen, len(b))
 		}
 
 		if _, err = self.W.Write(bw.Bytes()); err != nil {

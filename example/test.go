@@ -167,6 +167,7 @@ func main() {
 		w := &ts.TSWriter{
 			W: file,
 			PID: 0,
+			DisableHeaderPadding: true,
 		}
 		pat := ts.PAT{
 			Entries: []ts.PATEntry{
@@ -187,6 +188,7 @@ func main() {
 		w := &ts.TSWriter{
 			W: file,
 			PID: 0x1000,
+			DisableHeaderPadding: true,
 		}
 		pmt := ts.PMT{
 			PCRPID: 0x100,
