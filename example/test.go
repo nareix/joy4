@@ -35,7 +35,8 @@ func readSamples(filename string, ch chan Sample) {
 		close(ch)
 	}()
 
-	debug := false
+	debugData := true
+	debugStream := false
 
 	var file *os.File
 	var err error
@@ -70,8 +71,6 @@ func readSamples(filename string, ch chan Sample) {
 		return
 	}
 
-	debugStream := false
-
 	onStreamPayload := func() (err error) {
 		stream := findOrCreateStream(header.PID)
 		r := bytes.NewReader(payload)
@@ -94,7 +93,7 @@ func readSamples(filename string, ch chan Sample) {
 		}
 
 		if stream.Data.Len() == int(stream.PESHeader.DataLength) {
-			if debug {
+			if debugData {
 				fmt.Println(stream.Type, stream.Title, stream.Data.Len(), "total")
 				fmt.Println(hex.Dump(stream.Data.Bytes()))
 			}
@@ -114,7 +113,7 @@ func readSamples(filename string, ch chan Sample) {
 		if header, n, err = ts.ReadTSPacket(file, data[:]); err != nil {
 			return
 		}
-		if debug {
+		if debugData {
 			fmt.Println(header, n)
 		}
 
@@ -134,9 +133,6 @@ func readSamples(filename string, ch chan Sample) {
 					return
 				}
 				//fmt.Println("pmt", pmt)
-				if debug {
-					fmt.Println(hex.Dump(payload))
-				}
 			}
 		}
 
