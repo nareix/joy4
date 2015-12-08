@@ -121,6 +121,11 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 			})
 		}
 
+		// random_access_indicator
+		if flags & 0x40 != 0 {
+			self.RandomAccessIndicator = true
+		}
+
 		// PCR
 		if flags & 0x10 != 0 {
 			var v uint64
@@ -201,6 +206,12 @@ func ReadPSI(r io.Reader) (self PSI, lr *io.LimitedReader, cr *Crc32Reader, err 
 	if pointer, err = ReadUInt(r, 1); err != nil {
 		return
 	}
+
+	if DebugReader {
+		fmt.Printf("psi: pointer=%d\n", pointer)
+	}
+
+
 	if pointer != 0 {
 		if err = ReadDummy(r, int(pointer)); err != nil {
 			return
@@ -360,12 +371,40 @@ func ReadPMT(r io.Reader) (self PMT, err error) {
 		}
 		info.ElementaryPID = flags & 0x1fff
 
+		if DebugReader {
+			fmt.Printf("pmt: info1 %s\n", FieldsDumper{
+				Fields: []struct{
+					Length int
+					Desc string
+				}{
+					{3, "reserved"},
+					{13, "elementary_pid"},
+				},
+				Val: flags,
+				Length: 16,
+			})
+		}
+
 		// Reserved(6)
-		// ES Info length length(10)
+		// ES Info length(10)
 		if flags, err = ReadUInt(lr, 2); err != nil {
 			return
 		}
 		length = flags & 0x3ff
+
+		if DebugReader {
+			fmt.Printf("pmt: info2 %s\n", FieldsDumper{
+				Fields: []struct{
+					Length int
+					Desc string
+				}{
+					{6, "reserved"},
+					{10, "es_info_length"},
+				},
+				Val: flags,
+				Length: 16,
+			})
+		}
 
 		if length > 0 {
 			lr := &io.LimitedReader{R: lr, N: int64(length)}

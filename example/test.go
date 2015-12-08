@@ -13,7 +13,8 @@ import (
 
 type Stream struct {
 	PID uint
-	Header *ts.PESHeader
+	PESHeader *ts.PESHeader
+	FirstTSHeader ts.TSHeader
 	Title string
 	Data bytes.Buffer
 	Type uint
@@ -26,6 +27,7 @@ type Sample struct {
 	PTS uint64
 	DTS uint64
 	Data []byte
+	RandomAccessIndicator bool
 }
 
 func readSamples(filename string, ch chan Sample) {
@@ -68,7 +70,7 @@ func readSamples(filename string, ch chan Sample) {
 		return
 	}
 
-	debugStream := true
+	debugStream := false
 
 	onStreamPayload := func() (err error) {
 		stream := findOrCreateStream(header.PID)
@@ -77,10 +79,10 @@ func readSamples(filename string, ch chan Sample) {
 
 		if header.PayloadUnitStart {
 			stream.Data = bytes.Buffer{}
-			if stream.Header, err = ts.ReadPESHeader(lr); err != nil {
+			if stream.PESHeader, err = ts.ReadPESHeader(lr); err != nil {
 				return
 			}
-			stream.PCR = header.PCR
+			stream.FirstTSHeader = header
 		}
 
 		if _, err = io.CopyN(&stream.Data, lr, lr.N); err != nil {
@@ -88,10 +90,10 @@ func readSamples(filename string, ch chan Sample) {
 		}
 
 		if debugStream {
-			fmt.Printf("stream: %d/%d\n", stream.Data.Len(), stream.Header.DataLength)
+			fmt.Printf("stream: %d/%d\n", stream.Data.Len(), stream.PESHeader.DataLength)
 		}
 
-		if stream.Data.Len() == int(stream.Header.DataLength) {
+		if stream.Data.Len() == int(stream.PESHeader.DataLength) {
 			if debug {
 				fmt.Println(stream.Type, stream.Title, stream.Data.Len(), "total")
 				fmt.Println(hex.Dump(stream.Data.Bytes()))
@@ -99,9 +101,10 @@ func readSamples(filename string, ch chan Sample) {
 			ch <- Sample{
 				Type: stream.Type,
 				Data: stream.Data.Bytes(),
-				PTS: stream.Header.PTS,
-				DTS: stream.Header.DTS,
-				PCR: stream.PCR,
+				PTS: stream.PESHeader.PTS,
+				DTS: stream.PESHeader.DTS,
+				PCR: stream.FirstTSHeader.PCR,
+				RandomAccessIndicator: stream.FirstTSHeader.RandomAccessIndicator,
 			}
 		}
 		return
@@ -219,7 +222,7 @@ func main() {
 		if err = ts.WritePES(bw, pes, bytes.NewReader(sample.Data)); err != nil {
 			return
 		}
-		if err = w.Write(bw.Bytes(), false); err != nil {
+		if err = w.Write(bw.Bytes(), sample.RandomAccessIndicator); err != nil {
 			return
 		}
 		return
@@ -243,7 +246,7 @@ func main() {
 			if true {
 				fmt.Println("sample: ", len(sample.Data),
 					"PCR", sample.PCR, "PTS", sample.PTS,
-					"DTS", sample.DTS,
+					"DTS", sample.DTS, "sync", sample.RandomAccessIndicator,
 				)
 				//fmt.Print(hex.Dump(sample.Data))
 			}
