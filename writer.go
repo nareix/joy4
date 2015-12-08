@@ -565,9 +565,14 @@ func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, nalu []byte) (e
 	nalus = append(nalus, nalu)
 
 	readers := []io.ReadSeeker{}
-	for _, nalu := range nalus {
-		startCode := bytes.NewReader([]byte{0,0,1})
-		readers = append(readers, startCode)
+	for i, nalu := range nalus {
+		var startCode []byte
+		if i == 0 {
+			startCode = []byte{0,0,0,1,0x9,0xf0,0,0,0,1} // AUD
+		} else {
+			startCode = []byte{0,0,1}
+		}
+		readers = append(readers, bytes.NewReader(startCode))
 		readers = append(readers, bytes.NewReader(nalu))
 	}
 	data := &multiReadSeeker{readers: readers}
