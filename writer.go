@@ -7,7 +7,7 @@ import (
 	"bytes"
 )
 
-const DebugWriter = true
+const DebugWriter = false
 
 func WriteUInt64(w io.Writer, val uint64, n int) (err error) {
 	var b [8]byte
@@ -447,7 +447,7 @@ func WritePMT(w io.Writer, self PMT) (err error) {
 
 			// Reserved(6)
 			// ES Info length length(10)
-			if err = WriteUInt(w, uint(bw.Len())|0x3f<<10, 2); err != nil {
+			if err = WriteUInt(w, uint(bw.Len())|0x3c<<10, 2); err != nil {
 				return
 			}
 
@@ -550,37 +550,6 @@ func (self *SimpleH264Writer) prepare() (err error) {
 	return
 }
 
-func (self *SimpleH264Writer) writeData(data io.ReadSeeker, duration int) (err error) {
-	pes := PESHeader{
-		StreamId: StreamIdH264,
-		PTS: self.pts,
-	}
-	self.tsw.PCR = self.pcr
-
-	self.pts += uint64(duration)*PTS_HZ/uint64(self.TimeScale)
-	self.pcr += uint64(duration)*PCR_HZ/uint64(self.TimeScale)
-
-	bw := &bytes.Buffer{}
-	if err = WritePES(bw, pes, data); err != nil {
-		return
-	}
-	if err = self.tsw.Write(bw.Bytes(), false); err != nil {
-		return
-	}
-
-	return
-}
-
-func (self *SimpleH264Writer) writeNALUs(nalus [][]byte, duration int) (err error) {
-	readers := []io.ReadSeeker{}
-	for _, nalu := range nalus {
-		startCode := bytes.NewReader([]byte{0,0,1})
-		readers = append(readers, startCode)
-		readers = append(readers, bytes.NewReader(nalu))
-	}
-	return self.writeData(&multiReadSeeker{readers: readers}, duration)
-}
-
 func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, nalu []byte) (err error) {
 	nalus := [][]byte{}
 
@@ -595,6 +564,31 @@ func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, nalu []byte) (e
 
 	nalus = append(nalus, nalu)
 
-	return self.writeNALUs(nalus, duration)
+	readers := []io.ReadSeeker{}
+	for _, nalu := range nalus {
+		startCode := bytes.NewReader([]byte{0,0,1})
+		readers = append(readers, startCode)
+		readers = append(readers, bytes.NewReader(nalu))
+	}
+	data := &multiReadSeeker{readers: readers}
+
+	pes := PESHeader{
+		StreamId: StreamIdH264,
+		PTS: self.pts,
+	}
+	self.tsw.PCR = self.pcr
+
+	self.pts += uint64(duration)*PTS_HZ/uint64(self.TimeScale)
+	self.pcr += uint64(duration)*PCR_HZ/uint64(self.TimeScale)
+
+	bw := &bytes.Buffer{}
+	if err = WritePES(bw, pes, data); err != nil {
+		return
+	}
+	if err = self.tsw.Write(bw.Bytes(), sync); err != nil {
+		return
+	}
+
+	return
 }
 
