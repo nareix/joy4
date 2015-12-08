@@ -277,9 +277,7 @@ func bswap32(v uint) uint {
 func WritePES(w io.Writer, self PESHeader, data io.ReadSeeker) (err error) {
 	// http://dvd.sourceforge.net/dvdinfo/pes-hdr.html
 
-	var pts_dts_flags, header_length, packet_length uint
-
-	dataLen := getSeekerLength(data)
+	var pts_dts_flags, header_length uint
 
 	// start code(24) 000001
 	// StreamId(8)
@@ -317,14 +315,9 @@ func WritePES(w io.Writer, self PESHeader, data io.ReadSeeker) (err error) {
 	if pts_dts_flags & DTS != 0 {
 		header_length += 5
 	}
-	packet_length = 3+header_length+uint(dataLen)
 
-	if DebugWriter {
-		fmt.Printf("pesw: packet_length=%d\n", packet_length)
-	}
-
-	// packet_length(16)
-	if err = WriteUInt(w, packet_length, 2); err != nil {
+	// packet_length(16) if zero then variable length
+	if err = WriteUInt(w, 0, 2); err != nil {
 		return
 	}
 
