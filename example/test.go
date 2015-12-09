@@ -50,7 +50,7 @@ func readSamples(filename string, ch chan Sample) {
 	}()
 
 	debugData := true
-	debugStream := false
+	debugStream := true
 
 	var file *os.File
 	var err error
@@ -85,10 +85,29 @@ func readSamples(filename string, ch chan Sample) {
 		return
 	}
 
+	onStreamPayloadUnitEnd := func(stream *Stream) {
+		if debugData {
+			fmt.Println(stream.Type, stream.Title, stream.Data.Len(), "total")
+			fmt.Println(hex.Dump(stream.Data.Bytes()))
+		}
+		ch <- Sample{
+			Type: stream.Type,
+			Data: stream.Data.Bytes(),
+			PTS: stream.PESHeader.PTS,
+			DTS: stream.PESHeader.DTS,
+			PCR: stream.FirstTSHeader.PCR,
+			RandomAccessIndicator: stream.FirstTSHeader.RandomAccessIndicator,
+		}
+	}
+
 	onStreamPayload := func() (err error) {
 		stream := findOrCreateStream(header.PID)
 		r := bytes.NewReader(payload)
 		lr := &io.LimitedReader{R: r, N: int64(len(payload))}
+
+		if header.PayloadUnitStart && stream.PESHeader != nil && stream.PESHeader.DataLength == 0 {
+			onStreamPayloadUnitEnd(stream)
+		}
 
 		if header.PayloadUnitStart {
 			stream.Data = bytes.Buffer{}
@@ -96,6 +115,9 @@ func readSamples(filename string, ch chan Sample) {
 				return
 			}
 			stream.FirstTSHeader = header
+			if debugStream {
+				fmt.Printf("stream: start\n")
+			}
 		}
 
 		if _, err = io.CopyN(&stream.Data, lr, lr.N); err != nil {
@@ -107,19 +129,9 @@ func readSamples(filename string, ch chan Sample) {
 		}
 
 		if stream.Data.Len() == int(stream.PESHeader.DataLength) {
-			if debugData {
-				fmt.Println(stream.Type, stream.Title, stream.Data.Len(), "total")
-				fmt.Println(hex.Dump(stream.Data.Bytes()))
-			}
-			ch <- Sample{
-				Type: stream.Type,
-				Data: stream.Data.Bytes(),
-				PTS: stream.PESHeader.PTS,
-				DTS: stream.PESHeader.DTS,
-				PCR: stream.FirstTSHeader.PCR,
-				RandomAccessIndicator: stream.FirstTSHeader.RandomAccessIndicator,
-			}
+			onStreamPayloadUnitEnd(stream)
 		}
+
 		return
 	}
 
@@ -186,6 +198,9 @@ func main() {
 	output := flag.String("o", "", "output file")
 	inputGob := flag.String("g", "", "input gob file")
 	flag.Parse()
+
+	ts.DebugReader = true
+	ts.DebugWriter = true
 
 	if *inputGob != "" && *output != "" {
 		testInputGob(*inputGob, *output)

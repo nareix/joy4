@@ -7,7 +7,7 @@ import (
 	"bytes"
 )
 
-const DebugWriter = true
+var DebugWriter = false
 
 func WriteUInt64(w io.Writer, val uint64, n int) (err error) {
 	var b [8]byte

@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 )
 
-var DebugReader = true
+var DebugReader = false
 
 func ReadUInt(r io.Reader, n int) (res uint, err error) {
 	var b [4]byte
@@ -494,6 +494,9 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 	if length, err = ReadUInt(r, 2); err != nil {
 		return
 	}
+	if length == 0 {
+		length = 1<<31
+	}
 	lrAll := &io.LimitedReader{R: r, N: int64(length)}
 	lr := lrAll
 
@@ -667,13 +670,12 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		}
 	}
 
-	if lr.N > 0 {
+	if lr.N > 0 && lr.N < 65536 {
 		if err = ReadDummy(lr, int(lr.N)); err != nil {
 			return
 		}
+		self.DataLength = uint(lrAll.N)
 	}
-
-	self.DataLength = uint(lrAll.N)
 
 	res = self
 	return
