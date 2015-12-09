@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"encoding/hex"
 	"encoding/gob"
+	"runtime/pprof"
 	"flag"
 )
 
@@ -197,7 +198,18 @@ func main() {
 	input := flag.String("i", "", "input file")
 	output := flag.String("o", "", "output file")
 	inputGob := flag.String("g", "", "input gob file")
+	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
 	flag.Parse()
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			return
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
 
 	ts.DebugReader = true
 	ts.DebugWriter = true
