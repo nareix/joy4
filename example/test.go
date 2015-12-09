@@ -283,6 +283,7 @@ func main() {
 			W: file,
 			PID: 0x100,
 		}
+		w.EnableVecWriter()
 	}
 
 	for {

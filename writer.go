@@ -151,9 +151,26 @@ type TSWriter struct {
 	PID uint
 	TSHeader
 	DisableHeaderPadding bool
+
+	vecw *vecWriter
+}
+
+func (self *TSWriter) EnableVecWriter() {
+	if self.vecw == nil {
+		self.vecw = newVecWriter(self.W)
+
+		if DebugWriter && self.vecw != nil {
+			fmt.Println("tsw: enabled vec writer")
+		}
+	}
 }
 
 func (self *TSWriter) WriteIovec(data *iovec) (err error) {
+	w := self.W
+	if self.vecw != nil {
+		w = self.vecw
+	}
+
 	for i := 0; data.Len > 0; i++ {
 		header := TSHeader{
 			PID: self.PID,
@@ -172,7 +189,7 @@ func (self *TSWriter) WriteIovec(data *iovec) (err error) {
 			requestLength = 188
 		}
 		var headerLength int
-		if headerLength, err = WriteTSHeader(self.W, header, requestLength); err != nil {
+		if headerLength, err = WriteTSHeader(w, header, requestLength); err != nil {
 			return
 		}
 		payloadLength := 188 - headerLength
@@ -184,11 +201,17 @@ func (self *TSWriter) WriteIovec(data *iovec) (err error) {
 			fmt.Printf("tsw: payloadLength=%d dataLength=%d\n", payloadLength, data.Len)
 		}
 
-		if _, err = data.WriteTo(self.W, payloadLength); err != nil {
+		if _, err = data.WriteTo(w, payloadLength); err != nil {
 			return
 		}
 
 		self.ContinuityCounter++
+	}
+
+	if self.vecw != nil {
+		if err = self.vecw.Flush(); err != nil {
+			return
+		}
 	}
 
 	return
@@ -232,7 +255,7 @@ func WritePSI(w io.Writer, self PSI, data []byte) (err error) {
 	}
 
 	if DebugWriter {
-		fmt.Printf("wpsi: length=%d\n", length)
+		fmt.Printf("psiw: length=%d\n", length)
 	}
 
 	// Table ID extension(16)
@@ -546,6 +569,7 @@ func (self *SimpleH264Writer) prepare() (err error) {
 		W: self.W,
 		PID: 0x100,
 	}
+	self.tsw.EnableVecWriter()
 	self.pts = PTS_HZ
 	self.pcr = PCR_HZ
 
