@@ -7,7 +7,7 @@ import (
 	"bytes"
 )
 
-const DebugWriter = false
+const DebugWriter = true
 
 func WriteUInt64(w io.Writer, val uint64, n int) (err error) {
 	var b [8]byte
@@ -38,7 +38,7 @@ func WriteRepeatVal(w io.Writer, val byte, n int) (err error) {
 	return
 }
 
-func WriteTSHeader(w io.Writer, self TSHeader, dataLength int) (err error) {
+func WriteTSHeader(w io.Writer, self TSHeader, dataLength int) (written int, err error) {
 	var flags, extFlags uint
 
 	// sync(8)
@@ -85,6 +85,7 @@ func WriteTSHeader(w io.Writer, self TSHeader, dataLength int) (err error) {
 	if err = WriteUInt(w, flags, 4); err != nil {
 		return
 	}
+	written += 4
 
 	if flags & EXT != 0 {
 		var length uint
@@ -111,7 +112,7 @@ func WriteTSHeader(w io.Writer, self TSHeader, dataLength int) (err error) {
 		}
 
 		if DebugWriter {
-			fmt.Printf("tsw: dataLength=%d paddingLength=%d\n", dataLength, paddingLength)
+			fmt.Printf("tsw: header padding=%d\n", paddingLength)
 		}
 
 		if err = WriteUInt(w, length, 1); err != nil {
@@ -138,6 +139,8 @@ func WriteTSHeader(w io.Writer, self TSHeader, dataLength int) (err error) {
 				return
 			}
 		}
+
+		written += int(length)+1
 	}
 
 	return
@@ -146,14 +149,12 @@ func WriteTSHeader(w io.Writer, self TSHeader, dataLength int) (err error) {
 type TSWriter struct {
 	W io.Writer
 	PID uint
-	PCR uint64
-	OPCR uint64
-	ContinuityCounter uint
+	TSHeader
 	DisableHeaderPadding bool
 }
 
-func (self *TSWriter) Write(b []byte, RandomAccessIndicator bool) (err error) {
-	for i := 0; len(b) > 0; i++ {
+func (self *TSWriter) WriteIovec(data *iovec) (err error) {
+	for i := 0; data.Len > 0; i++ {
 		header := TSHeader{
 			PID: self.PID,
 			ContinuityCounter: self.ContinuityCounter,
@@ -161,37 +162,29 @@ func (self *TSWriter) Write(b []byte, RandomAccessIndicator bool) (err error) {
 
 		if i == 0 {
 			header.PayloadUnitStart = true
+			header.RandomAccessIndicator = self.RandomAccessIndicator
 			header.PCR = self.PCR
 			header.OPCR = self.OPCR
-			header.RandomAccessIndicator = RandomAccessIndicator
 		}
 
-		requestLength := len(b)
+		requestLength := data.Len
 		if self.DisableHeaderPadding {
 			requestLength = 188
 		}
-
-		bw := &bytes.Buffer{}
-		if err = WriteTSHeader(bw, header, requestLength); err != nil {
+		var headerLength int
+		if headerLength, err = WriteTSHeader(self.W, header, requestLength); err != nil {
 			return
 		}
-
-		dataLen := 188-bw.Len()
-		if self.DisableHeaderPadding && len(b) < dataLen {
-			b = append(b, makeRepeatValBytes(0xff, dataLen - len(b))...)
+		payloadLength := 188 - headerLength
+		if self.DisableHeaderPadding && data.Len < payloadLength {
+			data.Append(makeRepeatValBytes(0xff, payloadLength - data.Len))
 		}
-
-		data := b[:dataLen]
-		b = b[dataLen:]
 
 		if DebugWriter {
-			fmt.Printf("tsw: datalen=%d blen=%d\n", dataLen, len(b))
+			fmt.Printf("tsw: payloadLength=%d dataLength=%d\n", payloadLength, data.Len)
 		}
 
-		if _, err = self.W.Write(bw.Bytes()); err != nil {
-			return
-		}
-		if _, err = self.W.Write(data); err != nil {
+		if _, err = data.WriteTo(self.W, payloadLength); err != nil {
 			return
 		}
 
@@ -199,6 +192,12 @@ func (self *TSWriter) Write(b []byte, RandomAccessIndicator bool) (err error) {
 	}
 
 	return
+}
+
+func (self *TSWriter) Write(data []byte) (err error) {
+	iov := &iovec{}
+	iov.Append(data)
+	return self.WriteIovec(iov)
 }
 
 func WritePSI(w io.Writer, self PSI, data []byte) (err error) {
@@ -274,7 +273,7 @@ func bswap32(v uint) uint {
 	return (v>>24)|((v>>16)&0xff)<<8|((v>>8)&0xff)<<16|(v&0xff)<<24
 }
 
-func WritePES(w io.Writer, self PESHeader, data io.ReadSeeker) (err error) {
+func WritePESHeader(w io.Writer, self PESHeader) (err error) {
 	// http://dvd.sourceforge.net/dvdinfo/pes-hdr.html
 
 	var pts_dts_flags, header_length uint
@@ -353,11 +352,20 @@ func WritePES(w io.Writer, self PESHeader, data io.ReadSeeker) (err error) {
 		}
 	}
 
-	// data
-	if _, err = io.Copy(w, data); err != nil {
+	return
+}
+
+func WritePESPacket(w *TSWriter, header PESHeader, data []byte) (err error) {
+	bw := &bytes.Buffer{}
+	if err = WritePESHeader(bw, header); err != nil {
 		return
 	}
-
+	iov := &iovec{}
+	iov.Append(bw.Bytes())
+	iov.Append(data)
+	if err = w.WriteIovec(iov); err != nil {
+		return
+	}
 	return
 }
 
@@ -386,6 +394,22 @@ func WritePAT(w io.Writer, self PAT) (err error) {
 		return
 	}
 
+	return
+}
+
+func WritePATPacket(w io.Writer, pat PAT) (err error) {
+	tsw := &TSWriter{
+		W: w,
+		PID: 0,
+		DisableHeaderPadding: true,
+	}
+	bw := &bytes.Buffer{}
+	if err = WritePAT(bw, pat); err != nil {
+		return
+	}
+	if err = tsw.Write(bw.Bytes()); err != nil {
+		return
+	}
 	return
 }
 
@@ -468,6 +492,22 @@ func WritePMT(w io.Writer, self PMT) (err error) {
 	return
 }
 
+func WritePMTPacket(w io.Writer, pmt PMT, pid uint) (err error) {
+	tsw := &TSWriter{
+		W: w,
+		PID: pid,
+		DisableHeaderPadding: true,
+	}
+	bw := &bytes.Buffer{}
+	if err = WritePMT(bw, pmt); err != nil {
+		return
+	}
+	if err = tsw.Write(bw.Bytes()); err != nil {
+		return
+	}
+	return
+}
+
 type SimpleH264Writer struct {
 	W io.Writer
 	TimeScale int
@@ -479,57 +519,26 @@ type SimpleH264Writer struct {
 	pts uint64
 	pcr uint64
 	prepared bool
+	pesBuf *bytes.Buffer
 }
 
 func (self *SimpleH264Writer) prepare() (err error) {
-	writePAT := func() (err error) {
-		w := &TSWriter{
-			W: self.W,
-			PID: 0,
-			DisableHeaderPadding: true,
-		}
-		pat := PAT{
-			Entries: []PATEntry{
-				{ProgramNumber: 1, ProgramMapPID: 0x1000},
-			},
-		}
-		bw := &bytes.Buffer{}
-		if err = WritePAT(bw, pat); err != nil {
-			return
-		}
-		if err = w.Write(bw.Bytes(), false); err != nil {
-			return
-		}
+	pat := PAT{
+		Entries: []PATEntry{
+			{ProgramNumber: 1, ProgramMapPID: 0x1000},
+		},
+	}
+	if err = WritePATPacket(self.W, pat); err != nil {
 		return
 	}
 
-	writePMT := func() (err error) {
-		w := &TSWriter{
-			W: self.W,
-			PID: 0x1000,
-			DisableHeaderPadding: true,
-		}
-		pmt := PMT{
-			PCRPID: 0x100,
-			ElementaryStreamInfos: []ElementaryStreamInfo{
-				{StreamType: ElementaryStreamTypeH264, ElementaryPID: 0x100},
-			},
-		}
-		bw := &bytes.Buffer{}
-		if err = WritePMT(bw, pmt); err != nil {
-			return
-		}
-		if err = w.Write(bw.Bytes(), false); err != nil {
-			return
-		}
-		return
+	pmt := PMT{
+		PCRPID: 0x100,
+		ElementaryStreamInfos: []ElementaryStreamInfo{
+			{StreamType: ElementaryStreamTypeH264, ElementaryPID: 0x100},
+		},
 	}
-
-	if err = writePAT(); err != nil {
-		return
-	}
-
-	if err = writePMT(); err != nil {
+	if err = WritePMTPacket(self.W, pmt, 0x1000); err != nil {
 		return
 	}
 
@@ -539,6 +548,8 @@ func (self *SimpleH264Writer) prepare() (err error) {
 	}
 	self.pts = PTS_HZ
 	self.pcr = PCR_HZ
+
+	self.pesBuf = &bytes.Buffer{}
 
 	return
 }
@@ -554,10 +565,18 @@ func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, nalu []byte) (e
 		nalus = append(nalus, self.SPS)
 		nalus = append(nalus, self.PPS)
 	}
-
 	nalus = append(nalus, nalu)
 
-	readers := []io.ReadSeeker{}
+	pes := PESHeader{
+		StreamId: StreamIdH264,
+		PTS: self.pts,
+	}
+	if err = WritePESHeader(self.pesBuf, pes); err != nil {
+		return
+	}
+
+	data := &iovec{}
+	data.Append(self.pesBuf.Bytes())
 	for i, nalu := range nalus {
 		var startCode []byte
 		if i == 0 {
@@ -565,27 +584,20 @@ func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, nalu []byte) (e
 		} else {
 			startCode = []byte{0,0,1}
 		}
-		readers = append(readers, bytes.NewReader(startCode))
-		readers = append(readers, bytes.NewReader(nalu))
+		data.Append(startCode)
+		data.Append(nalu)
 	}
-	data := &multiReadSeeker{readers: readers}
 
-	pes := PESHeader{
-		StreamId: StreamIdH264,
-		PTS: self.pts,
-	}
+	self.tsw.RandomAccessIndicator = sync
 	self.tsw.PCR = self.pcr
+
+	if err = self.tsw.WriteIovec(data); err != nil {
+		return
+	}
 
 	self.pts += uint64(duration)*PTS_HZ/uint64(self.TimeScale)
 	self.pcr += uint64(duration)*PCR_HZ/uint64(self.TimeScale)
-
-	bw := &bytes.Buffer{}
-	if err = WritePES(bw, pes, data); err != nil {
-		return
-	}
-	if err = self.tsw.Write(bw.Bytes(), sync); err != nil {
-		return
-	}
+	self.pesBuf.Reset()
 
 	return
 }

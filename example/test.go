@@ -8,8 +8,22 @@ import (
 	ts "../"
 	"fmt"
 	"encoding/hex"
+	"encoding/gob"
 	"flag"
 )
+
+type GobAllSamples struct {
+	TimeScale int
+	SPS []byte
+	PPS []byte
+	Samples []GobSample
+}
+
+type GobSample struct {
+	Duration int
+	Data []byte
+	Sync bool
+}
 
 type Stream struct {
 	PID uint
@@ -145,10 +159,38 @@ func readSamples(filename string, ch chan Sample) {
 	}
 }
 
+func testInputGob(pathGob string, pathOut string) {
+	gobfile, _ := os.Open(pathGob)
+	outfile, _ := os.Create(pathOut)
+	dec := gob.NewDecoder(gobfile)
+	var allSamples GobAllSamples
+	dec.Decode(&allSamples)
+
+	w := ts.SimpleH264Writer{
+		W: outfile,
+		SPS: allSamples.SPS,
+		PPS: allSamples.PPS,
+		TimeScale: allSamples.TimeScale,
+	}
+
+	for _, sample := range allSamples.Samples {
+		w.WriteNALU(sample.Sync, sample.Duration, sample.Data)
+	}
+
+	outfile.Close()
+	fmt.Println("written to", pathOut)
+}
+
 func main() {
 	input := flag.String("i", "", "input file")
 	output := flag.String("o", "", "output file")
+	inputGob := flag.String("g", "", "input gob file")
 	flag.Parse()
+
+	if *inputGob != "" && *output != "" {
+		testInputGob(*inputGob, *output)
+		return
+	}
 
 	var file *os.File
 	var err error
@@ -163,43 +205,25 @@ func main() {
 	}
 
 	writePAT := func() (err error) {
-		w := &ts.TSWriter{
-			W: file,
-			PID: 0,
-			DisableHeaderPadding: true,
-		}
 		pat := ts.PAT{
 			Entries: []ts.PATEntry{
 				{ProgramNumber: 1, ProgramMapPID: 0x1000},
 			},
 		}
-		bw := &bytes.Buffer{}
-		if err = ts.WritePAT(bw, pat); err != nil {
-			return
-		}
-		if err = w.Write(bw.Bytes(), false); err != nil {
+		if err = ts.WritePATPacket(file, pat); err != nil {
 			return
 		}
 		return
 	}
 
 	writePMT := func() (err error) {
-		w := &ts.TSWriter{
-			W: file,
-			PID: 0x1000,
-			DisableHeaderPadding: true,
-		}
 		pmt := ts.PMT{
 			PCRPID: 0x100,
 			ElementaryStreamInfos: []ts.ElementaryStreamInfo{
 				{StreamType: ts.ElementaryStreamTypeH264, ElementaryPID: 0x100},
 			},
 		}
-		bw := &bytes.Buffer{}
-		if err = ts.WritePMT(bw, pmt); err != nil {
-			return
-		}
-		if err = w.Write(bw.Bytes(), false); err != nil {
+		if err = ts.WritePMTPacket(file, pmt, 0x1000); err != nil {
 			return
 		}
 		return
@@ -214,11 +238,8 @@ func main() {
 			DTS: sample.DTS,
 		}
 		w.PCR = sample.PCR
-		bw := &bytes.Buffer{}
-		if err = ts.WritePES(bw, pes, bytes.NewReader(sample.Data)); err != nil {
-			return
-		}
-		if err = w.Write(bw.Bytes(), sample.RandomAccessIndicator); err != nil {
+		w.RandomAccessIndicator = sample.RandomAccessIndicator
+		if err = ts.WritePESPacket(w, pes, sample.Data); err != nil {
 			return
 		}
 		return

@@ -5,36 +5,41 @@ import (
 	"io"
 )
 
-func getSeekerLength(data io.Seeker) (length int64) {
-	length, _ = data.Seek(0, 2)
-	data.Seek(0, 0)
-	return
+type iovec struct {
+	data [][]byte
+	Len int
 }
 
-type multiReadSeeker struct {
-	readers []io.ReadSeeker
+func (self *iovec) Append(b []byte) {
+	self.data = append(self.data, b)
+	self.Len += len(b)
 }
 
-func (mr *multiReadSeeker) Seek(offset int64, whence int) (n int64, err error) {
-	if whence == 2 {
-		for _, reader := range mr.readers {
-			n += getSeekerLength(reader)
+func (self *iovec) WriteTo(w io.Writer, n int) (written int, err error) {
+	for n > 0 && self.Len > 0 {
+		data := self.data[0]
+
+		var b []byte
+		if n > len(data) {
+			b = data
+		} else {
+			b = data[:n]
 		}
-	}
-	return
-}
 
-func (mr *multiReadSeeker) Read(p []byte) (n int, err error) {
-	for len(mr.readers) > 0 {
-		n, err = mr.readers[0].Read(p)
-		if n > 0 || err != io.EOF {
-			if err == io.EOF {
-				err = nil
-			}
+		data = data[len(b):]
+		if len(data) == 0 {
+			self.data = self.data[1:]
+		} else {
+			self.data[0] = data
+		}
+		self.Len -= len(b)
+		n -= len(b)
+		written += len(b)
+
+		if _, err = w.Write(b); err != nil {
 			return
 		}
-		mr.readers = mr.readers[1:]
 	}
-	return 0, io.EOF
+	return
 }
 
