@@ -45,13 +45,15 @@ type Sample struct {
 	RandomAccessIndicator bool
 }
 
+var (
+	debugData = true
+	debugStream = true
+)
+
 func readSamples(filename string, ch chan Sample) {
 	defer func() {
 		close(ch)
 	}()
-
-	debugData := true
-	debugStream := true
 
 	var file *os.File
 	var err error
@@ -191,7 +193,9 @@ func testInputGob(pathGob string, pathOut string) {
 	}
 
 	outfile.Close()
-	fmt.Println("written to", pathOut)
+	if debugStream {
+		fmt.Println("written to", pathOut)
+	}
 }
 
 func main() {
@@ -199,6 +203,10 @@ func main() {
 	output := flag.String("o", "", "output file")
 	inputGob := flag.String("g", "", "input gob file")
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
+	flag.BoolVar(&debugData, "vd", false, "debug data")
+	flag.BoolVar(&debugStream, "vs", false, "debug stream")
+	flag.BoolVar(&ts.DebugReader, "vr", false, "debug reader")
+	flag.BoolVar(&ts.DebugWriter, "vw", false, "debug writer")
 	flag.Parse()
 
 	if *cpuprofile != "" {
@@ -209,10 +217,6 @@ func main() {
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
-
-
-	ts.DebugReader = true
-	ts.DebugWriter = true
 
 	if *inputGob != "" && *output != "" {
 		testInputGob(*inputGob, *output)
@@ -287,7 +291,7 @@ func main() {
 			break
 		}
 		if sample.Type == ts.ElementaryStreamTypeH264 {
-			if true {
+			if debugStream {
 				fmt.Println("sample: ", len(sample.Data),
 					"PCR", sample.PCR, "PTS", sample.PTS,
 					"DTS", sample.DTS, "sync", sample.RandomAccessIndicator,
