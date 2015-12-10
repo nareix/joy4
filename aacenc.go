@@ -1,56 +1,55 @@
-
 package codec
 
 import (
 	/*
-	#include <libavcodec/avcodec.h>
-	#include <libavutil/avutil.h>
-	#include <string.h>
+			#include <libavcodec/avcodec.h>
+			#include <libavutil/avutil.h>
+			#include <string.h>
 
-	typedef struct {
-		AVCodec *c;
-		AVCodecContext *ctx;
-		AVFrame *f;
-		int got;
-		uint8_t buf[1024*10]; int size;
-		int samplerate; int bitrate;
-		int channels;
-	} aacenc_t ;
+			typedef struct {
+				AVCodec *c;
+				AVCodecContext *ctx;
+				AVFrame *f;
+				int got;
+				uint8_t buf[1024*10]; int size;
+				int samplerate; int bitrate;
+				int channels;
+			} aacenc_t ;
 
-	static int aacenc_new(aacenc_t *m) {
-		m->c = avcodec_find_encoder(CODEC_ID_AAC);
-		m->ctx = avcodec_alloc_context3(m->c);
-		m->ctx->sample_fmt = AV_SAMPLE_FMT_FLTP;
-		m->ctx->sample_rate = m->samplerate;
-		m->ctx->bit_rate = m->bitrate;
-		m->ctx->channels = m->channels;
-  	m->ctx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
-		m->f = avcodec_alloc_frame();
-		int r = avcodec_open2(m->ctx, m->c, 0);
-		av_log(m->ctx, AV_LOG_DEBUG, "extra %d\n", m->ctx->extradata_size);
-		return r;
-	}
+			static int aacenc_new(aacenc_t *m) {
+				m->c = avcodec_find_encoder(CODEC_ID_AAC);
+				m->ctx = avcodec_alloc_context3(m->c);
+				m->ctx->sample_fmt = AV_SAMPLE_FMT_FLTP;
+				m->ctx->sample_rate = m->samplerate;
+				m->ctx->bit_rate = m->bitrate;
+				m->ctx->channels = m->channels;
+		  	m->ctx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
+				m->f = avcodec_alloc_frame();
+				int r = avcodec_open2(m->ctx, m->c, 0);
+				av_log(m->ctx, AV_LOG_DEBUG, "extra %d\n", m->ctx->extradata_size);
+				return r;
+			}
 
-	static void aacenc_encode(aacenc_t *m) {
-		AVPacket pkt;
-		av_init_packet(&pkt);
-		pkt.data = m->buf;
-		pkt.size = sizeof(m->buf);
-		m->f->nb_samples = 1024;
-		m->f->extended_data = m->f->data;
-		m->f->linesize[0] = 4096;
-		avcodec_encode_audio2(m->ctx, &pkt, m->f, &m->got);
-		av_log(m->ctx, AV_LOG_DEBUG, "got %d size %d\n", m->got, pkt.size);
-		m->size = pkt.size;
-	}
+			static void aacenc_encode(aacenc_t *m) {
+				AVPacket pkt;
+				av_init_packet(&pkt);
+				pkt.data = m->buf;
+				pkt.size = sizeof(m->buf);
+				m->f->nb_samples = 1024;
+				m->f->extended_data = m->f->data;
+				m->f->linesize[0] = 4096;
+				avcodec_encode_audio2(m->ctx, &pkt, m->f, &m->got);
+				av_log(m->ctx, AV_LOG_DEBUG, "got %d size %d\n", m->got, pkt.size);
+				m->size = pkt.size;
+			}
 	*/
 	"C"
-	"unsafe"
 	"errors"
+	"unsafe"
 )
 
 type AACEncoder struct {
-	m C.aacenc_t
+	m      C.aacenc_t
 	Header []byte
 }
 
@@ -90,4 +89,3 @@ func (m *AACEncoder) Encode(sample []byte) (ret []byte, err error) {
 	)
 	return
 }
-

@@ -1,56 +1,55 @@
-
 package codec
 
 import (
 
 	/*
-	#include <stdio.h>
-	#include <stdlib.h>
-	#include <stdint.h>
-	#include <string.h>
-	#include <libavcodec/avcodec.h>
-	#include <libavformat/avformat.h>
-	#include <libavutil/avutil.h>
+		#include <stdio.h>
+		#include <stdlib.h>
+		#include <stdint.h>
+		#include <string.h>
+		#include <libavcodec/avcodec.h>
+		#include <libavformat/avformat.h>
+		#include <libavutil/avutil.h>
 
-	typedef struct {
-		int w, h;
-		int pixfmt;
-		char *preset[2];
-		char *profile;
-		int bitrate;
-		int got;
-		AVCodec *c;
-		AVCodecContext *ctx;
-		AVFrame *f;
-		AVPacket pkt;
-	} h264enc_t;
+		typedef struct {
+			int w, h;
+			int pixfmt;
+			char *preset[2];
+			char *profile;
+			int bitrate;
+			int got;
+			AVCodec *c;
+			AVCodecContext *ctx;
+			AVFrame *f;
+			AVPacket pkt;
+		} h264enc_t;
 
-	static int h264enc_new(h264enc_t *m) {
-		m->c = avcodec_find_encoder(CODEC_ID_H264);
-		m->ctx = avcodec_alloc_context3(m->c);
-		m->ctx->width = m->w;
-		m->ctx->height = m->h;
-		m->ctx->bit_rate = m->bitrate;
-		m->ctx->pix_fmt = m->pixfmt;
-		m->ctx->flags |= CODEC_FLAG_GLOBAL_HEADER;
-		m->f = avcodec_alloc_frame();
-		return avcodec_open2(m->ctx, m->c, NULL);
-	}
+		static int h264enc_new(h264enc_t *m) {
+			m->c = avcodec_find_encoder(CODEC_ID_H264);
+			m->ctx = avcodec_alloc_context3(m->c);
+			m->ctx->width = m->w;
+			m->ctx->height = m->h;
+			m->ctx->bit_rate = m->bitrate;
+			m->ctx->pix_fmt = m->pixfmt;
+			m->ctx->flags |= CODEC_FLAG_GLOBAL_HEADER;
+			m->f = avcodec_alloc_frame();
+			return avcodec_open2(m->ctx, m->c, NULL);
+		}
 
 	*/
 	"C"
-	"unsafe"
-	"image"
 	"errors"
+	"image"
 	"strings"
+	"unsafe"
 	//"log"
 )
 
 type H264Encoder struct {
-	m C.h264enc_t
+	m      C.h264enc_t
 	Header []byte
 	Pixfmt image.YCbCrSubsampleRatio
-	W, H int
+	W, H   int
 }
 
 func NewH264Encoder(
@@ -94,7 +93,7 @@ func NewH264Encoder(
 
 type h264Out struct {
 	Data []byte
-	Key bool
+	Key  bool
 }
 
 func (m *H264Encoder) Encode(img *image.YCbCr) (out h264Out, err error) {
@@ -111,12 +110,12 @@ func (m *H264Encoder) Encode(img *image.YCbCr) (out h264Out, err error) {
 			return
 		}
 		f = m.m.f
-		f.data[0] = (*C.uint8_t)(unsafe.Pointer(&img.Y[0]));
-		f.data[1] = (*C.uint8_t)(unsafe.Pointer(&img.Cb[0]));
-		f.data[2] = (*C.uint8_t)(unsafe.Pointer(&img.Cr[0]));
-		f.linesize[0] = (C.int)(img.YStride);
-		f.linesize[1] = (C.int)(img.CStride);
-		f.linesize[2] = (C.int)(img.CStride);
+		f.data[0] = (*C.uint8_t)(unsafe.Pointer(&img.Y[0]))
+		f.data[1] = (*C.uint8_t)(unsafe.Pointer(&img.Cb[0]))
+		f.data[2] = (*C.uint8_t)(unsafe.Pointer(&img.Cr[0]))
+		f.linesize[0] = (C.int)(img.YStride)
+		f.linesize[1] = (C.int)(img.CStride)
+		f.linesize[2] = (C.int)(img.CStride)
 	}
 
 	C.av_init_packet(&m.m.pkt)
@@ -130,7 +129,7 @@ func (m *H264Encoder) Encode(img *image.YCbCr) (out h264Out, err error) {
 		err = errors.New("no picture")
 		return
 	}
-	if (m.m.pkt.size == 0) {
+	if m.m.pkt.size == 0 {
 		err = errors.New("packet size == 0")
 		return
 	}
@@ -145,4 +144,3 @@ func (m *H264Encoder) Encode(img *image.YCbCr) (out h264Out, err error) {
 
 	return
 }
-

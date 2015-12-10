@@ -1,41 +1,40 @@
-
 package codec
 
 import (
 	/*
-	#include <libavcodec/avcodec.h>
-	#include <libavformat/avformat.h>
-	#include <libavutil/avutil.h>
+		#include <libavcodec/avcodec.h>
+		#include <libavformat/avformat.h>
+		#include <libavutil/avutil.h>
 
-	typedef struct {
-		AVCodec *c;
-		AVCodecContext *ctx;
-		AVFrame *f;
-		int got;
-	} h264dec_t ;
+		typedef struct {
+			AVCodec *c;
+			AVCodecContext *ctx;
+			AVFrame *f;
+			int got;
+		} h264dec_t ;
 
-	static int h264dec_new(h264dec_t *h, uint8_t *data, int len) {
-		h->c = avcodec_find_decoder(CODEC_ID_H264);
-		h->ctx = avcodec_alloc_context3(h->c);
-		h->f = avcodec_alloc_frame();
-		h->ctx->extradata = data;
-		h->ctx->extradata_size = len;
-		h->ctx->debug = 0x3;
-		return avcodec_open2(h->ctx, h->c, 0);
-	}
+		static int h264dec_new(h264dec_t *h, uint8_t *data, int len) {
+			h->c = avcodec_find_decoder(CODEC_ID_H264);
+			h->ctx = avcodec_alloc_context3(h->c);
+			h->f = avcodec_alloc_frame();
+			h->ctx->extradata = data;
+			h->ctx->extradata_size = len;
+			h->ctx->debug = 0x3;
+			return avcodec_open2(h->ctx, h->c, 0);
+		}
 
-	static int h264dec_decode(h264dec_t *h, uint8_t *data, int len) {
-		AVPacket pkt;
-		av_init_packet(&pkt);
-		pkt.data = data;
-		pkt.size = len;
-		return avcodec_decode_video2(h->ctx, h->f, &h->got, &pkt);
-	}
+		static int h264dec_decode(h264dec_t *h, uint8_t *data, int len) {
+			AVPacket pkt;
+			av_init_packet(&pkt);
+			pkt.data = data;
+			pkt.size = len;
+			return avcodec_decode_video2(h->ctx, h->f, &h->got, &pkt);
+		}
 	*/
 	"C"
-	"unsafe"
 	"errors"
 	"image"
+	"unsafe"
 )
 
 type H264Decoder struct {
@@ -76,15 +75,14 @@ func (m *H264Decoder) Decode(nal []byte) (f *image.YCbCr, err error) {
 	cs := int(m.m.f.linesize[1])
 
 	f = &image.YCbCr{
-		Y: fromCPtr(unsafe.Pointer(m.m.f.data[0]), ys*h),
-		Cb: fromCPtr(unsafe.Pointer(m.m.f.data[1]), cs*h/2),
-		Cr: fromCPtr(unsafe.Pointer(m.m.f.data[2]), cs*h/2),
-		YStride: ys,
-		CStride: cs,
+		Y:              fromCPtr(unsafe.Pointer(m.m.f.data[0]), ys*h),
+		Cb:             fromCPtr(unsafe.Pointer(m.m.f.data[1]), cs*h/2),
+		Cr:             fromCPtr(unsafe.Pointer(m.m.f.data[2]), cs*h/2),
+		YStride:        ys,
+		CStride:        cs,
 		SubsampleRatio: image.YCbCrSubsampleRatio420,
-		Rect: image.Rect(0, 0, w, h),
+		Rect:           image.Rect(0, 0, w, h),
 	}
 
 	return
 }
-
