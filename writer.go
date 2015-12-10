@@ -570,8 +570,11 @@ func (self *SimpleH264Writer) prepare() (err error) {
 		PID: 0x100,
 	}
 	self.tsw.EnableVecWriter()
-	self.pts = PTS_HZ
-	self.pcr = PCR_HZ
+
+	if self.pts == 0 {
+		self.pts = PTS_HZ
+		self.pcr = PCR_HZ
+	}
 
 	self.pesBuf = &bytes.Buffer{}
 
@@ -623,6 +626,16 @@ func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, nalu []byte) (e
 	self.pcr += uint64(duration)*PCR_HZ/uint64(self.TimeScale)
 	self.pesBuf.Reset()
 
+	return
+}
+
+func (self *SimpleH264Writer) LastPTSPCR() (pts, pcr uint64) {
+	return self.pts, self.pcr
+}
+
+func (self *SimpleH264Writer) SetPTSPCR(pts, pcr uint64) {
+	self.pts = pts
+	self.pcr = pcr
 	return
 }
 
