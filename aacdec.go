@@ -17,7 +17,7 @@ import (
 		static int aacdec_new(aacdec_t *m, uint8_t *buf, int len) {
 			m->c = avcodec_find_decoder(CODEC_ID_AAC);
 			m->ctx = avcodec_alloc_context3(m->c);
-			m->f = avcodec_alloc_frame();
+			m->f = av_frame_alloc();
 			m->ctx->extradata = buf;
 			m->ctx->extradata_size = len;
 			m->ctx->debug = 0x3;

@@ -24,7 +24,7 @@ import (
 				m->ctx->bit_rate = m->bitrate;
 				m->ctx->channels = m->channels;
 		  	m->ctx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
-				m->f = avcodec_alloc_frame();
+				m->f = av_frame_alloc();
 				int r = avcodec_open2(m->ctx, m->c, 0);
 				av_log(m->ctx, AV_LOG_DEBUG, "extra %d\n", m->ctx->extradata_size);
 				return r;

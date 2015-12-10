@@ -32,7 +32,7 @@ import (
 			m->ctx->bit_rate = m->bitrate;
 			m->ctx->pix_fmt = m->pixfmt;
 			m->ctx->flags |= CODEC_FLAG_GLOBAL_HEADER;
-			m->f = avcodec_alloc_frame();
+			m->f = av_frame_alloc();
 			return avcodec_open2(m->ctx, m->c, NULL);
 		}
 
