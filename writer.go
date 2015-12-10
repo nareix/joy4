@@ -538,11 +538,19 @@ type SimpleH264Writer struct {
 	SPS []byte
 	PPS []byte
 
-	tsw *TSWriter
+	tswPAT *TSWriter
+	tswPMT *TSWriter
+	tswH264 *TSWriter
+
 	pts uint64
 	pcr uint64
+
 	prepared bool
+	writeSPS bool
+
 	pesBuf *bytes.Buffer
+	patBuf []byte
+	pmtBuf []byte
 }
 
 func (self *SimpleH264Writer) prepare() (err error) {
@@ -551,9 +559,11 @@ func (self *SimpleH264Writer) prepare() (err error) {
 			{ProgramNumber: 1, ProgramMapPID: 0x1000},
 		},
 	}
-	if err = WritePATPacket(self.W, pat); err != nil {
+	bw := &bytes.Buffer{}
+	if err = WritePAT(bw, pat); err != nil {
 		return
 	}
+	self.patBuf = bw.Bytes()
 
 	pmt := PMT{
 		PCRPID: 0x100,
@@ -561,23 +571,48 @@ func (self *SimpleH264Writer) prepare() (err error) {
 			{StreamType: ElementaryStreamTypeH264, ElementaryPID: 0x100},
 		},
 	}
-	if err = WritePMTPacket(self.W, pmt, 0x1000); err != nil {
+	bw = &bytes.Buffer{}
+	if err = WritePMT(bw, pmt); err != nil {
 		return
 	}
+	self.pmtBuf = bw.Bytes()
 
-	self.tsw = &TSWriter{
-		W: self.W,
+	self.tswPMT = &TSWriter{
+		PID: 0x1000,
+	}
+	self.tswPAT = &TSWriter{
+		PID: 0,
+	}
+	self.tswH264 = &TSWriter{
 		PID: 0x100,
 	}
-	self.tsw.EnableVecWriter()
 
-	if self.pts == 0 {
-		self.pts = PTS_HZ
-		self.pcr = PCR_HZ
-	}
+	self.tswH264.EnableVecWriter()
+
+	self.pts = PTS_HZ
+	self.pcr = PCR_HZ
 
 	self.pesBuf = &bytes.Buffer{}
 
+	return
+}
+
+func (self *SimpleH264Writer) WriteHeader() (err error) {
+	if !self.prepared {
+		if err = self.prepare(); err != nil {
+			return
+		}
+		self.prepared = true
+	}
+	self.tswPAT.W = self.W
+	if err = self.tswPAT.Write(self.patBuf); err != nil {
+		return
+	}
+	self.tswPMT.W = self.W
+	if err = self.tswPMT.Write(self.pmtBuf); err != nil {
+		return
+	}
+	self.writeSPS = true
 	return
 }
 
@@ -585,10 +620,13 @@ func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, nalu []byte) (e
 	nalus := [][]byte{}
 
 	if !self.prepared {
-		if err = self.prepare(); err != nil {
+		if err = self.WriteHeader(); err != nil {
 			return
 		}
-		self.prepared = true
+	}
+
+	if self.writeSPS {
+		self.writeSPS = false
 		nalus = append(nalus, self.SPS)
 		nalus = append(nalus, self.PPS)
 	}
@@ -615,10 +653,11 @@ func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, nalu []byte) (e
 		data.Append(nalu)
 	}
 
-	self.tsw.RandomAccessIndicator = sync
-	self.tsw.PCR = self.pcr
+	self.tswH264.RandomAccessIndicator = sync
+	self.tswH264.PCR = self.pcr
 
-	if err = self.tsw.WriteIovec(data); err != nil {
+	self.tswH264.W = self.W
+	if err = self.tswH264.WriteIovec(data); err != nil {
 		return
 	}
 
@@ -626,16 +665,6 @@ func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, nalu []byte) (e
 	self.pcr += uint64(duration)*PCR_HZ/uint64(self.TimeScale)
 	self.pesBuf.Reset()
 
-	return
-}
-
-func (self *SimpleH264Writer) LastPTSPCR() (pts, pcr uint64) {
-	return self.pts, self.pcr
-}
-
-func (self *SimpleH264Writer) SetPTSPCR(pts, pcr uint64) {
-	self.pts = pts
-	self.pcr = pcr
 	return
 }
 

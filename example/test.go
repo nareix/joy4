@@ -174,7 +174,7 @@ func readSamples(filename string, ch chan Sample) {
 	}
 }
 
-func testInputGob(pathGob string, pathOut string) {
+func testInputGob(pathGob string, pathOut string, testSeg bool) {
 	gobfile, _ := os.Open(pathGob)
 	outfile, _ := os.Create(pathOut)
 	dec := gob.NewDecoder(gobfile)
@@ -187,14 +187,34 @@ func testInputGob(pathGob string, pathOut string) {
 		PPS: allSamples.PPS,
 		TimeScale: allSamples.TimeScale,
 	}
+	//w.WriteHeader()
 
-	for _, sample := range allSamples.Samples {
+	syncCount := 0
+	segCount := 0
+
+	for i, sample := range allSamples.Samples {
+		if debugStream {
+			fmt.Println("stream: write sample #", i)
+		}
+		if sample.Sync {
+			syncCount++
+			if testSeg {
+				if syncCount % 3 == 0 {
+					outfile.Close()
+					segCount++
+					outfile, _ = os.Create(fmt.Sprintf("%s.seg%d.ts", pathOut, segCount))
+					w.W = outfile
+					w.WriteHeader()
+					fmt.Println("seg", segCount, "sync", syncCount)
+				}
+			}
+		}
 		w.WriteNALU(sample.Sync, sample.Duration, sample.Data)
 	}
 
 	outfile.Close()
 	if debugStream {
-		fmt.Println("written to", pathOut)
+		fmt.Println("stream: written to", pathOut)
 	}
 }
 
@@ -202,7 +222,9 @@ func main() {
 	input := flag.String("i", "", "input file")
 	output := flag.String("o", "", "output file")
 	inputGob := flag.String("g", "", "input gob file")
+	testSegment := flag.Bool("seg", false, "test segment")
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
+
 	flag.BoolVar(&debugData, "vd", false, "debug data")
 	flag.BoolVar(&debugStream, "vs", false, "debug stream")
 	flag.BoolVar(&ts.DebugReader, "vr", false, "debug reader")
@@ -219,7 +241,7 @@ func main() {
 	}
 
 	if *inputGob != "" && *output != "" {
-		testInputGob(*inputGob, *output)
+		testInputGob(*inputGob, *output, *testSegment)
 		return
 	}
 
