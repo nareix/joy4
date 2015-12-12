@@ -584,6 +584,7 @@ func (self *SimpleH264Writer) prepare() (err error) {
 
 	self.tswPMT = &TSWriter{
 		PID: 0x1000,
+		DiscontinuityIndicator: true,
 	}
 	self.tswPAT = &TSWriter{
 		PID: 0,
@@ -591,6 +592,7 @@ func (self *SimpleH264Writer) prepare() (err error) {
 	}
 	self.tswH264 = &TSWriter{
 		PID: 0x100,
+		DiscontinuityIndicator: true,
 	}
 
 	self.tswH264.EnableVecWriter()
