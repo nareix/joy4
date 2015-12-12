@@ -542,8 +542,8 @@ type SimpleH264Writer struct {
 	tswPMT *TSWriter
 	tswH264 *TSWriter
 
-	PTS uint64
-	PCR uint64
+	PTS int64
+	PCR int64
 
 	prepared bool
 	writeSPS bool
@@ -590,10 +590,12 @@ func (self *SimpleH264Writer) prepare() (err error) {
 	self.tswH264.EnableVecWriter()
 
 	if self.PTS == 0 {
-		self.PTS = PTS_HZ
+		// 1s
+		self.PTS = int64(self.TimeScale)
 	}
 	if self.PCR == 0 {
-		self.PCR = PCR_HZ
+		// 1s
+		self.PCR = int64(self.TimeScale)
 	}
 
 	self.pesBuf = &bytes.Buffer{}
@@ -638,7 +640,7 @@ func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, nalu []byte) (e
 
 	pes := PESHeader{
 		StreamId: StreamIdH264,
-		PTS: self.PTS,
+		PTS: uint64(self.PTS)*PTS_HZ/uint64(self.TimeScale),
 	}
 	if err = WritePESHeader(self.pesBuf, pes); err != nil {
 		return
@@ -658,15 +660,15 @@ func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, nalu []byte) (e
 	}
 
 	self.tswH264.RandomAccessIndicator = sync
-	self.tswH264.PCR = self.PCR
+	self.tswH264.PCR = uint64(self.PCR)*PCR_HZ/uint64(self.TimeScale)
 
 	self.tswH264.W = self.W
 	if err = self.tswH264.WriteIovec(data); err != nil {
 		return
 	}
 
-	self.PTS += uint64(duration)*PTS_HZ/uint64(self.TimeScale)
-	self.PCR += uint64(duration)*PCR_HZ/uint64(self.TimeScale)
+	self.PTS += int64(duration)
+	self.PCR += int64(duration)
 	self.pesBuf.Reset()
 
 	return
