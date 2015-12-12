@@ -72,6 +72,9 @@ func WriteTSHeader(w io.Writer, self TSHeader, dataLength int) (written int, err
 	if self.RandomAccessIndicator {
 		extFlags |= 0x40
 	}
+	if self.DiscontinuityIndicator {
+		extFlags |= 0x80
+	}
 
 	if extFlags != 0 {
 		flags |= EXT
@@ -151,6 +154,7 @@ type TSWriter struct {
 	PID uint
 	TSHeader
 	DisableHeaderPadding bool
+	DiscontinuityIndicator bool
 
 	vecw *vecWriter
 }
@@ -175,6 +179,7 @@ func (self *TSWriter) WriteIovec(data *iovec) (err error) {
 		header := TSHeader{
 			PID: self.PID,
 			ContinuityCounter: self.ContinuityCounter,
+			DiscontinuityIndicator: self.DiscontinuityIndicator,
 		}
 
 		if i == 0 {
@@ -410,7 +415,7 @@ func WritePAT(w io.Writer, self PAT) (err error) {
 		}
 	}
 
-	psi := PSI {
+	psi := PSI{
 		TableIdExtension: 1,
 	}
 	if err = WritePSI(w, psi, bw.Bytes()); err != nil {
@@ -582,6 +587,7 @@ func (self *SimpleH264Writer) prepare() (err error) {
 	}
 	self.tswPAT = &TSWriter{
 		PID: 0,
+		DiscontinuityIndicator: true,
 	}
 	self.tswH264 = &TSWriter{
 		PID: 0x100,

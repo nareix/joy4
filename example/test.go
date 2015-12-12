@@ -174,12 +174,40 @@ func readSamples(filename string, ch chan Sample) {
 	}
 }
 
-func testInputGob(pathGob string, pathOut string, testSeg bool) {
+func writeM3U8Header(w io.Writer) {
+	fmt.Fprintln(w, `#EXTM3U
+#EXT-X-ALLOW-CACHE:YES
+#EXT-X-PLAYLIST-TYPE:VOD
+#EXT-X-TARGETDURATION:9
+#EXT-X-VERSION:3
+#EXT-X-MEDIA-SEQUENCE:0`)
+}
+
+func writeM3U8Item(w io.Writer, filename string, size int64, duration float64) {
+	fmt.Fprintf(w, `#EXT-X-BYTE-SIZE:%d
+#EXTINF:%f,
+%s
+`, size, duration, filename)
+}
+
+func writeM3U8Footer(w io.Writer) {
+	fmt.Fprintln(w, `#EXT-X-ENDLIST`)
+}
+
+func testInputGob(pathGob string, pathOut string, testSeg bool, writeM3u8 bool) {
+	var m3u8file *os.File
+	lastFilename := pathOut
+
 	gobfile, _ := os.Open(pathGob)
 	outfile, _ := os.Create(pathOut)
 	dec := gob.NewDecoder(gobfile)
 	var allSamples GobAllSamples
 	dec.Decode(&allSamples)
+
+	if writeM3u8 {
+		m3u8file, _ = os.Create("index.m3u8")
+		writeM3U8Header(m3u8file)
+	}
 
 	w := ts.SimpleH264Writer{
 		W: outfile,
@@ -187,6 +215,7 @@ func testInputGob(pathGob string, pathOut string, testSeg bool) {
 		PPS: allSamples.PPS,
 		TimeScale: allSamples.TimeScale,
 	}
+	lastPCR := int64(0)
 	//w.WriteHeader()
 
 	syncCount := 0
@@ -200,16 +229,36 @@ func testInputGob(pathGob string, pathOut string, testSeg bool) {
 			syncCount++
 			if testSeg {
 				if syncCount % 3 == 0 {
+					filename := fmt.Sprintf("%s.seg%d.ts", pathOut, segCount)
+
+					if debugStream {
+						fmt.Println("stream:", "seg", segCount, "sync", syncCount,  w.PCR)
+					}
+
+					if m3u8file != nil {
+						info, _ := outfile.Stat()
+						size := info.Size()
+						dur := float64(w.PCR - lastPCR) / float64(allSamples.TimeScale)
+						writeM3U8Item(m3u8file, lastFilename, size, dur)
+					}
+
+					lastFilename = filename
 					outfile.Close()
 					segCount++
-					outfile, _ = os.Create(fmt.Sprintf("%s.seg%d.ts", pathOut, segCount))
+					outfile, _ = os.Create(filename)
 					w.W = outfile
 					w.WriteHeader()
-					fmt.Println("seg", segCount, "sync", syncCount)
+					lastPCR = w.PCR
 				}
 			}
+
 		}
 		w.WriteNALU(sample.Sync, sample.Duration, sample.Data)
+	}
+
+	if m3u8file != nil {
+		writeM3U8Footer(m3u8file)
+		m3u8file.Close()
 	}
 
 	outfile.Close()
@@ -223,6 +272,7 @@ func main() {
 	output := flag.String("o", "", "output file")
 	inputGob := flag.String("g", "", "input gob file")
 	testSegment := flag.Bool("seg", false, "test segment")
+	writeM3u8 := flag.Bool("m3u8", false, "write m3u8 file")
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
 
 	flag.BoolVar(&debugData, "vd", false, "debug data")
@@ -241,7 +291,7 @@ func main() {
 	}
 
 	if *inputGob != "" && *output != "" {
-		testInputGob(*inputGob, *output, *testSegment)
+		testInputGob(*inputGob, *output, *testSegment, *writeM3u8)
 		return
 	}
 

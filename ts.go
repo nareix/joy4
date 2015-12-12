@@ -16,6 +16,7 @@ type TSHeader struct {
 	OPCR uint64
 	ContinuityCounter uint
 	PayloadUnitStart bool
+	DiscontinuityIndicator bool
 	RandomAccessIndicator bool
 	HeaderLength uint
 }
