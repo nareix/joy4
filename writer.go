@@ -56,8 +56,12 @@ func WriteTSHeader(w io.Writer, self TSHeader, dataLength int) (written int, err
 	if self.PayloadUnitStart {
 		flags |= 0x400000
 	}
-	flags |= (self.PID&0x1fff00)<<8
+	flags |= (self.PID&0x1fff)<<8
 	flags |= self.ContinuityCounter&0xf
+
+	if DebugWriter {
+		fmt.Printf("tsw: pid=%x\n", self.PID)
+	}
 
 	const PCR = 0x10
 	const OPCR = 0x08
