@@ -191,7 +191,7 @@ func ReadTSPacket(r io.Reader, data []byte) (self TSHeader, n int, err error) {
 		return
 	}
 	if DebugReader {
-		fmt.Println("ts: data", lr.N)
+		fmt.Println("ts: data len", lr.N)
 	}
 	if n, err = lr.Read(data[:lr.N]); err != nil {
 		return
@@ -494,15 +494,15 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 	if length, err = ReadUInt(r, 2); err != nil {
 		return
 	}
+	if DebugReader {
+		fmt.Printf("pes: StreamId=%x length=%d\n", self.StreamId, length)
+	}
+
 	if length == 0 {
 		length = 1<<31
 	}
 	lrAll := &io.LimitedReader{R: r, N: int64(length)}
 	lr := lrAll
-
-	if DebugReader {
-		fmt.Printf("pes: StreamId=%x length=%d\n", self.StreamId, length)
-	}
 
 	// 10(2)
 	// PES scrambling control(2)
@@ -670,10 +670,13 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		}
 	}
 
-	if lr.N > 0 && lr.N < 65536 {
+	if lr.N > 0 {
 		if err = ReadDummy(lr, int(lr.N)); err != nil {
 			return
 		}
+	}
+
+	if lrAll.N < 65536 {
 		self.DataLength = uint(lrAll.N)
 	}
 
