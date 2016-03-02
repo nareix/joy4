@@ -89,6 +89,9 @@ func readSamples(filename string, ch chan Sample) {
 	}
 
 	onStreamPayloadUnitEnd := func(stream *Stream) {
+		if debugStream {
+			fmt.Printf("stream: %s end\n", stream.Title)
+		}
 		if debugData {
 			fmt.Println(stream.Type, stream.Title, stream.Data.Len(), "total")
 			fmt.Println(hex.Dump(stream.Data.Bytes()))
@@ -119,16 +122,15 @@ func readSamples(filename string, ch chan Sample) {
 			}
 			stream.FirstTSHeader = header
 			if debugStream {
-				fmt.Printf("stream: start\n")
+				fmt.Printf("stream: %s start\n", stream.Title)
 			}
 		}
 
 		if _, err = io.CopyN(&stream.Data, lr, lr.N); err != nil {
 			return
 		}
-
 		if debugStream {
-			fmt.Printf("stream: %d/%d\n", stream.Data.Len(), stream.PESHeader.DataLength)
+			fmt.Printf("stream: %s %d/%d\n", stream.Title, stream.Data.Len(), stream.PESHeader.DataLength)
 		}
 
 		if stream.Data.Len() == int(stream.PESHeader.DataLength) {
@@ -143,7 +145,7 @@ func readSamples(filename string, ch chan Sample) {
 			return
 		}
 		if debugData {
-			fmt.Println(header, n)
+			fmt.Println("header:", header, n)
 		}
 
 		payload = data[:n]
@@ -324,6 +326,7 @@ func main() {
 			PCRPID: 0x100,
 			ElementaryStreamInfos: []ts.ElementaryStreamInfo{
 				{StreamType: ts.ElementaryStreamTypeH264, ElementaryPID: 0x100},
+				{StreamType: ts.ElementaryStreamTypeAdtsAAC, ElementaryPID: 0x101},
 			},
 		}
 		if err = ts.WritePMTPacket(file, pmt, 0x1000); err != nil {
@@ -335,11 +338,24 @@ func main() {
 	var w *ts.TSWriter
 	var sample Sample
 	writeSample := func() (err error) {
+		var streamId uint
+		var pid uint
+
+		switch sample.Type {
+		case ts.ElementaryStreamTypeH264:
+			streamId = ts.StreamIdH264
+			pid = 0x100
+		case ts.ElementaryStreamTypeAdtsAAC:
+			streamId = ts.StreamIdAAC
+			pid = 0x101
+		}
+
 		pes := ts.PESHeader{
-			StreamId: ts.StreamIdH264,
+			StreamId: streamId,
 			PTS: sample.PTS,
 			DTS: sample.DTS,
 		}
+		w.PID = pid
 		w.PCR = sample.PCR
 		w.RandomAccessIndicator = sample.RandomAccessIndicator
 		if err = ts.WritePESPacket(w, pes, sample.Data); err != nil {
@@ -363,18 +379,17 @@ func main() {
 		if sample, ok = <-ch; !ok {
 			break
 		}
-		if sample.Type == ts.ElementaryStreamTypeH264 {
-			if debugStream {
-				fmt.Println("sample: ", len(sample.Data),
-					"PCR", sample.PCR, "PTS", sample.PTS,
-					"DTS", sample.DTS, "sync", sample.RandomAccessIndicator,
-				)
-				//fmt.Print(hex.Dump(sample.Data))
-			}
 
-			if file != nil {
-				writeSample()
-			}
+		if debugStream {
+			fmt.Println("sample: ", sample.Type, len(sample.Data),
+				"PCR", sample.PCR, "PTS", sample.PTS,
+				"DTS", sample.DTS, "sync", sample.RandomAccessIndicator,
+			)
+			//fmt.Print(hex.Dump(sample.Data))
+		}
+
+		if file != nil {
+			writeSample()
 		}
 	}
 
