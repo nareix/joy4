@@ -211,15 +211,16 @@ func testInputGob(pathGob string, pathOut string, testSeg bool, writeM3u8 bool) 
 		writeM3U8Header(m3u8file)
 	}
 
-	w := ts.SimpleH264Writer{
+	muxer := &ts.Muxer{
 		W: outfile,
-		SPS: allSamples.SPS,
-		PPS: allSamples.PPS,
-		TimeScale: allSamples.TimeScale,
 	}
-	lastPCR := int64(0)
-	//w.WriteHeader()
+	trackH264 := muxer.AddH264Track()
+	trackH264.SPS = allSamples.SPS
+	trackH264.PPS = allSamples.PPS
+	trackH264.TimeScale = int64(allSamples.TimeScale)
+	muxer.WriteHeader()
 
+	lastPTS := int64(0)
 	syncCount := 0
 	segCount := 0
 
@@ -234,13 +235,13 @@ func testInputGob(pathGob string, pathOut string, testSeg bool, writeM3u8 bool) 
 					filename := fmt.Sprintf("%s.seg%d.ts", pathOut, segCount)
 
 					if debugStream {
-						fmt.Println("stream:", "seg", segCount, "sync", syncCount,  w.PCR)
+						fmt.Println("stream:", "seg", segCount, "sync", syncCount, trackH264.PTS)
 					}
 
 					if m3u8file != nil {
 						info, _ := outfile.Stat()
 						size := info.Size()
-						dur := float64(w.PCR - lastPCR) / float64(allSamples.TimeScale)
+						dur := float64(trackH264.PTS - lastPTS) / float64(allSamples.TimeScale)
 						writeM3U8Item(m3u8file, lastFilename, size, dur)
 					}
 
@@ -248,14 +249,14 @@ func testInputGob(pathGob string, pathOut string, testSeg bool, writeM3u8 bool) 
 					outfile.Close()
 					segCount++
 					outfile, _ = os.Create(filename)
-					w.W = outfile
-					w.WriteHeader()
-					lastPCR = w.PCR
+					muxer.W = outfile
+					muxer.WriteHeader()
+					lastPTS = trackH264.PTS
 				}
 			}
-
 		}
-		w.WriteNALU(sample.Sync, sample.Duration, sample.Data)
+
+		trackH264.WriteH264NALU(sample.Sync, sample.Duration, sample.Data)
 	}
 
 	if m3u8file != nil {

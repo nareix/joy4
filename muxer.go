@@ -7,15 +7,46 @@ import (
 )
 
 type Track struct {
-	timeScale int64
-	writeSPS bool
 	SPS []byte
 	PPS []byte
-	spsHasWritten bool
-	tsw *TSWriter
+
 	PTS int64
-	PCR int64
-	pesBuf *bytes.Buffer
+	TimeScale int64
+
+	writeSPS bool
+	spsHasWritten bool
+	pcrHasWritten bool
+
+	streamId uint
+	tsw *TSWriter
+	dataBuf *iovec
+	cacheSize int
+}
+
+func (self *Track) setPCR() {
+	if !self.pcrHasWritten {
+		self.tsw.PCR = 24300000
+		self.pcrHasWritten = true
+	} else {
+		self.tsw.PCR = 0
+	}
+}
+
+func (self *Track) getPesHeader() (data []byte){
+	if self.PTS == 0 {
+		self.PTS = self.TimeScale
+	}
+	buf := &bytes.Buffer{}
+	pes := PESHeader{
+		StreamId: self.streamId,
+		PTS: uint64(self.PTS)*PTS_HZ/uint64(self.TimeScale),
+	}
+	WritePESHeader(buf, pes)
+	return buf.Bytes()
+}
+
+func (self *Track) incPTS(delta int) {
+	self.PTS += int64(delta)
 }
 
 func (self *Track) WriteH264NALU(sync bool, duration int, nalu []byte) (err error) {
@@ -28,16 +59,8 @@ func (self *Track) WriteH264NALU(sync bool, duration int, nalu []byte) (err erro
 	}
 	nalus = append(nalus, nalu)
 
-	pes := PESHeader{
-		StreamId: StreamIdH264,
-		PTS: uint64(self.PTS)*PTS_HZ/uint64(self.timeScale),
-	}
-	if err = WritePESHeader(self.pesBuf, pes); err != nil {
-		return
-	}
-
 	data := &iovec{}
-	data.Append(self.pesBuf.Bytes())
+	data.Append(self.getPesHeader())
 	for i, nalu := range nalus {
 		var startCode []byte
 		if i == 0 {
@@ -50,64 +73,51 @@ func (self *Track) WriteH264NALU(sync bool, duration int, nalu []byte) (err erro
 	}
 
 	self.tsw.RandomAccessIndicator = sync
-	self.tsw.PCR = uint64(self.PCR)*PCR_HZ/uint64(self.timeScale)
-
+	self.setPCR()
 	if err = self.tsw.WriteIovec(data); err != nil {
 		return
 	}
 
-	self.PTS += int64(duration)
-	self.PCR += int64(duration)
-	self.pesBuf.Reset()
-
+	self.incPTS(duration)
 	return
 }
 
 func (self *Track) WriteADTSAACFrame(duration int, frame []byte) (err error) {
-	pes := PESHeader{
-		StreamId: StreamIdAAC,
-		PTS: uint64(self.PTS)*PTS_HZ/uint64(self.timeScale),
-	}
-	if err = WritePESHeader(self.pesBuf, pes); err != nil {
-		return
-	}
-
-	data := &iovec{}
-	data.Append(self.pesBuf.Bytes())
-	data.Append(frame)
-
-	self.tsw.RandomAccessIndicator = true
-	self.tsw.PCR = uint64(self.PCR)*PCR_HZ/uint64(self.timeScale)
-	if err = self.tsw.WriteIovec(data); err != nil {
-		return
+	if self.dataBuf != nil && self.dataBuf.Len > self.cacheSize {
+		self.tsw.RandomAccessIndicator = true
+		self.setPCR()
+		if err = self.tsw.WriteIovec(self.dataBuf); err != nil {
+			return
+		}
+		self.dataBuf = nil
 	}
 
-	self.PTS += int64(duration)
-	self.PCR += int64(duration)
-	self.pesBuf.Reset()
+	if self.dataBuf == nil {
+		self.dataBuf = &iovec{}
+		self.dataBuf.Append(self.getPesHeader())
+	} else {
+		self.dataBuf.Append(frame)
+	}
 
+	self.incPTS(duration)
 	return
 }
 
-func newTrack(w io.Writer, pid uint, timeScale int64) (track *Track) {
+func newTrack(w io.Writer, pid uint, streamId uint) (track *Track) {
 	track = &Track{
 		tsw: &TSWriter{
 			W: w,
 			PID: pid,
-			DiscontinuityIndicator: true,
+			//DiscontinuityIndicator: true,
 		},
-		timeScale: timeScale,
-		pesBuf: &bytes.Buffer{},
+		streamId: streamId,
 	}
 	track.tsw.EnableVecWriter()
-	track.PTS = timeScale
-	track.PCR = timeScale
 	return
 }
 
 type Muxer struct {
 	W io.Writer
-	TimeScale int64
 	tswPAT *TSWriter
 	tswPMT *TSWriter
 	elemStreams []ElementaryStreamInfo
@@ -118,7 +128,10 @@ func (self *Muxer) AddAACTrack() (track *Track) {
 		self.elemStreams,
 		ElementaryStreamInfo{StreamType: ElementaryStreamTypeAdtsAAC, ElementaryPID: 0x101},
 	)
-	return newTrack(self.W, 0x101, self.TimeScale)
+	track = newTrack(self.W, 0x101, StreamIdAAC)
+	track.pcrHasWritten = true
+	track.cacheSize = 3000
+	return
 }
 
 func (self *Muxer) AddH264Track() (track *Track) {
@@ -126,7 +139,8 @@ func (self *Muxer) AddH264Track() (track *Track) {
 		self.elemStreams,
 		ElementaryStreamInfo{StreamType: ElementaryStreamTypeH264, ElementaryPID: 0x100},
 	)
-	return newTrack(self.W, 0x100, self.TimeScale)
+	track = newTrack(self.W, 0x100, StreamIdH264)
+	return
 }
 
 func (self *Muxer) WriteHeader() (err error) {
@@ -148,12 +162,12 @@ func (self *Muxer) WriteHeader() (err error) {
 	tswPMT := &TSWriter{
 		W: self.W,
 		PID: 0x1000,
-		DiscontinuityIndicator: true,
+		//DiscontinuityIndicator: true,
 	}
 	tswPAT := &TSWriter{
 		W: self.W,
 		PID: 0,
-		DiscontinuityIndicator: true,
+		//DiscontinuityIndicator: true,
 	}
 	if err = tswPAT.Write(bufPAT.Bytes()); err != nil {
 		return
