@@ -17,6 +17,11 @@ type iovec struct {
 	idx int
 }
 
+func (self *iovec) Prepend(b []byte) {
+	self.data = append([][]byte{b}, self.data...)
+	self.Len += len(b)
+}
+
 func (self *iovec) Append(b []byte) {
 	self.data = append(self.data, b)
 	self.Len += len(b)
