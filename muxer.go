@@ -32,7 +32,7 @@ func (self *Track) setPCR() {
 	}
 }
 
-func (self *Track) getPesHeader() (data []byte){
+func (self *Track) getPesHeader(dataLength int) (data []byte){
 	if self.PTS == 0 {
 		self.PTS = self.TimeScale
 	}
@@ -41,7 +41,7 @@ func (self *Track) getPesHeader() (data []byte){
 		StreamId: self.streamId,
 		PTS: uint64(self.PTS)*PTS_HZ/uint64(self.TimeScale),
 	}
-	WritePESHeader(buf, pes)
+	WritePESHeader(buf, pes, dataLength)
 	return buf.Bytes()
 }
 
@@ -60,7 +60,6 @@ func (self *Track) WriteH264NALU(sync bool, duration int, nalu []byte) (err erro
 	nalus = append(nalus, nalu)
 
 	data := &iovec{}
-	data.Append(self.getPesHeader())
 	for i, nalu := range nalus {
 		var startCode []byte
 		if i == 0 {
@@ -72,6 +71,7 @@ func (self *Track) WriteH264NALU(sync bool, duration int, nalu []byte) (err erro
 		data.Append(nalu)
 	}
 
+	data.Prepend(self.getPesHeader(data.Len))
 	self.tsw.RandomAccessIndicator = sync
 	self.setPCR()
 	if err = self.tsw.WriteIovec(data); err != nil {
@@ -84,6 +84,7 @@ func (self *Track) WriteH264NALU(sync bool, duration int, nalu []byte) (err erro
 
 func (self *Track) WriteADTSAACFrame(duration int, frame []byte) (err error) {
 	if self.dataBuf != nil && self.dataBuf.Len > self.cacheSize {
+		self.dataBuf.Prepend(self.getPesHeader(self.dataBuf.Len))
 		self.tsw.RandomAccessIndicator = true
 		self.setPCR()
 		if err = self.tsw.WriteIovec(self.dataBuf); err != nil {
@@ -91,14 +92,10 @@ func (self *Track) WriteADTSAACFrame(duration int, frame []byte) (err error) {
 		}
 		self.dataBuf = nil
 	}
-
 	if self.dataBuf == nil {
 		self.dataBuf = &iovec{}
-		self.dataBuf.Append(self.getPesHeader())
-	} else {
-		self.dataBuf.Append(frame)
 	}
-
+	self.dataBuf.Append(frame)
 	self.incPTS(duration)
 	return
 }
@@ -108,7 +105,7 @@ func newTrack(w io.Writer, pid uint, streamId uint) (track *Track) {
 		tsw: &TSWriter{
 			W: w,
 			PID: pid,
-			//DiscontinuityIndicator: true,
+			DiscontinuityIndicator: true,
 		},
 		streamId: streamId,
 	}
@@ -162,12 +159,12 @@ func (self *Muxer) WriteHeader() (err error) {
 	tswPMT := &TSWriter{
 		W: self.W,
 		PID: 0x1000,
-		//DiscontinuityIndicator: true,
+		DiscontinuityIndicator: true,
 	}
 	tswPAT := &TSWriter{
 		W: self.W,
 		PID: 0,
-		//DiscontinuityIndicator: true,
+		DiscontinuityIndicator: true,
 	}
 	if err = tswPAT.Write(bufPAT.Bytes()); err != nil {
 		return
