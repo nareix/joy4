@@ -305,10 +305,10 @@ func bswap32(v uint) uint {
 	return (v>>24)|((v>>16)&0xff)<<8|((v>>8)&0xff)<<16|(v&0xff)<<24
 }
 
-func WritePESHeader(w io.Writer, self PESHeader) (err error) {
+func WritePESHeader(w io.Writer, self PESHeader, dataLength int) (err error) {
 	// http://dvd.sourceforge.net/dvdinfo/pes-hdr.html
 
-	var pts_dts_flags, header_length uint
+	var pts_dts_flags, header_length, packet_length uint
 
 	// start code(24) 000001
 	// StreamId(8)
@@ -347,8 +347,14 @@ func WritePESHeader(w io.Writer, self PESHeader) (err error) {
 		header_length += 5
 	}
 
+	if dataLength > 0 {
+		packet_length = uint(dataLength) + header_length + 3
+	}
 	// packet_length(16) if zero then variable length
-	if err = WriteUInt(w, 0, 2); err != nil {
+	// Specifies the number of bytes remaining in the packet after this field. Can be zero. 
+	// If the PES packet length is set to zero, the PES packet can be of any length. 
+	// A value of zero for the PES packet length can be used only when the PES packet payload is a video elementary stream.
+	if err = WriteUInt(w, packet_length, 2); err != nil {
 		return
 	}
 
@@ -389,7 +395,7 @@ func WritePESHeader(w io.Writer, self PESHeader) (err error) {
 
 func WritePESPacket(w *TSWriter, header PESHeader, data []byte) (err error) {
 	bw := &bytes.Buffer{}
-	if err = WritePESHeader(bw, header); err != nil {
+	if err = WritePESHeader(bw, header, len(data)); err != nil {
 		return
 	}
 	iov := &iovec{}
@@ -654,7 +660,7 @@ func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, nalu []byte) (e
 		StreamId: StreamIdH264,
 		PTS: uint64(self.PTS)*PTS_HZ/uint64(self.TimeScale),
 	}
-	if err = WritePESHeader(self.pesBuf, pes); err != nil {
+	if err = WritePESHeader(self.pesBuf, pes, 0); err != nil {
 		return
 	}
 
