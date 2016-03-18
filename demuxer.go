@@ -109,6 +109,40 @@ func (self *Track) setSampleIndex(index int) (err error) {
 		return
 	}
 
+	start = 0
+	found = false
+	self.ptsEntryIndex = 0
+	for self.ptsEntryIndex < len(self.sample.TimeToSample.Entries) {
+		n := self.sample.TimeToSample.Entries[self.ptsEntryIndex].Count
+		if index >= start && index < start+n {
+			self.sampleIndexInPtsEntry = index-start
+			break
+		}
+		start += n
+		self.ptsEntryIndex++
+	}
+	if !found {
+		err = io.EOF
+		return
+	}
+
+	start = 0
+	found = false
+	self.dtsEntryIndex = 0
+	for self.dtsEntryIndex < len(self.sample.CompositionOffset.Entries) {
+		n := self.sample.CompositionOffset.Entries[self.dtsEntryIndex].Count
+		if index >= start && index < start+n {
+			self.sampleIndexInDtsEntry = index-start
+			break
+		}
+		start += n
+		self.dtsEntryIndex++
+	}
+	if !found {
+		err = io.EOF
+		return
+	}
+
 	self.sampleIndex = index
 	return
 }

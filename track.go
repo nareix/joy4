@@ -20,6 +20,13 @@ type Track struct {
 
 	sample *atom.SampleTable
 	sampleIndex int
+
+	ptsEntryIndex int
+	sampleIndexInPtsEntry int
+
+	dtsEntryIndex int
+	sampleIndexInDtsEntry int
+
 	chunkGroupIndex int
 	chunkIndex int
 	sampleIndexInChunk int
