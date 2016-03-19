@@ -3,10 +3,8 @@ package mp4
 
 import (
 	"github.com/nareix/mp4/atom"
-	_ "os"
 	"fmt"
 	"io"
-	_ "log"
 )
 
 type Demuxer struct {
@@ -109,42 +107,99 @@ func (self *Track) setSampleIndex(index int) (err error) {
 		return
 	}
 
+	if self.sample.SampleSize.SampleSize != 0 {
+		self.sampleOffsetInChunk = int64(self.sampleIndexInChunk*self.sample.SampleSize.SampleSize)
+	} else {
+		if index >= len(self.sample.SampleSize.Entries) {
+			err = io.EOF
+			return
+		}
+		self.sampleOffsetInChunk = int64(0)
+		for i := index-self.sampleIndexInChunk; i < index; i++ {
+			self.sampleOffsetInChunk += int64(self.sample.SampleSize.Entries[i])
+		}
+	}
+
+	self.dts = int64(0)
 	start = 0
 	found = false
-	self.ptsEntryIndex = 0
-	for self.ptsEntryIndex < len(self.sample.TimeToSample.Entries) {
-		n := self.sample.TimeToSample.Entries[self.ptsEntryIndex].Count
+	self.sttsEntryIndex = 0
+	for self.sttsEntryIndex < len(self.sample.TimeToSample.Entries) {
+		entry := self.sample.TimeToSample.Entries[self.sttsEntryIndex]
+		n := entry.Count
 		if index >= start && index < start+n {
-			self.sampleIndexInPtsEntry = index-start
+			self.sampleIndexInSttsEntry = index-start
+			self.dts += int64((index-start)*entry.Duration)
 			break
 		}
 		start += n
-		self.ptsEntryIndex++
+		self.dts += int64(n*entry.Duration)
+		self.sttsEntryIndex++
 	}
 	if !found {
 		err = io.EOF
 		return
 	}
 
-	start = 0
-	found = false
-	self.dtsEntryIndex = 0
-	for self.dtsEntryIndex < len(self.sample.CompositionOffset.Entries) {
-		n := self.sample.CompositionOffset.Entries[self.dtsEntryIndex].Count
-		if index >= start && index < start+n {
-			self.sampleIndexInDtsEntry = index-start
-			break
+	if self.sample.CompositionOffset != nil && len(self.sample.CompositionOffset.Entries) > 0 {
+		start = 0
+		found = false
+		self.cttsEntryIndex = 0
+		for self.cttsEntryIndex < len(self.sample.CompositionOffset.Entries) {
+			n := self.sample.CompositionOffset.Entries[self.cttsEntryIndex].Count
+			if index >= start && index < start+n {
+				self.sampleIndexInCttsEntry = index-start
+				break
+			}
+			start += n
+			self.cttsEntryIndex++
 		}
-		start += n
-		self.dtsEntryIndex++
+		if !found {
+			err = io.EOF
+			return
+		}
 	}
-	if !found {
-		err = io.EOF
-		return
+
+	if self.sample.SyncSample != nil {
+		self.syncSampleIndex = 0
+		for self.syncSampleIndex < len(self.sample.SyncSample.Entries)-1 {
+			if self.sample.SyncSample.Entries[self.syncSampleIndex+1]-1 > index {
+				break
+			}
+			self.syncSampleIndex++
+		}
 	}
 
 	self.sampleIndex = index
 	return
+}
+
+func (self *Track) isSampleValid() bool {
+	if self.chunkIndex >= len(self.sample.ChunkOffset.Entries) {
+		return false
+	}
+	if self.chunkGroupIndex >= len(self.sample.SampleToChunk.Entries) {
+		return false
+	}
+	if self.sttsEntryIndex >= len(self.sample.TimeToSample.Entries) {
+		return false
+	}
+	if self.sample.CompositionOffset != nil && len(self.sample.CompositionOffset.Entries) > 0 {
+		if self.cttsEntryIndex >= len(self.sample.CompositionOffset.Entries) {
+			return false
+		}
+	}
+	if self.sample.SyncSample != nil {
+		if self.syncSampleIndex >= len(self.sample.SyncSample.Entries) {
+			return false
+		}
+	}
+	if self.sample.SampleSize.SampleSize != 0 {
+		if self.sampleIndex >= len(self.sample.SampleSize.Entries) {
+			return false
+		}
+	}
+	return true
 }
 
 func (self *Track) incSampleIndex() {
@@ -152,11 +207,43 @@ func (self *Track) incSampleIndex() {
 	if self.sampleIndexInChunk == self.sample.SampleToChunk.Entries[self.chunkGroupIndex].SamplesPerChunk {
 		self.chunkIndex++
 		self.sampleIndexInChunk = 0
+		self.sampleOffsetInChunk = int64(0)
+	} else {
+		if self.sample.SampleSize.SampleSize != 0 {
+			self.sampleOffsetInChunk += int64(self.sample.SampleSize.SampleSize)
+		} else {
+			self.sampleOffsetInChunk += int64(self.sample.SampleSize.Entries[self.sampleIndex])
+		}
 	}
+
 	if self.chunkGroupIndex+1 < len(self.sample.SampleToChunk.Entries) &&
 		self.chunkIndex+1 == self.sample.SampleToChunk.Entries[self.chunkGroupIndex+1].FirstChunk {
 		self.chunkGroupIndex++
 	}
+
+	sttsEntry := self.sample.TimeToSample.Entries[self.sttsEntryIndex]
+	self.sampleIndexInSttsEntry++
+	self.dts += int64(sttsEntry.Duration)
+	if self.sampleIndexInSttsEntry == sttsEntry.Count {
+		self.sampleIndexInSttsEntry = 0
+		self.sttsEntryIndex++
+	}
+
+	if self.sample.CompositionOffset != nil && len(self.sample.CompositionOffset.Entries) > 0 {
+		self.sampleIndexInCttsEntry++
+		if self.sampleIndexInCttsEntry == self.sample.CompositionOffset.Entries[self.cttsEntryIndex].Count {
+			self.sampleIndexInCttsEntry = 0
+			self.cttsEntryIndex++
+		}
+	}
+
+	if self.sample.SyncSample != nil {
+		entries := self.sample.SyncSample.Entries
+		if self.syncSampleIndex+1 < len(entries) && entries[self.syncSampleIndex+1]-1 == self.sampleIndex+1 {
+			self.syncSampleIndex++
+		}
+	}
+
 	self.sampleIndex++
 }
 
@@ -179,65 +266,122 @@ func (self *Track) SampleCount() int {
 }
 
 func (self *Track) ReadSample() (pts int64, dts int64, isKeyFrame bool, data []byte, err error) {
-	return
-}
-
-func (self *Track) ReadSampleAtIndex(index int) (pts int64, dts int64, isKeyFrame bool, data []byte, err error) {
-	if self.sampleIndex+1 == index {
-		self.incSampleIndex()
-	} else if self.sampleIndex != index {
-		if err = self.setSampleIndex(index); err != nil {
-			return
-		}
-	}
-
-	if self.chunkIndex > len(self.sample.ChunkOffset.Entries) {
-		err = io.EOF
-		return
-	}
-	if self.chunkGroupIndex >= len(self.sample.SampleToChunk.Entries) {
+	if !self.isSampleValid() {
 		err = io.EOF
 		return
 	}
 
 	chunkOffset := self.sample.ChunkOffset.Entries[self.chunkIndex]
-	sampleOffset := 0
 	sampleSize := 0
-
 	if self.sample.SampleSize.SampleSize != 0 {
-		sampleOffset = chunkOffset + self.sampleIndexInChunk*self.sample.SampleSize.SampleSize
+		sampleSize = self.sample.SampleSize.SampleSize
 	} else {
-		sampleOffset = chunkOffset
-		for i := self.sampleIndex-self.sampleIndexInChunk; i < self.sampleIndex; i++ {
-			sampleOffset += self.sample.SampleSize.Entries[i]
-		}
+		sampleSize = self.sample.SampleSize.Entries[self.sampleIndex]
 	}
 
+	sampleOffset := int64(chunkOffset)+self.sampleOffsetInChunk
 	if _, err = self.r.Seek(int64(sampleOffset), 0); err != nil {
 		return
 	}
+
 	data = make([]byte, sampleSize)
 	if _, err = self.r.Read(data); err != nil {
 		return
 	}
 
+	if self.sample.SyncSample != nil {
+		if self.sample.SyncSample.Entries[self.syncSampleIndex]-1 == self.sampleIndex {
+			isKeyFrame = true
+		}
+	}
+
+	//println("pts/dts", self.ptsEntryIndex, self.dtsEntryIndex)
+	dts = self.dts
+	if self.sample.CompositionOffset != nil && len(self.sample.CompositionOffset.Entries) > 0 {
+		pts = self.dts+int64(self.sample.CompositionOffset.Entries[self.cttsEntryIndex].Offset)
+	} else {
+		pts = dts
+	}
+
+	self.incSampleIndex()
 	return
 }
 
-func (self *Track) Duration() float32 {
+func (self *Track) Duration() float64 {
 	total := int64(0)
 	for _, entry := range(self.sample.TimeToSample.Entries) {
 		total += int64(entry.Duration*entry.Count)
 	}
-	return float32(total)/float32(self.TrackAtom.Media.Header.TimeScale)
+	return float64(total)/float64(self.TrackAtom.Media.Header.TimeScale)
 }
 
-func (self *Track) TimeToSampleIndex(second float32) int {
-	return 0
+func (self *Track) CurTime() float64 {
+	return self.TimeStampToTime(self.dts)
 }
 
-func (self *Track) TimeStampToTime(ts int64) float32 {
-	return 0.0
+func (self *Track) CurTimeStamp() int64 {
+	return self.dts
+}
+
+func (self *Track) CurSampleIndex() int {
+	return self.sampleIndex
+}
+
+func (self *Track) SeekToTime(time float64) error {
+	index := self.TimeToSampleIndex(time)
+	return self.setSampleIndex(index)
+}
+
+func (self *Track) SeekToSampleIndex(index int) error {
+	return self.setSampleIndex(index)
+}
+
+func (self *Track) TimeToSampleIndex(time float64) int {
+	targetTs := self.TimeToTimeStamp(time)
+	targetIndex := 0
+
+	startTs := int64(0)
+	endTs := int64(0)
+	startIndex := 0
+	endIndex := 0
+	found := false
+	for _, entry := range(self.sample.TimeToSample.Entries) {
+		endTs = startTs+int64(entry.Count*entry.Duration)
+		endIndex = startIndex+entry.Count
+		if targetTs >= startTs && targetTs < endTs {
+			targetIndex = startIndex+int((targetTs-startTs)/int64(entry.Duration))
+			found = true
+		}
+		startTs = endTs
+		startIndex = endIndex
+	}
+	if !found {
+		if targetTs < 0 {
+			targetIndex = 0
+		} else {
+			targetIndex = endIndex-1
+		}
+	}
+
+	if self.sample.SyncSample != nil {
+		entries := self.sample.SyncSample.Entries
+		for i := len(entries)-1; i >= 0; i-- {
+			if entries[i]-1 < targetIndex {
+				targetIndex = entries[i]-1
+				break
+			}
+		}
+	}
+
+	return targetIndex
+}
+
+func (self *Track) TimeToTimeStamp(time float64) int64 {
+	return int64(time*float64(self.TrackAtom.Media.Header.TimeScale))
+}
+
+func (self *Track) TimeStampToTime(ts int64) float64 {
+	return float64(ts)/float64(self.TrackAtom.Media.Header.TimeScale)
 }
 
 func (self *Track) WriteSample(pts int64, dts int64, data []byte) (err error) {
