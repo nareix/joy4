@@ -1,4 +1,4 @@
-# mp4 muxer written in go
+# Golang mp4 muxer/demuxer
 
 Includes h264/aac track muxer, mp4 atoms reader/writer/dumper
 
