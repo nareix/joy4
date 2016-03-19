@@ -3,7 +3,7 @@
 Provides mp4 reader/writer and mp4 atom manipulations functions.
 
 Open a mp4 file and read the first sample:
-```
+```go
 file, _ := os.Open("test.mp4")
 demuxer := &mp4.Demuxer{R: file}
 demuxer.ReadHeader()
@@ -12,7 +12,7 @@ pts, dts, isKeyFrame, data, err := demuxer.TrackH264.ReadSample()
 
 do some seeking:
 
-```
+```go
 demuxer.TrackH264.SeekToTime(2.0)
 ```
 
@@ -24,7 +24,7 @@ learn more about mp4 atoms [here](https://developer.apple.com/library/mac/docume
 
 you can access atom structs via `Demuxer.TrackH264.TrackAtom`. for example:
 
-```
+```go
 // Get the raw TimeScale field inside `mvhd` atom
 fmt.Println(demuxer.TrackH264.TrackAtom.Media.Header.TimeScale)
 ```
