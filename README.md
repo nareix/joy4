@@ -36,7 +36,3 @@ for more see Atom API Docs
 [API Docs](https://godoc.org/github.com/nareix/mp4)
 
 [Atom API Docs](https://godoc.org/github.com/nareix/mp4/atom)
-
-
-## Atoms manipulation
-
