@@ -71,7 +71,7 @@ func (self *Track) WriteH264NALU(sync bool, duration int, nalu []byte) (err erro
 		data.Append(nalu)
 	}
 
-	data.Prepend(self.getPesHeader(data.Len))
+	data.Prepend(self.getPesHeader(0))
 	self.tsw.RandomAccessIndicator = sync
 	self.setPCR()
 	if err = self.tsw.WriteIovec(data); err != nil {
