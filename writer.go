@@ -174,11 +174,22 @@ func (self *TSWriter) EnableVecWriter() {
 }
 
 func (self *TSWriter) WriteIovec(data *iovec) (err error) {
-	w := self.W
 	if self.vecw != nil {
-		w = self.vecw
+		if err = self.WriteIovecTo(self.vecw, data); err != nil {
+			return
+		}
+		if err = self.vecw.Flush(); err != nil {
+			return
+		}
+	} else {
+		if err = self.WriteIovecTo(self.W, data); err != nil {
+			return
+		}
 	}
+	return
+}
 
+func (self *TSWriter) WriteIovecTo(w io.Writer, data *iovec) (err error) {
 	for i := 0; data.Len > 0; i++ {
 		header := TSHeader{
 			PID: self.PID,
@@ -216,14 +227,13 @@ func (self *TSWriter) WriteIovec(data *iovec) (err error) {
 
 		self.ContinuityCounter++
 	}
-
-	if self.vecw != nil {
-		if err = self.vecw.Flush(); err != nil {
-			return
-		}
-	}
-
 	return
+}
+
+func (self *TSWriter) WriteTo(w io.Writer, data []byte) (err error) {
+	iov := &iovec{}
+	iov.Append(data)
+	return self.WriteIovecTo(w, iov)
 }
 
 func (self *TSWriter) Write(data []byte) (err error) {
