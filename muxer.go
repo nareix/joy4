@@ -15,7 +15,6 @@ type Track struct {
 
 	writeSPS bool
 	spsHasWritten bool
-	pcrHasWritten bool
 
 	mux *Muxer
 	streamId uint
@@ -25,12 +24,7 @@ type Track struct {
 }
 
 func (self *Track) setPCR() {
-	if !self.pcrHasWritten {
-		self.tsw.PCR = 24300000
-		self.pcrHasWritten = true
-	} else {
-		self.tsw.PCR = 0
-	}
+	self.tsw.PCR = uint64(self.PTS)*PCR_HZ/uint64(self.TimeScale)
 }
 
 func (self *Track) getPesHeader(dataLength int) (data []byte){
@@ -129,7 +123,6 @@ func (self *Muxer) AddAACTrack() (track *Track) {
 		ElementaryStreamInfo{StreamType: ElementaryStreamTypeAdtsAAC, ElementaryPID: 0x101},
 	)
 	track = newTrack(self, 0x101, StreamIdAAC)
-	track.pcrHasWritten = true
 	track.cacheSize = 3000
 	self.Tracks = append(self.Tracks, track)
 	return
@@ -179,7 +172,6 @@ func (self *Muxer) WriteHeader() (err error) {
 
 	for _, track := range(self.Tracks) {
 		track.spsHasWritten = false
-		track.pcrHasWritten = false
 	}
 
 	return
