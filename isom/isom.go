@@ -1,10 +1,10 @@
 package isom
 
 import (
-	"github.com/nareix/bits"
-	"io"
 	"bytes"
 	"fmt"
+	"github.com/nareix/bits"
+	"io"
 	"io/ioutil"
 )
 
@@ -62,11 +62,11 @@ const (
 )
 
 type MPEG4AudioConfig struct {
-	SampleRate  int
-	ChannelCount int
+	SampleRate      int
+	ChannelCount    int
 	ObjectType      uint
 	SampleRateIndex uint
-	ChannelConfig      uint
+	ChannelConfig   uint
 }
 
 var sampleRateTable = []int{
@@ -76,6 +76,51 @@ var sampleRateTable = []int{
 
 var chanConfigTable = []int{
 	0, 1, 2, 3, 4, 5, 6, 8,
+}
+
+func ReadADTSHeader(data []byte) (objectType, sampleRateIndex, chanConfig, frameLength uint) {
+	br := &bits.Reader{R: bytes.NewReader(data)}
+
+	//Structure
+	//AAAAAAAA AAAABCCD EEFFFFGH HHIJKLMM MMMMMMMM MMMOOOOO OOOOOOPP (QQQQQQQQ QQQQQQQQ)
+	//Header consists of 7 or 9 bytes (without or with CRC).
+
+	//A	12	syncword 0xFFF, all bits must be 1
+	br.ReadBits(12)
+	//B	1	MPEG Version: 0 for MPEG-4, 1 for MPEG-2
+	br.ReadBits(1)
+	//C	2	Layer: always 0
+	br.ReadBits(2)
+	//D	1	protection absent, Warning, set to 1 if there is no CRC and 0 if there is CRC
+	br.ReadBits(1)
+
+	//E	2	profile, the MPEG-4 Audio Object Type minus 1
+	objectType, _ = br.ReadBits(2)
+	objectType++
+	//F	4	MPEG-4 Sampling Frequency Index (15 is forbidden)
+	sampleRateIndex, _ = br.ReadBits(4)
+	//G	1	private bit, guaranteed never to be used by MPEG, set to 0 when encoding, ignore when decoding
+	br.ReadBits(1)
+	//H	3	MPEG-4 Channel Configuration (in the case of 0, the channel configuration is sent via an inband PCE)
+	chanConfig, _ = br.ReadBits(3)
+	//I	1	originality, set to 0 when encoding, ignore when decoding
+	br.ReadBits(1)
+	//J	1	home, set to 0 when encoding, ignore when decoding
+	br.ReadBits(1)
+	//K	1	copyrighted id bit, the next bit of a centrally registered copyright identifier, set to 0 when encoding, ignore when decoding
+	br.ReadBits(1)
+	//L	1	copyright id start, signals that this frame's copyright id bit is the first bit of the copyright id, set to 0 when encoding, ignore when decoding
+	br.ReadBits(1)
+
+	//M	13	frame length, this value must include 7 or 9 bytes of header length: FrameLength = (ProtectionAbsent == 1 ? 7 : 9) + size(AACFrame)
+	frameLength, _ = br.ReadBits(13)
+	//O	11	Buffer fullness
+	br.ReadBits(11)
+	//P	2	Number of AAC frames (RDBs) in ADTS frame minus 1, for maximum compatibility always use 1 AAC frame per ADTS frame
+	br.ReadBits(2)
+
+	//Q	16	CRC if protection absent is 0
+	return
 }
 
 func readObjectType(r *bits.Reader) (objectType uint, err error) {
@@ -221,7 +266,7 @@ func writeDesc(w io.Writer, tag uint, data []byte) (err error) {
 	}
 	length := uint(len(data))
 	for length > 0 {
-		val := length&0x7f
+		val := length & 0x7f
 		if length >= 0x80 {
 			val |= 0x80
 		}
@@ -419,4 +464,3 @@ func WriteElemStreamDescAAC(w io.Writer, config MPEG4AudioConfig) (err error) {
 
 	return
 }
-

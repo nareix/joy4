@@ -38,5 +38,12 @@ func TestReadElemStreamDesc(t *testing.T) {
 		t.Error(err)
 	}
 	t.Logf("decConfig=%x", decConfig)
+
+	//00000000  ff f1 50 80 04 3f fc de  04 00 00 6c 69 62 66 61  |..P..?.....libfa|
+	//00000010  61 63 20 31 2e 32 38 00  00 42 40 93 20 04 32 00  |ac 1.28..B@. .2.|
+	//00000020  47 ff f1 50 80 05 1f fc  21 42 fe ed b2 5c a8 00  |G..P....!B...\..|
+	data, _ = hex.DecodeString("fff15080043ffcde040000")
+	objectType, sampleRateIndex, chanConfig, frameLength := ReadADTSHeader(data)
+	t.Logf("objectType=%d sampleRateIndex=%d chanConfig=%d frameLength=%d", objectType, sampleRateIndex, chanConfig, frameLength)
 }
 
