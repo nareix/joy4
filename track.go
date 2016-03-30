@@ -3,6 +3,7 @@ package mp4
 
 import (
 	"github.com/nareix/mp4/atom"
+	"github.com/nareix/mp4/isom"
 	"io"
 )
 
@@ -13,10 +14,13 @@ const (
 
 type Track struct {
 	Type int
-	SPS []byte
-	PPS []byte
 	TrackAtom *atom.Track
 	r io.ReadSeeker
+
+	sps []byte
+	pps []byte
+
+	mpeg4AudioConfig isom.MPEG4AudioConfig
 
 	sample *atom.SampleTable
 	sampleIndex int
@@ -34,5 +38,11 @@ type Track struct {
 	chunkGroupIndex int
 	chunkIndex int
 	sampleIndexInChunk int
+
+	sampleToChunkEntry *atom.SampleToChunkEntry
+	sttsEntry *atom.TimeToSampleEntry
+	cttsEntry *atom.CompositionOffsetEntry
+	writeMdat func ([]byte) error
+	lastDts int64
 }
 
