@@ -3,6 +3,8 @@ package mp4
 
 import (
 	"github.com/nareix/mp4/atom"
+	"github.com/nareix/mp4/isom"
+	"bytes"
 	"fmt"
 	"io"
 )
@@ -65,19 +67,22 @@ func (self *Demuxer) ReadHeader() (err error) {
 			return
 		}
 		if record := atom.GetAVCDecoderConfRecordByTrack(atrack); record != nil {
-			track.Type = H264
-			self.TrackH264 = track
 			if len(record.PPS) > 0 {
-				track.PPS = record.PPS[0]
+				track.pps = record.PPS[0]
 			}
 			if len(record.SPS) > 0 {
-				track.SPS = record.SPS[0]
+				track.sps = record.SPS[0]
 			}
+			track.Type = H264
+			self.TrackH264 = track
 			self.Tracks = append(self.Tracks, track)
-		} else if mp4a := atom.GetMp4aDescByTrack(atrack); mp4a != nil {
-			self.TrackAAC = track
-			track.Type = AAC
-			self.Tracks = append(self.Tracks, track)
+		} else if mp4a := atom.GetMp4aDescByTrack(atrack); mp4a != nil && mp4a.Conf != nil {
+			if config, err := isom.ReadElemStreamDescAAC(bytes.NewReader(mp4a.Conf.Data)); err == nil {
+				track.mpeg4AudioConfig = config.Complete()
+				track.Type = AAC
+				self.TrackAAC = track
+				self.Tracks = append(self.Tracks, track)
+			}
 		}
 	}
 
@@ -384,7 +389,15 @@ func (self *Track) TimeStampToTime(ts int64) float64 {
 	return float64(ts)/float64(self.TrackAtom.Media.Header.TimeScale)
 }
 
-func (self *Track) WriteSample(pts int64, dts int64, data []byte) (err error) {
-	return
+func (self *Track) TimeScale() int64 {
+	return int64(self.TrackAtom.Media.Header.TimeScale)
+}
+
+func (self *Track) GetH264PPSAndSPS() (pps, sps []byte) {
+	return self.pps, self.sps
+}
+
+func (self *Track) GetMPEG4AudioConfig() isom.MPEG4AudioConfig {
+	return self.mpeg4AudioConfig
 }
 
