@@ -1,10 +1,9 @@
-
 package isom
 
 import (
-	"testing"
-	"encoding/hex"
 	"bytes"
+	"encoding/hex"
+	"testing"
 )
 
 func TestReadElemStreamDesc(t *testing.T) {
@@ -23,6 +22,7 @@ func TestReadElemStreamDesc(t *testing.T) {
 	if aconfig, err = ReadMPEG4AudioConfig(bytes.NewReader(decConfig)); err != nil {
 		t.Error(err)
 	}
+	aconfig = aconfig.Complete()
 	t.Logf("aconfig=%v", aconfig)
 
 	bw := &bytes.Buffer{}
@@ -46,4 +46,3 @@ func TestReadElemStreamDesc(t *testing.T) {
 	objectType, sampleRateIndex, chanConfig, frameLength := ReadADTSHeader(data)
 	t.Logf("objectType=%d sampleRateIndex=%d chanConfig=%d frameLength=%d", objectType, sampleRateIndex, chanConfig, frameLength)
 }
-

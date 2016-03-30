@@ -181,6 +181,17 @@ func writeSampleRateIndex(w *bits.Writer, index uint) (err error) {
 	return
 }
 
+func (self MPEG4AudioConfig) Complete() (config MPEG4AudioConfig) {
+	config = self
+	if int(config.SampleRateIndex) < len(sampleRateTable) {
+		config.SampleRate = sampleRateTable[config.SampleRateIndex]
+	}
+	if int(config.ChannelConfig) < len(chanConfigTable) {
+		config.ChannelCount = chanConfigTable[config.ChannelConfig]
+	}
+	return
+}
+
 // copied from libavcodec/mpeg4audio.c avpriv_mpeg4audio_get_config()
 func ReadMPEG4AudioConfig(r io.Reader) (config MPEG4AudioConfig, err error) {
 	br := &bits.Reader{R: r}
@@ -191,14 +202,8 @@ func ReadMPEG4AudioConfig(r io.Reader) (config MPEG4AudioConfig, err error) {
 	if config.SampleRateIndex, err = readSampleRateIndex(br); err != nil {
 		return
 	}
-	if int(config.SampleRateIndex) < len(sampleRateTable) {
-		config.SampleRate = sampleRateTable[config.SampleRateIndex]
-	}
 	if config.ChannelConfig, err = br.ReadBits(4); err != nil {
 		return
-	}
-	if int(config.ChannelConfig) < len(chanConfigTable) {
-		config.ChannelCount = chanConfigTable[config.ChannelConfig]
 	}
 	return
 }
@@ -427,6 +432,17 @@ func ReadElemStreamDesc(r io.Reader) (decConfig []byte, err error) {
 	r = bytes.NewReader(data)
 
 	if decConfig, err = readDecConfDesc(r); err != nil {
+		return
+	}
+	return
+}
+
+func ReadElemStreamDescAAC(r io.Reader) (config MPEG4AudioConfig, err error) {
+	var data []byte
+	if data, err = ReadElemStreamDesc(r); err != nil {
+		return
+	}
+	if config, err = ReadMPEG4AudioConfig(bytes.NewReader(data)); err != nil {
 		return
 	}
 	return
