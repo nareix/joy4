@@ -206,8 +206,8 @@ func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byt
 		}
 		duration := int(dts-self.lastDts)
 		if self.sttsEntry == nil || duration != self.sttsEntry.Duration {
-			self.sttsEntry = &atom.TimeToSampleEntry{Duration: duration}
-			self.sample.TimeToSample.Entries = append(self.sample.TimeToSample.Entries, *self.sttsEntry)
+			self.sample.TimeToSample.Entries = append(self.sample.TimeToSample.Entries, atom.TimeToSampleEntry{Duration: duration})
+			self.sttsEntry = &self.sample.TimeToSample.Entries[len(self.sample.TimeToSample.Entries)-1]
 		}
 		self.sttsEntry.Count++
 	}
@@ -258,7 +258,7 @@ func (self *Track) fillTrackAtom() (err error) {
 	} else if self.Type == AAC {
 		buf := &bytes.Buffer{}
 		config := self.mpeg4AudioConfig.Complete()
-		if err = isom.WriteElemStreamDescAAC(buf, config); err != nil {
+		if err = isom.WriteElemStreamDescAAC(buf, config, uint(self.TrackAtom.Header.TrackId)); err != nil {
 			return
 		}
 		self.sample.SampleDesc.Mp4aDesc.Conf.Data = buf.Bytes()
