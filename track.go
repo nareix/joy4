@@ -39,10 +39,9 @@ type Track struct {
 	chunkIndex int
 	sampleIndexInChunk int
 
-	sampleToChunkEntry *atom.SampleToChunkEntry
 	sttsEntry *atom.TimeToSampleEntry
 	cttsEntry *atom.CompositionOffsetEntry
-	writeMdat func ([]byte) error
+	writeMdat func ([]byte) (int64,error)
 	lastDts int64
 }
 
