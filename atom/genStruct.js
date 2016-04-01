@@ -93,8 +93,8 @@ var atoms = {
 		fields: [
 			['$atoms', [
 				['header', '*mediaHeader'],
-				['info', '*mediaInfo'],
 				['handler', '*handlerRefer'],
+				['info', '*mediaInfo'],
 			]],
 		],
 	},
@@ -526,9 +526,15 @@ var DeclDumpFunc = (opts) => {
 	};
 
 	var dumpArr = (name, type, id) => {
-		return For(`_, item := range(${name})`, [
-			dumpCommonType('item', type, id),
-		]);
+		return [
+			//Call('w.StartArray', [`"${id}"`, `len(${name})`]),
+			For(`i, item := range(${name})`, If(
+				`w.FilterArrayItem("${opts.type}", "${id}", i, len(${name}))`,
+				dumpCommonType('item', type, id),
+				[`w.ArrayLeft(i, len(${name}))`, 'break']
+			)),
+			//Call('w.EndArray', []),
+		];
 	};
 
 	var dumpCommonType = (name, type, id) => {
@@ -554,12 +560,9 @@ var DeclDumpFunc = (opts) => {
 	};
 
 	var dumpFields = fields => 
-		[
-			Call('w.Log', [`"[${opts.type}]"`]),
-			Call('w.Start', []),
-		]
+		[ Call('w.StartStruct', [`"${opts.type}"`]) ]
 		.concat(fields.map(field => dumpField(field.name, field.type)))
-		.concat([Call('w.End', [])]);
+		.concat([Call('w.EndStruct', [])]);
 
 	return Func(
 		'Walk'+opts.type,

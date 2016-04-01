@@ -81,20 +81,24 @@ func WriteMovie(w io.WriteSeeker, self *Movie) (err error) {
 }
 func WalkMovie(w Walker, self *Movie) {
 
-	w.Log("[Movie]")
-	w.Start()
+	w.StartStruct("Movie")
 	if self.Header != nil {
 		WalkMovieHeader(w, self.Header)
 	}
 	if self.Iods != nil {
 		WalkIods(w, self.Iods)
 	}
-	for _, item := range self.Tracks {
-		if item != nil {
-			WalkTrack(w, item)
+	for i, item := range self.Tracks {
+		if w.FilterArrayItem("Movie", "Tracks", i, len(self.Tracks)) {
+			if item != nil {
+				WalkTrack(w, item)
+			}
+		} else {
+			w.ArrayLeft(i, len(self.Tracks))
+			break
 		}
 	}
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -128,11 +132,10 @@ func WriteIods(w io.WriteSeeker, self *Iods) (err error) {
 }
 func WalkIods(w Walker, self *Iods) {
 
-	w.Log("[Iods]")
-	w.Start()
+	w.StartStruct("Iods")
 	w.Name("Data")
 	w.Bytes(self.Data)
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -281,8 +284,7 @@ func WriteMovieHeader(w io.WriteSeeker, self *MovieHeader) (err error) {
 }
 func WalkMovieHeader(w Walker, self *MovieHeader) {
 
-	w.Log("[MovieHeader]")
-	w.Start()
+	w.StartStruct("MovieHeader")
 	w.Name("Version")
 	w.Int(self.Version)
 	w.Name("Flags")
@@ -299,9 +301,14 @@ func WalkMovieHeader(w Walker, self *MovieHeader) {
 	w.Fixed(self.PreferredRate)
 	w.Name("PreferredVolume")
 	w.Fixed(self.PreferredVolume)
-	for _, item := range self.Matrix {
-		w.Name("Matrix")
-		w.Int(item)
+	for i, item := range self.Matrix {
+		if w.FilterArrayItem("MovieHeader", "Matrix", i, len(self.Matrix)) {
+			w.Name("Matrix")
+			w.Int(item)
+		} else {
+			w.ArrayLeft(i, len(self.Matrix))
+			break
+		}
 	}
 	w.Name("PreviewTime")
 	w.TimeStamp(self.PreviewTime)
@@ -317,7 +324,7 @@ func WalkMovieHeader(w Walker, self *MovieHeader) {
 	w.TimeStamp(self.CurrentTime)
 	w.Name("NextTrackId")
 	w.Int(self.NextTrackId)
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -381,15 +388,14 @@ func WriteTrack(w io.WriteSeeker, self *Track) (err error) {
 }
 func WalkTrack(w Walker, self *Track) {
 
-	w.Log("[Track]")
-	w.Start()
+	w.StartStruct("Track")
 	if self.Header != nil {
 		WalkTrackHeader(w, self.Header)
 	}
 	if self.Media != nil {
 		WalkMedia(w, self.Media)
 	}
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -522,8 +528,7 @@ func WriteTrackHeader(w io.WriteSeeker, self *TrackHeader) (err error) {
 }
 func WalkTrackHeader(w Walker, self *TrackHeader) {
 
-	w.Log("[TrackHeader]")
-	w.Start()
+	w.StartStruct("TrackHeader")
 	w.Name("Version")
 	w.Int(self.Version)
 	w.Name("Flags")
@@ -542,15 +547,20 @@ func WalkTrackHeader(w Walker, self *TrackHeader) {
 	w.Int(self.AlternateGroup)
 	w.Name("Volume")
 	w.Fixed(self.Volume)
-	for _, item := range self.Matrix {
-		w.Name("Matrix")
-		w.Int(item)
+	for i, item := range self.Matrix {
+		if w.FilterArrayItem("TrackHeader", "Matrix", i, len(self.Matrix)) {
+			w.Name("Matrix")
+			w.Int(item)
+		} else {
+			w.ArrayLeft(i, len(self.Matrix))
+			break
+		}
 	}
 	w.Name("TrackWidth")
 	w.Fixed(self.TrackWidth)
 	w.Name("TrackHeight")
 	w.Fixed(self.TrackHeight)
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -612,8 +622,7 @@ func WriteHandlerRefer(w io.WriteSeeker, self *HandlerRefer) (err error) {
 }
 func WalkHandlerRefer(w Walker, self *HandlerRefer) {
 
-	w.Log("[HandlerRefer]")
-	w.Start()
+	w.StartStruct("HandlerRefer")
 	w.Name("Version")
 	w.Int(self.Version)
 	w.Name("Flags")
@@ -624,14 +633,14 @@ func WalkHandlerRefer(w Walker, self *HandlerRefer) {
 	w.String(self.SubType)
 	w.Name("Name")
 	w.String(self.Name)
-	w.End()
+	w.EndStruct()
 	return
 }
 
 type Media struct {
 	Header  *MediaHeader
-	Info    *MediaInfo
 	Handler *HandlerRefer
+	Info    *MediaInfo
 }
 
 func ReadMedia(r *io.LimitedReader) (res *Media, err error) {
@@ -650,15 +659,15 @@ func ReadMedia(r *io.LimitedReader) (res *Media, err error) {
 					return
 				}
 			}
-		case "minf":
-			{
-				if self.Info, err = ReadMediaInfo(ar); err != nil {
-					return
-				}
-			}
 		case "hdlr":
 			{
 				if self.Handler, err = ReadHandlerRefer(ar); err != nil {
+					return
+				}
+			}
+		case "minf":
+			{
+				if self.Info, err = ReadMediaInfo(ar); err != nil {
 					return
 				}
 			}
@@ -683,13 +692,13 @@ func WriteMedia(w io.WriteSeeker, self *Media) (err error) {
 			return
 		}
 	}
-	if self.Info != nil {
-		if err = WriteMediaInfo(w, self.Info); err != nil {
+	if self.Handler != nil {
+		if err = WriteHandlerRefer(w, self.Handler); err != nil {
 			return
 		}
 	}
-	if self.Handler != nil {
-		if err = WriteHandlerRefer(w, self.Handler); err != nil {
+	if self.Info != nil {
+		if err = WriteMediaInfo(w, self.Info); err != nil {
 			return
 		}
 	}
@@ -700,18 +709,17 @@ func WriteMedia(w io.WriteSeeker, self *Media) (err error) {
 }
 func WalkMedia(w Walker, self *Media) {
 
-	w.Log("[Media]")
-	w.Start()
+	w.StartStruct("Media")
 	if self.Header != nil {
 		WalkMediaHeader(w, self.Header)
-	}
-	if self.Info != nil {
-		WalkMediaInfo(w, self.Info)
 	}
 	if self.Handler != nil {
 		WalkHandlerRefer(w, self.Handler)
 	}
-	w.End()
+	if self.Info != nil {
+		WalkMediaInfo(w, self.Info)
+	}
+	w.EndStruct()
 	return
 }
 
@@ -794,8 +802,7 @@ func WriteMediaHeader(w io.WriteSeeker, self *MediaHeader) (err error) {
 }
 func WalkMediaHeader(w Walker, self *MediaHeader) {
 
-	w.Log("[MediaHeader]")
-	w.Start()
+	w.StartStruct("MediaHeader")
 	w.Name("Version")
 	w.Int(self.Version)
 	w.Name("Flags")
@@ -812,7 +819,7 @@ func WalkMediaHeader(w Walker, self *MediaHeader) {
 	w.Int(self.Language)
 	w.Name("Quality")
 	w.Int(self.Quality)
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -900,8 +907,7 @@ func WriteMediaInfo(w io.WriteSeeker, self *MediaInfo) (err error) {
 }
 func WalkMediaInfo(w Walker, self *MediaInfo) {
 
-	w.Log("[MediaInfo]")
-	w.Start()
+	w.StartStruct("MediaInfo")
 	if self.Sound != nil {
 		WalkSoundMediaInfo(w, self.Sound)
 	}
@@ -914,7 +920,7 @@ func WalkMediaInfo(w Walker, self *MediaInfo) {
 	if self.Sample != nil {
 		WalkSampleTable(w, self.Sample)
 	}
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -966,12 +972,11 @@ func WriteDataInfo(w io.WriteSeeker, self *DataInfo) (err error) {
 }
 func WalkDataInfo(w Walker, self *DataInfo) {
 
-	w.Log("[DataInfo]")
-	w.Start()
+	w.StartStruct("DataInfo")
 	if self.Refer != nil {
 		WalkDataRefer(w, self.Refer)
 	}
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -1049,8 +1054,7 @@ func WriteDataRefer(w io.WriteSeeker, self *DataRefer) (err error) {
 }
 func WalkDataRefer(w Walker, self *DataRefer) {
 
-	w.Log("[DataRefer]")
-	w.Start()
+	w.StartStruct("DataRefer")
 	w.Name("Version")
 	w.Int(self.Version)
 	w.Name("Flags")
@@ -1058,7 +1062,7 @@ func WalkDataRefer(w Walker, self *DataRefer) {
 	if self.Url != nil {
 		WalkDataReferUrl(w, self.Url)
 	}
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -1099,13 +1103,12 @@ func WriteDataReferUrl(w io.WriteSeeker, self *DataReferUrl) (err error) {
 }
 func WalkDataReferUrl(w Walker, self *DataReferUrl) {
 
-	w.Log("[DataReferUrl]")
-	w.Start()
+	w.StartStruct("DataReferUrl")
 	w.Name("Version")
 	w.Int(self.Version)
 	w.Name("Flags")
 	w.Int(self.Flags)
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -1159,15 +1162,14 @@ func WriteSoundMediaInfo(w io.WriteSeeker, self *SoundMediaInfo) (err error) {
 }
 func WalkSoundMediaInfo(w Walker, self *SoundMediaInfo) {
 
-	w.Log("[SoundMediaInfo]")
-	w.Start()
+	w.StartStruct("SoundMediaInfo")
 	w.Name("Version")
 	w.Int(self.Version)
 	w.Name("Flags")
 	w.Int(self.Flags)
 	w.Name("Balance")
 	w.Int(self.Balance)
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -1226,19 +1228,23 @@ func WriteVideoMediaInfo(w io.WriteSeeker, self *VideoMediaInfo) (err error) {
 }
 func WalkVideoMediaInfo(w Walker, self *VideoMediaInfo) {
 
-	w.Log("[VideoMediaInfo]")
-	w.Start()
+	w.StartStruct("VideoMediaInfo")
 	w.Name("Version")
 	w.Int(self.Version)
 	w.Name("Flags")
 	w.Int(self.Flags)
 	w.Name("GraphicsMode")
 	w.Int(self.GraphicsMode)
-	for _, item := range self.Opcolor {
-		w.Name("Opcolor")
-		w.Int(item)
+	for i, item := range self.Opcolor {
+		if w.FilterArrayItem("VideoMediaInfo", "Opcolor", i, len(self.Opcolor)) {
+			w.Name("Opcolor")
+			w.Int(item)
+		} else {
+			w.ArrayLeft(i, len(self.Opcolor))
+			break
+		}
 	}
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -1362,8 +1368,7 @@ func WriteSampleTable(w io.WriteSeeker, self *SampleTable) (err error) {
 }
 func WalkSampleTable(w Walker, self *SampleTable) {
 
-	w.Log("[SampleTable]")
-	w.Start()
+	w.StartStruct("SampleTable")
 	if self.SampleDesc != nil {
 		WalkSampleDesc(w, self.SampleDesc)
 	}
@@ -1385,7 +1390,7 @@ func WalkSampleTable(w Walker, self *SampleTable) {
 	if self.SampleSize != nil {
 		WalkSampleSize(w, self.SampleSize)
 	}
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -1475,8 +1480,7 @@ func WriteSampleDesc(w io.WriteSeeker, self *SampleDesc) (err error) {
 }
 func WalkSampleDesc(w Walker, self *SampleDesc) {
 
-	w.Log("[SampleDesc]")
-	w.Start()
+	w.StartStruct("SampleDesc")
 	w.Name("Version")
 	w.Int(self.Version)
 	if self.Avc1Desc != nil {
@@ -1485,7 +1489,7 @@ func WalkSampleDesc(w Walker, self *SampleDesc) {
 	if self.Mp4aDesc != nil {
 		WalkMp4aDesc(w, self.Mp4aDesc)
 	}
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -1605,8 +1609,7 @@ func WriteMp4aDesc(w io.WriteSeeker, self *Mp4aDesc) (err error) {
 }
 func WalkMp4aDesc(w Walker, self *Mp4aDesc) {
 
-	w.Log("[Mp4aDesc]")
-	w.Start()
+	w.StartStruct("Mp4aDesc")
 	w.Name("DataRefIdx")
 	w.Int(self.DataRefIdx)
 	w.Name("Version")
@@ -1626,7 +1629,7 @@ func WalkMp4aDesc(w Walker, self *Mp4aDesc) {
 	if self.Conf != nil {
 		WalkElemStreamDesc(w, self.Conf)
 	}
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -1667,13 +1670,12 @@ func WriteElemStreamDesc(w io.WriteSeeker, self *ElemStreamDesc) (err error) {
 }
 func WalkElemStreamDesc(w Walker, self *ElemStreamDesc) {
 
-	w.Log("[ElemStreamDesc]")
-	w.Start()
+	w.StartStruct("ElemStreamDesc")
 	w.Name("Version")
 	w.Int(self.Version)
 	w.Name("Data")
 	w.Bytes(self.Data)
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -1835,8 +1837,7 @@ func WriteAvc1Desc(w io.WriteSeeker, self *Avc1Desc) (err error) {
 }
 func WalkAvc1Desc(w Walker, self *Avc1Desc) {
 
-	w.Log("[Avc1Desc]")
-	w.Start()
+	w.StartStruct("Avc1Desc")
 	w.Name("DataRefIdx")
 	w.Int(self.DataRefIdx)
 	w.Name("Version")
@@ -1868,7 +1869,7 @@ func WalkAvc1Desc(w Walker, self *Avc1Desc) {
 	if self.Conf != nil {
 		WalkAvc1Conf(w, self.Conf)
 	}
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -1902,10 +1903,9 @@ func WriteAvc1Conf(w io.WriteSeeker, self *Avc1Conf) (err error) {
 }
 func WalkAvc1Conf(w Walker, self *Avc1Conf) {
 
-	w.Log("[Avc1Conf]")
-	w.Start()
+	w.StartStruct("Avc1Conf")
 	WalkAVCDecoderConfRecord(w, self.Record)
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -1965,16 +1965,20 @@ func WriteTimeToSample(w io.WriteSeeker, self *TimeToSample) (err error) {
 }
 func WalkTimeToSample(w Walker, self *TimeToSample) {
 
-	w.Log("[TimeToSample]")
-	w.Start()
+	w.StartStruct("TimeToSample")
 	w.Name("Version")
 	w.Int(self.Version)
 	w.Name("Flags")
 	w.Int(self.Flags)
-	for _, item := range self.Entries {
-		WalkTimeToSampleEntry(w, item)
+	for i, item := range self.Entries {
+		if w.FilterArrayItem("TimeToSample", "Entries", i, len(self.Entries)) {
+			WalkTimeToSampleEntry(w, item)
+		} else {
+			w.ArrayLeft(i, len(self.Entries))
+			break
+		}
 	}
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -2005,13 +2009,12 @@ func WriteTimeToSampleEntry(w io.WriteSeeker, self TimeToSampleEntry) (err error
 }
 func WalkTimeToSampleEntry(w Walker, self TimeToSampleEntry) {
 
-	w.Log("[TimeToSampleEntry]")
-	w.Start()
+	w.StartStruct("TimeToSampleEntry")
 	w.Name("Count")
 	w.Int(self.Count)
 	w.Name("Duration")
 	w.Int(self.Duration)
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -2071,16 +2074,20 @@ func WriteSampleToChunk(w io.WriteSeeker, self *SampleToChunk) (err error) {
 }
 func WalkSampleToChunk(w Walker, self *SampleToChunk) {
 
-	w.Log("[SampleToChunk]")
-	w.Start()
+	w.StartStruct("SampleToChunk")
 	w.Name("Version")
 	w.Int(self.Version)
 	w.Name("Flags")
 	w.Int(self.Flags)
-	for _, item := range self.Entries {
-		WalkSampleToChunkEntry(w, item)
+	for i, item := range self.Entries {
+		if w.FilterArrayItem("SampleToChunk", "Entries", i, len(self.Entries)) {
+			WalkSampleToChunkEntry(w, item)
+		} else {
+			w.ArrayLeft(i, len(self.Entries))
+			break
+		}
 	}
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -2118,15 +2125,14 @@ func WriteSampleToChunkEntry(w io.WriteSeeker, self SampleToChunkEntry) (err err
 }
 func WalkSampleToChunkEntry(w Walker, self SampleToChunkEntry) {
 
-	w.Log("[SampleToChunkEntry]")
-	w.Start()
+	w.StartStruct("SampleToChunkEntry")
 	w.Name("FirstChunk")
 	w.Int(self.FirstChunk)
 	w.Name("SamplesPerChunk")
 	w.Int(self.SamplesPerChunk)
 	w.Name("SampleDescId")
 	w.Int(self.SampleDescId)
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -2186,16 +2192,20 @@ func WriteCompositionOffset(w io.WriteSeeker, self *CompositionOffset) (err erro
 }
 func WalkCompositionOffset(w Walker, self *CompositionOffset) {
 
-	w.Log("[CompositionOffset]")
-	w.Start()
+	w.StartStruct("CompositionOffset")
 	w.Name("Version")
 	w.Int(self.Version)
 	w.Name("Flags")
 	w.Int(self.Flags)
-	for _, item := range self.Entries {
-		WalkCompositionOffsetEntry(w, item)
+	for i, item := range self.Entries {
+		if w.FilterArrayItem("CompositionOffset", "Entries", i, len(self.Entries)) {
+			WalkCompositionOffsetEntry(w, item)
+		} else {
+			w.ArrayLeft(i, len(self.Entries))
+			break
+		}
 	}
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -2226,13 +2236,12 @@ func WriteCompositionOffsetEntry(w io.WriteSeeker, self CompositionOffsetEntry) 
 }
 func WalkCompositionOffsetEntry(w Walker, self CompositionOffsetEntry) {
 
-	w.Log("[CompositionOffsetEntry]")
-	w.Start()
+	w.StartStruct("CompositionOffsetEntry")
 	w.Name("Count")
 	w.Int(self.Count)
 	w.Name("Offset")
 	w.Int(self.Offset)
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -2292,17 +2301,21 @@ func WriteSyncSample(w io.WriteSeeker, self *SyncSample) (err error) {
 }
 func WalkSyncSample(w Walker, self *SyncSample) {
 
-	w.Log("[SyncSample]")
-	w.Start()
+	w.StartStruct("SyncSample")
 	w.Name("Version")
 	w.Int(self.Version)
 	w.Name("Flags")
 	w.Int(self.Flags)
-	for _, item := range self.Entries {
-		w.Name("Entries")
-		w.Int(item)
+	for i, item := range self.Entries {
+		if w.FilterArrayItem("SyncSample", "Entries", i, len(self.Entries)) {
+			w.Name("Entries")
+			w.Int(item)
+		} else {
+			w.ArrayLeft(i, len(self.Entries))
+			break
+		}
 	}
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -2369,19 +2382,23 @@ func WriteSampleSize(w io.WriteSeeker, self *SampleSize) (err error) {
 }
 func WalkSampleSize(w Walker, self *SampleSize) {
 
-	w.Log("[SampleSize]")
-	w.Start()
+	w.StartStruct("SampleSize")
 	w.Name("Version")
 	w.Int(self.Version)
 	w.Name("Flags")
 	w.Int(self.Flags)
 	w.Name("SampleSize")
 	w.Int(self.SampleSize)
-	for _, item := range self.Entries {
-		w.Name("Entries")
-		w.Int(item)
+	for i, item := range self.Entries {
+		if w.FilterArrayItem("SampleSize", "Entries", i, len(self.Entries)) {
+			w.Name("Entries")
+			w.Int(item)
+		} else {
+			w.ArrayLeft(i, len(self.Entries))
+			break
+		}
 	}
-	w.End()
+	w.EndStruct()
 	return
 }
 
@@ -2441,16 +2458,20 @@ func WriteChunkOffset(w io.WriteSeeker, self *ChunkOffset) (err error) {
 }
 func WalkChunkOffset(w Walker, self *ChunkOffset) {
 
-	w.Log("[ChunkOffset]")
-	w.Start()
+	w.StartStruct("ChunkOffset")
 	w.Name("Version")
 	w.Int(self.Version)
 	w.Name("Flags")
 	w.Int(self.Flags)
-	for _, item := range self.Entries {
-		w.Name("Entries")
-		w.Int(item)
+	for i, item := range self.Entries {
+		if w.FilterArrayItem("ChunkOffset", "Entries", i, len(self.Entries)) {
+			w.Name("Entries")
+			w.Int(item)
+		} else {
+			w.ArrayLeft(i, len(self.Entries))
+			break
+		}
 	}
-	w.End()
+	w.EndStruct()
 	return
 }
