@@ -29,13 +29,12 @@ func (self *Muxer) newTrack() *Track {
 				{
 					FirstChunk: 1,
 					SampleDescId: 1,
+					SamplesPerChunk: 1,
 				},
 			},
 		},
 		SampleSize: &atom.SampleSize{},
-		ChunkOffset: &atom.ChunkOffset{
-			Entries: []int{8},
-		},
+		ChunkOffset: &atom.ChunkOffset{},
 	}
 
 	track.TrackAtom = &atom.Track{
@@ -68,7 +67,6 @@ func (self *Muxer) newTrack() *Track {
 	}
 
 	track.writeMdat = self.writeMdat
-	track.sampleToChunkEntry = &track.sample.SampleToChunk.Entries[0]
 	self.Tracks = append(self.Tracks, track)
 
 	return track
@@ -94,8 +92,8 @@ func (self *Muxer) AddAACTrack() (track *Track) {
 
 func (self *Muxer) AddH264Track() (track *Track) {
 	track = self.newTrack()
-	track.Type = H264
 	self.TrackH264 = track
+	track.Type = H264
 	track.sample.SampleDesc.Avc1Desc = &atom.Avc1Desc{
 		DataRefIdx: 1,
 		HorizontalResolution: 72,
@@ -143,9 +141,9 @@ func (self *Track) SetTimeScale(timeScale int64) {
 }
 
 func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byte) (err error) {
-	//var filePos int64
+	var filePos int64
 	sampleSize := len(data)
-	if _, err = self.writeMdat(data); err != nil {
+	if filePos, err = self.writeMdat(data); err != nil {
 		return
 	}
 
@@ -184,7 +182,7 @@ func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byt
 
 	self.lastDts = dts
 	self.sampleIndex++
-	self.sampleToChunkEntry.SamplesPerChunk++
+	self.sample.ChunkOffset.Entries = append(self.sample.ChunkOffset.Entries, int(filePos))
 	self.sample.SampleSize.Entries = append(self.sample.SampleSize.Entries, sampleSize)
 
 	return
