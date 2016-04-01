@@ -48,6 +48,7 @@ func (self *Muxer) newTrack() *Track {
 			Header: &atom.MediaHeader{
 				TimeScale: 0, // fill later
 				Duration: 0, // fill later
+				Language: 21956,
 			},
 			Info: &atom.MediaInfo{
 				Sample: track.sample,
@@ -190,6 +191,9 @@ func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byt
 }
 
 func (self *Track) fillTrackAtom() (err error) {
+	if self.sampleIndex > 0 {
+		self.sttsEntry.Count++
+	}
 	if self.Type == H264 {
 		self.sample.SampleDesc.Avc1Desc.Conf.Record, err = atom.CreateAVCDecoderConfRecord(
 			self.sps,
