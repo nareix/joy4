@@ -105,6 +105,7 @@ func (self *Muxer) AddH264Track() (track *Track) {
 		ColorTableId: -1,
 		Conf: &atom.Avc1Conf{},
 	}
+	track.sample.SyncSample = &atom.SyncSample{}
 	track.TrackAtom.Media.Handler = &atom.HandlerRefer{
 		SubType: "vide",
 		Name: "Video Media Handler",
