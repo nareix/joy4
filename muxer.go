@@ -42,8 +42,6 @@ func (self *Muxer) newTrack() *Track {
 			TrackId: len(self.Tracks)+1,
 			Flags: 0x0003, // Track enabled | Track in movie
 			Duration: 0, // fill later
-			Volume: atom.IntToFixed(1),
-			AlternateGroup: 1,
 			Matrix: [9]int{0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000},
 		},
 		Media: &atom.Media{
@@ -52,8 +50,6 @@ func (self *Muxer) newTrack() *Track {
 				Duration: 0, // fill later
 			},
 			Info: &atom.MediaInfo{
-				Sound: &atom.SoundMediaInfo{
-				},
 				Sample: track.sample,
 				Data: &atom.DataInfo{
 					Refer: &atom.DataRefer{
@@ -83,10 +79,13 @@ func (self *Muxer) AddAACTrack() (track *Track) {
 		SampleRate: 0, // fill later
 		Conf: &atom.ElemStreamDesc{},
 	}
+	track.TrackAtom.Header.Volume = atom.IntToFixed(1)
+	track.TrackAtom.Header.AlternateGroup = 1
 	track.TrackAtom.Media.Handler = &atom.HandlerRefer{
 		SubType: "soun",
 		Name: "Sound Handler",
 	}
+	track.TrackAtom.Media.Info.Sound = &atom.SoundMediaInfo{}
 	return
 }
 
@@ -108,6 +107,10 @@ func (self *Muxer) AddH264Track() (track *Track) {
 	track.TrackAtom.Media.Handler = &atom.HandlerRefer{
 		SubType: "vide",
 		Name: "Video Media Handler",
+	}
+	track.sample.CompositionOffset = &atom.CompositionOffset{}
+	track.TrackAtom.Media.Info.Video = &atom.VideoMediaInfo{
+		Flags: 0x000001,
 	}
 	return
 }
@@ -164,18 +167,16 @@ func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byt
 		self.sttsEntry.Count++
 	}
 
-	if pts != dts {
+	if self.sample.CompositionOffset != nil {
 		if pts < dts {
 			err = fmt.Errorf("pts must greater than dts")
 			return
 		}
 		offset := int(pts-dts)
 		if self.cttsEntry == nil || offset != self.cttsEntry.Offset {
-			self.cttsEntry = &atom.CompositionOffsetEntry{Offset: offset}
-			if self.sample.CompositionOffset == nil {
-				self.sample.CompositionOffset = &atom.CompositionOffset{}
-			}
-			self.sample.CompositionOffset.Entries = append(self.sample.CompositionOffset.Entries, *self.cttsEntry)
+			table := self.sample.CompositionOffset
+			table.Entries = append(table.Entries, atom.CompositionOffsetEntry{Offset: offset})
+			self.cttsEntry = &table.Entries[len(table.Entries)-1]
 		}
 		self.cttsEntry.Count++
 	}
