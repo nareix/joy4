@@ -209,7 +209,6 @@ func (self *Track) fillTrackAtom() (err error) {
 		}
 		self.sample.SampleDesc.Avc1Desc.Width = int(info.Width)
 		self.sample.SampleDesc.Avc1Desc.Height = int(info.Height)
-		self.TrackAtom.Header.Duration = int(self.lastDts)
 		self.TrackAtom.Header.TrackWidth = atom.IntToFixed(int(info.Width))
 		self.TrackAtom.Header.TrackHeight = atom.IntToFixed(int(info.Height))
 		self.TrackAtom.Media.Header.Duration = int(self.lastDts)
@@ -223,7 +222,6 @@ func (self *Track) fillTrackAtom() (err error) {
 		self.sample.SampleDesc.Mp4aDesc.NumberOfChannels = config.ChannelCount
 		self.sample.SampleDesc.Mp4aDesc.SampleSize = config.ChannelCount*8
 		self.sample.SampleDesc.Mp4aDesc.SampleRate = atom.IntToFixed(config.SampleRate)
-		self.TrackAtom.Header.Duration = int(self.lastDts)
 		self.TrackAtom.Media.Header.Duration = int(self.lastDts)
 	}
 	return
@@ -237,22 +235,22 @@ func (self *Muxer) WriteTrailer() (err error) {
 		Matrix: [9]int{0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000},
 		NextTrackId: 2,
 	}
-	timeScale := 0
-	duration := 0
+
+	maxDur := float64(0)
+	timeScale := 10000
 	for _, track := range(self.Tracks) {
 		if err = track.fillTrackAtom(); err != nil {
 			return
 		}
-		if track.TrackAtom.Media.Header.TimeScale > timeScale {
-			timeScale = track.TrackAtom.Media.Header.TimeScale
-		}
-		if track.TrackAtom.Media.Header.Duration > duration {
-			duration = track.TrackAtom.Media.Header.Duration
+		dur := track.Duration()
+		track.TrackAtom.Header.Duration = int(float64(timeScale)*dur)
+		if dur > maxDur {
+			maxDur = dur
 		}
 		moov.Tracks = append(moov.Tracks, track.TrackAtom)
 	}
 	moov.Header.TimeScale = timeScale
-	moov.Header.Duration = duration
+	moov.Header.Duration = int(float64(timeScale)*maxDur)
 
 	if err = self.mdatWriter.Close(); err != nil {
 		return
