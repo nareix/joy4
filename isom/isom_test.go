@@ -7,19 +7,17 @@ import (
 )
 
 func TestReadElemStreamDesc(t *testing.T) {
-	var decConfig []byte
+	debugReader = true
+	debugWriter = true
+
 	var err error
 
 	data, _ := hex.DecodeString("03808080220002000480808014401500000000030d400000000005808080021210068080800102")
+	t.Logf("elemDesc=%x", data)
 	t.Logf("length=%d", len(data))
 
-	if decConfig, err = ReadElemStreamDesc(bytes.NewReader(data)); err != nil {
-		t.Error(err)
-	}
-	t.Logf("decConfig=%x", decConfig)
-
 	var aconfig MPEG4AudioConfig
-	if aconfig, err = ReadMPEG4AudioConfig(bytes.NewReader(decConfig)); err != nil {
+	if aconfig, err = ReadElemStreamDescAAC(bytes.NewReader(data)); err != nil {
 		t.Error(err)
 	}
 	aconfig = aconfig.Complete()
@@ -27,17 +25,17 @@ func TestReadElemStreamDesc(t *testing.T) {
 
 	bw := &bytes.Buffer{}
 	WriteMPEG4AudioConfig(bw, aconfig)
-	t.Logf("decConfig=%x", bw.Bytes())
 
 	bw = &bytes.Buffer{}
-	WriteElemStreamDescAAC(bw, aconfig)
+	WriteElemStreamDescAAC(bw, aconfig, 2)
 	t.Logf("elemDesc=%x", bw.Bytes())
 	data = bw.Bytes()
+	t.Logf("length=%d", len(data))
 
-	if decConfig, err = ReadElemStreamDesc(bytes.NewReader(data)); err != nil {
+	if aconfig, err = ReadElemStreamDescAAC(bytes.NewReader(data)); err != nil {
 		t.Error(err)
 	}
-	t.Logf("decConfig=%x", decConfig)
+	t.Logf("aconfig=%x", aconfig.Complete())
 
 	//00000000  ff f1 50 80 04 3f fc de  04 00 00 6c 69 62 66 61  |..P..?.....libfa|
 	//00000010  61 63 20 31 2e 32 38 00  00 42 40 93 20 04 32 00  |ac 1.28..B@. .2.|

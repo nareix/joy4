@@ -15,6 +15,9 @@ const (
 	MP4DecSpecificDescrTag = 5
 )
 
+var debugReader = false
+var debugWriter = false
+
 // copied from libavcodec/mpeg4audio.h
 const (
 	AOT_AAC_MAIN        = 1 + iota  ///< Y                       Main
@@ -270,15 +273,13 @@ func writeDesc(w io.Writer, tag uint, data []byte) (err error) {
 		return
 	}
 	length := uint(len(data))
-	for length > 0 {
-		val := length & 0x7f
-		if length >= 0x80 {
-			val |= 0x80
-		}
-		if err = bits.WriteUIntBE(w, val, 8); err != nil {
+	for i := 3; i > 0; i-- {
+		if err = bits.WriteUIntBE(w, (length>>uint(7*i))&0x7f|0x80, 8); err != nil {
 			return
 		}
-		length >>= 7
+	}
+	if err = bits.WriteUIntBE(w, length&0x7f, 8); err != nil {
+		return
 	}
 	if _, err = w.Write(data); err != nil {
 		return
@@ -287,8 +288,9 @@ func writeDesc(w io.Writer, tag uint, data []byte) (err error) {
 }
 
 func readESDesc(r io.Reader) (err error) {
+	var ES_ID uint
 	// ES_ID
-	if _, err = bits.ReadUIntBE(r, 16); err != nil {
+	if ES_ID, err = bits.ReadUIntBE(r, 16); err != nil {
 		return
 	}
 	var flags uint
@@ -317,16 +319,41 @@ func readESDesc(r io.Reader) (err error) {
 			return
 		}
 	}
+	if debugReader {
+		println("readESDesc:", ES_ID, flags)
+	}
 	return
 }
 
-func writeESDesc(w io.Writer) (err error) {
+func writeESDesc(w io.Writer, ES_ID uint) (err error) {
 	// ES_ID
-	if err = bits.WriteUIntBE(w, 0, 16); err != nil {
+	if err = bits.WriteUIntBE(w, ES_ID, 16); err != nil {
 		return
 	}
 	// flags
 	if err = bits.WriteUIntBE(w, 0, 8); err != nil {
+		return
+	}
+	return
+}
+
+func readDescByTag(r io.Reader, targetTag uint) (data []byte, err error) {
+	var found bool
+	for {
+		if tag, _data, err := readDesc(r); err != nil {
+			break
+		} else {
+			if tag == targetTag {
+				data = _data
+				found = true
+			}
+			if debugReader {
+				println("readDescByTag:", tag, len(_data))
+			}
+		}
+	}
+	if !found {
+		err = fmt.Errorf("tag not found")
 		return
 	}
 	return
@@ -361,20 +388,13 @@ func readDecConfDesc(r io.Reader) (decConfig []byte, err error) {
 		return
 	}
 
-	if false {
-		println("readDecConfDesc", objectId, streamType, bufSize, maxBitrate, avgBitrate)
+	if debugReader {
+		println("readDecConfDesc:", objectId, streamType, bufSize, maxBitrate, avgBitrate)
 	}
 
-	var tag uint
-	var data []byte
-	if tag, data, err = readDesc(r); err != nil {
+	if decConfig, err = readDescByTag(r, MP4DecSpecificDescrTag); err != nil {
 		return
 	}
-	if tag != MP4DecSpecificDescrTag {
-		err = fmt.Errorf("MP4DecSpecificDescrTag not found")
-		return
-	}
-	decConfig = data
 	return
 }
 
@@ -393,7 +413,7 @@ func writeDecConfDesc(w io.Writer, objectId uint, streamType uint, decConfig []b
 		return
 	}
 	// max bitrate
-	if err = bits.WriteUIntBE(w, 0, 32); err != nil {
+	if err = bits.WriteUIntBE(w, 200000, 32); err != nil {
 		return
 	}
 	// avg bitrate
@@ -408,13 +428,12 @@ func writeDecConfDesc(w io.Writer, objectId uint, streamType uint, decConfig []b
 
 // copied from libavformat/mov.c ff_mov_read_esds()
 func ReadElemStreamDesc(r io.Reader) (decConfig []byte, err error) {
-	var tag uint
-	var data []byte
-	if tag, data, err = readDesc(r); err != nil {
-		return
+	if debugReader {
+		println("ReadElemStreamDesc: start")
 	}
-	if tag != MP4ESDescrTag {
-		err = fmt.Errorf("MP4ESDescrTag not found")
+
+	var data []byte
+	if data, err = readDescByTag(r, MP4ESDescrTag); err != nil {
 		return
 	}
 	r = bytes.NewReader(data)
@@ -422,17 +441,18 @@ func ReadElemStreamDesc(r io.Reader) (decConfig []byte, err error) {
 	if err = readESDesc(r); err != nil {
 		return
 	}
-	if tag, data, err = readDesc(r); err != nil {
-		return
-	}
-	if tag != MP4DecConfigDescrTag {
-		err = fmt.Errorf("MP4DecSpecificDescrTag not found")
+
+	if data, err = readDescByTag(r, MP4DecConfigDescrTag); err != nil {
 		return
 	}
 	r = bytes.NewReader(data)
 
 	if decConfig, err = readDecConfDesc(r); err != nil {
 		return
+	}
+
+	if debugReader {
+		println("ReadElemStreamDesc: end")
 	}
 	return
 }
@@ -442,13 +462,16 @@ func ReadElemStreamDescAAC(r io.Reader) (config MPEG4AudioConfig, err error) {
 	if data, err = ReadElemStreamDesc(r); err != nil {
 		return
 	}
+	if debugReader {
+		println("decConfig: ", len(data))
+	}
 	if config, err = ReadMPEG4AudioConfig(bytes.NewReader(data)); err != nil {
 		return
 	}
 	return
 }
 
-func WriteElemStreamDescAAC(w io.Writer, config MPEG4AudioConfig) (err error) {
+func WriteElemStreamDescAAC(w io.Writer, config MPEG4AudioConfig, trackId uint) (err error) {
 	// MP4ESDescrTag(ESDesc MP4DecConfigDescrTag(objectId streamType bufSize avgBitrate MP4DecSpecificDescrTag(decConfig)))
 
 	buf := &bytes.Buffer{}
@@ -462,21 +485,21 @@ func WriteElemStreamDescAAC(w io.Writer, config MPEG4AudioConfig) (err error) {
 	data = buf.Bytes()
 
 	buf = &bytes.Buffer{}
-	writeDesc(buf, MP4DecConfigDescrTag, data)
+	writeDesc(buf, MP4DecConfigDescrTag, data) // 4
 	data = buf.Bytes()
 
 	buf = &bytes.Buffer{}
-	writeESDesc(buf)
+	writeESDesc(buf, trackId)
 	buf.Write(data)
+	writeDesc(buf, 0x06, []byte{0x02})
 	data = buf.Bytes()
 
 	buf = &bytes.Buffer{}
-	writeDesc(buf, MP4ESDescrTag, data)
+	writeDesc(buf, MP4ESDescrTag, data) // 3
 	data = buf.Bytes()
 
 	if _, err = w.Write(data); err != nil {
 		return
 	}
-
 	return
 }
