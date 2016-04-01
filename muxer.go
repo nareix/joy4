@@ -146,6 +146,24 @@ func (self *Track) SetTimeScale(timeScale int64) {
 }
 
 func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byte) (err error) {
+
+	// check ADTSHeader(starts with FFF)
+	if len(data) > 7 && data[0]==0xff&&data[1]&0xf0==0xf0 {
+		if !self.mpeg4AudioConfig.IsValid() {
+			self.mpeg4AudioConfig, _ = isom.ReadADTSHeader(data)
+		}
+		// Skip ADTSHeader
+		if data[1]&0x1 == 0 {
+			if len(data) < 9 {
+				err = fmt.Errorf("ADTSHeader short read")
+				return
+			}
+			data = data[9:]
+		} else {
+			data = data[7:]
+		}
+	}
+
 	var filePos int64
 	sampleSize := len(data)
 	if filePos, err = self.writeMdat(data); err != nil {
@@ -195,6 +213,7 @@ func (self *Track) fillTrackAtom() (err error) {
 	if self.sampleIndex > 0 {
 		self.sttsEntry.Count++
 	}
+
 	if self.Type == H264 {
 		self.sample.SampleDesc.Avc1Desc.Conf.Record, err = atom.CreateAVCDecoderConfRecord(
 			self.sps,
@@ -213,6 +232,10 @@ func (self *Track) fillTrackAtom() (err error) {
 		self.TrackAtom.Header.TrackHeight = atom.IntToFixed(int(info.Height))
 		self.TrackAtom.Media.Header.Duration = int(self.lastDts)
 	} else if self.Type == AAC {
+		if !self.mpeg4AudioConfig.IsValid() {
+			err = fmt.Errorf("invalie MPEG4AudioConfig")
+			return
+		}
 		buf := &bytes.Buffer{}
 		config := self.mpeg4AudioConfig.Complete()
 		if err = isom.WriteElemStreamDescAAC(buf, config, uint(self.TrackAtom.Header.TrackId)); err != nil {
