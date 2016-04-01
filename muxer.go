@@ -18,20 +18,11 @@ type Muxer struct {
 	mdatWriter *atom.Writer
 }
 
-func (self *Muxer) AddAACTrack() (track *Track) {
-	track = &Track{}
-	track.Type = AAC
+func (self *Muxer) newTrack() *Track {
+	track := &Track{}
 
 	track.sample = &atom.SampleTable{
-		SampleDesc: &atom.SampleDesc{
-			Mp4aDesc: &atom.Mp4aDesc{
-				DataRefIdx: 1,
-				NumberOfChannels: 0, // fill later
-				SampleSize: 0, // fill later
-				SampleRate: 0, // fill later
-				Conf: &atom.ElemStreamDesc{},
-			},
-		},
+		SampleDesc: &atom.SampleDesc{},
 		TimeToSample: &atom.TimeToSample{},
 		SampleToChunk: &atom.SampleToChunk{
 			Entries: []atom.SampleToChunkEntry{
@@ -46,8 +37,6 @@ func (self *Muxer) AddAACTrack() (track *Track) {
 			Entries: []int{8},
 		},
 	}
-	track.sampleToChunkEntry = &track.sample.SampleToChunk.Entries[0]
-	track.writeMdat = self.writeMdat
 
 	track.TrackAtom = &atom.Track{
 		Header: &atom.TrackHeader{
@@ -75,96 +64,60 @@ func (self *Muxer) AddAACTrack() (track *Track) {
 					},
 				},
 			},
-			Handler: &atom.HandlerRefer{
-				SubType: "soun",
-				Name: "Sound Handler",
-			},
 		},
 	}
 
-	self.TrackAAC = track
+	track.writeMdat = self.writeMdat
+	track.sampleToChunkEntry = &track.sample.SampleToChunk.Entries[0]
 	self.Tracks = append(self.Tracks, track)
+
+	return track
+}
+
+func (self *Muxer) AddAACTrack() (track *Track) {
+	track = self.newTrack()
+	self.TrackAAC = track
+	track.Type = AAC
+	track.sample.SampleDesc.Mp4aDesc = &atom.Mp4aDesc{
+		DataRefIdx: 1,
+		NumberOfChannels: 0, // fill later
+		SampleSize: 0, // fill later
+		SampleRate: 0, // fill later
+		Conf: &atom.ElemStreamDesc{},
+	}
+	track.TrackAtom.Media.Handler = &atom.HandlerRefer{
+		SubType: "soun",
+		Name: "Sound Handler",
+	}
 	return
 }
 
 func (self *Muxer) AddH264Track() (track *Track) {
-	track = &Track{}
+	track = self.newTrack()
 	track.Type = H264
-
-	track.sample = &atom.SampleTable{
-		SampleDesc: &atom.SampleDesc{
-			Avc1Desc: &atom.Avc1Desc{
-				DataRefIdx: 1,
-				HorizontalResolution: 72,
-				VorizontalResolution: 72,
-				Width: 0, // fill later
-				Height: 0, // fill later
-				FrameCount: 1,
-				Depth: 24,
-				ColorTableId: -1,
-				Conf: &atom.Avc1Conf{},
-			},
-		},
-		TimeToSample: &atom.TimeToSample{},
-		SampleToChunk: &atom.SampleToChunk{
-			Entries: []atom.SampleToChunkEntry{
-				{
-					FirstChunk: 1,
-					SampleDescId: 1,
-				},
-			},
-		},
-		SampleSize: &atom.SampleSize{},
-		ChunkOffset: &atom.ChunkOffset{
-			Entries: []int{8},
-		},
-		SyncSample: &atom.SyncSample{},
-	}
-	track.sampleToChunkEntry = &track.sample.SampleToChunk.Entries[0]
-	track.writeMdat = self.writeMdat
-
-	track.TrackAtom = &atom.Track{
-		Header: &atom.TrackHeader{
-			TrackId: len(self.Tracks)+1,
-			Flags: 0x0003, // Track enabled | Track in movie
-			Duration: 0, // fill later
-			Volume: atom.IntToFixed(1),
-			Matrix: [9]int{0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000},
-			TrackWidth: atom.IntToFixed(0), // fill later
-			TrackHeight: atom.IntToFixed(0), // fill later
-		},
-
-		Media: &atom.Media{
-			Header: &atom.MediaHeader{
-				TimeScale: 0, // fill later
-				Duration: 0, // fill later
-			},
-			Info: &atom.MediaInfo{
-				Video: &atom.VideoMediaInfo{
-					Flags: 0x000001,
-				},
-				Sample: track.sample,
-				Data: &atom.DataInfo{
-					Refer: &atom.DataRefer{
-						Url: &atom.DataReferUrl{
-							Flags: 0x000001, // Self reference
-						},
-					},
-				},
-			},
-			Handler: &atom.HandlerRefer{
-				SubType: "vide",
-				Name: "Video Media Handler",
-			},
-		},
-	}
-
 	self.TrackH264 = track
-	self.Tracks = append(self.Tracks, track)
+	track.sample.SampleDesc.Avc1Desc = &atom.Avc1Desc{
+		DataRefIdx: 1,
+		HorizontalResolution: 72,
+		VorizontalResolution: 72,
+		Width: 0, // fill later
+		Height: 0, // fill later
+		FrameCount: 1,
+		Depth: 24,
+		ColorTableId: -1,
+		Conf: &atom.Avc1Conf{},
+	}
+	track.TrackAtom.Media.Handler = &atom.HandlerRefer{
+		SubType: "vide",
+		Name: "Video Media Handler",
+	}
 	return
 }
 
-func (self *Muxer) writeMdat(data []byte) (err error) {
+func (self *Muxer) writeMdat(data []byte) (pos int64, err error) {
+	if pos, err = self.mdatWriter.Seek(0, 1); err != nil {
+		return
+	}
 	_, err = self.mdatWriter.Write(data)
 	return
 }
@@ -190,8 +143,9 @@ func (self *Track) SetTimeScale(timeScale int64) {
 }
 
 func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byte) (err error) {
+	//var filePos int64
 	sampleSize := len(data)
-	if err = self.writeMdat(data); err != nil {
+	if _, err = self.writeMdat(data); err != nil {
 		return
 	}
 
