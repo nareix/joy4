@@ -321,10 +321,10 @@ func (self *Track) Duration() float64 {
 }
 
 func (self *Track) CurTime() float64 {
-	return self.TimeStampToTime(self.dts)
+	return self.TsToTime(self.dts)
 }
 
-func (self *Track) CurTimeStamp() int64 {
+func (self *Track) CurTs() int64 {
 	return self.dts
 }
 
@@ -342,7 +342,7 @@ func (self *Track) SeekToSampleIndex(index int) error {
 }
 
 func (self *Track) TimeToSampleIndex(time float64) int {
-	targetTs := self.TimeToTimeStamp(time)
+	targetTs := self.TimeToTs(time)
 	targetIndex := 0
 
 	startTs := int64(0)
@@ -381,11 +381,11 @@ func (self *Track) TimeToSampleIndex(time float64) int {
 	return targetIndex
 }
 
-func (self *Track) TimeToTimeStamp(time float64) int64 {
+func (self *Track) TimeToTs(time float64) int64 {
 	return int64(time*float64(self.TrackAtom.Media.Header.TimeScale))
 }
 
-func (self *Track) TimeStampToTime(ts int64) float64 {
+func (self *Track) TsToTime(ts int64) float64 {
 	return float64(ts)/float64(self.TrackAtom.Media.Header.TimeScale)
 }
 
