@@ -81,13 +81,53 @@ var chanConfigTable = []int{
 	0, 1, 2, 3, 4, 5, 6, 8,
 }
 
-func ReadADTSHeader(data []byte) (objectType, sampleRateIndex, chanConfig, frameLength uint) {
+func IsADTSPayload(frames []byte) bool {
+	return len(frames) > 7 && frames[0]==0xff&&frames[1]&0xf0==0xf0
+}
+
+func ReadADTSPayload(frames []byte) (config MPEG4AudioConfig, payload []byte, n int, next []byte, err error) {
+	if !IsADTSPayload(frames) {
+		err = fmt.Errorf("not adts frame")
+		return
+	}
+	config.ObjectType = uint(frames[2]>>6)+1
+	config.SampleRateIndex = uint(frames[2]>>2&0xf)
+	config.ChannelConfig = uint(frames[2]<<2&0x4|frames[3]>>6&0x3)
+	framelen := int(frames[3]&0x3)<<11|int(frames[4])<<3|int(frames[5]>>5)
+	n = (int(frames[6]&0x3)+1)*1024
+	hdrlen := 7
+	if frames[1]&0x1 == 0 {
+		hdrlen = 9
+	}
+	if framelen < hdrlen || len(frames) < framelen {
+		err = fmt.Errorf("invalid adts header length")
+		return
+	}
+	payload = append(payload, frames[hdrlen:framelen]...)
+	next = frames[framelen:]
+	return
+}
+
+func ExtractADTSPayload(frames []byte) (config MPEG4AudioConfig, payload []byte, total int, err error) {
+	for len(frames) > 0 {
+		var n int
+		if config, payload, n, frames, err = ReadADTSPayload(frames); err != nil {
+			return
+		}
+		total += n
+	}
+	return
+}
+
+func ReadADTSHeader(data []byte) (config MPEG4AudioConfig, frameLength int) {
 	br := &bits.Reader{R: bytes.NewReader(data)}
+	var i uint
 
 	//Structure
 	//AAAAAAAA AAAABCCD EEFFFFGH HHIJKLMM MMMMMMMM MMMOOOOO OOOOOOPP (QQQQQQQQ QQQQQQQQ)
 	//Header consists of 7 or 9 bytes (without or with CRC).
 
+	// 2 bytes
 	//A	12	syncword 0xFFF, all bits must be 1
 	br.ReadBits(12)
 	//B	1	MPEG Version: 0 for MPEG-4, 1 for MPEG-2
@@ -98,14 +138,14 @@ func ReadADTSHeader(data []byte) (objectType, sampleRateIndex, chanConfig, frame
 	br.ReadBits(1)
 
 	//E	2	profile, the MPEG-4 Audio Object Type minus 1
-	objectType, _ = br.ReadBits(2)
-	objectType++
+	config.ObjectType, _ = br.ReadBits(2)
+	config.ObjectType++
 	//F	4	MPEG-4 Sampling Frequency Index (15 is forbidden)
-	sampleRateIndex, _ = br.ReadBits(4)
+	config.SampleRateIndex, _ = br.ReadBits(4)
 	//G	1	private bit, guaranteed never to be used by MPEG, set to 0 when encoding, ignore when decoding
 	br.ReadBits(1)
 	//H	3	MPEG-4 Channel Configuration (in the case of 0, the channel configuration is sent via an inband PCE)
-	chanConfig, _ = br.ReadBits(3)
+	config.ChannelConfig, _ = br.ReadBits(3)
 	//I	1	originality, set to 0 when encoding, ignore when decoding
 	br.ReadBits(1)
 	//J	1	home, set to 0 when encoding, ignore when decoding
@@ -116,7 +156,8 @@ func ReadADTSHeader(data []byte) (objectType, sampleRateIndex, chanConfig, frame
 	br.ReadBits(1)
 
 	//M	13	frame length, this value must include 7 or 9 bytes of header length: FrameLength = (ProtectionAbsent == 1 ? 7 : 9) + size(AACFrame)
-	frameLength, _ = br.ReadBits(13)
+	i, _ = br.ReadBits(13)
+	frameLength = int(i)
 	//O	11	Buffer fullness
 	br.ReadBits(11)
 	//P	2	Number of AAC frames (RDBs) in ADTS frame minus 1, for maximum compatibility always use 1 AAC frame per ADTS frame
@@ -182,6 +223,10 @@ func writeSampleRateIndex(w *bits.Writer, index uint) (err error) {
 		}
 	}
 	return
+}
+
+func (self MPEG4AudioConfig) IsValid() bool {
+	return self.ObjectType > 0
 }
 
 func (self MPEG4AudioConfig) Complete() (config MPEG4AudioConfig) {
