@@ -96,89 +96,90 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 		if length, err = ReadUInt(r, 1); err != nil {
 			return
 		}
-		lr := &io.LimitedReader{R: r, N: int64(length)}
-		if flags, err = ReadUInt(lr, 1); err != nil {
-			return
-		}
-
-		if DebugReader {
-			fmt.Printf("ts: ext_flags %s\n", FieldsDumper{
-				Fields: []struct{
-					Length int
-					Desc string
-				}{
-					{1, "discontinuity_indicator"},
-					{1, "random_access_indicator"},
-					{1, "elementary_stream_priority_indicator"},
-					{1, "pcr_flag"},
-					{1, "opcr_flag"},
-					{1, "splicing_point_flag"},
-					{1, "transport_private_data_flag"},
-					{1, "adaptation_field_extension_flag"},
-				},
-				Val: flags,
-				Length: 8,
-			})
-		}
-
-		// random_access_indicator
-		if flags & 0x40 != 0 {
-			self.RandomAccessIndicator = true
-		}
-
-		// PCR
-		if flags & 0x10 != 0 {
-			var v uint64
-			if v, err = ReadUInt64(lr, 6); err != nil {
+		if length > 0 {
+			lr := &io.LimitedReader{R: r, N: int64(length)}
+			if flags, err = ReadUInt(lr, 1); err != nil {
 				return
 			}
-			// clock is 27MHz
-			self.PCR = UIntToPCR(v)
+
 			if DebugReader {
-				fmt.Printf("ts: PCR %d %f\n", self.PCR, float64(self.PCR)/PCR_HZ)
-			}
-		}
-
-		// OPCR
-		if flags & 0x08 != 0 {
-			var v uint64
-			if v, err = ReadUInt64(lr, 6); err != nil {
-				return
-			}
-			self.OPCR = UIntToPCR(v)
-		}
-
-		// Splice countdown
-		if flags & 0x04 != 0 {
-			if _, err = ReadUInt(lr, 1); err != nil {
-				return
-			}
-		}
-
-		// Transport private data
-		if flags & 0x02 != 0 {
-			var length uint
-			if length, err = ReadUInt(lr, 1); err != nil {
-				return
+				fmt.Printf("ts: ext_flags %s\n", FieldsDumper{
+					Fields: []struct{
+						Length int
+						Desc string
+					}{
+						{1, "discontinuity_indicator"},
+						{1, "random_access_indicator"},
+						{1, "elementary_stream_priority_indicator"},
+						{1, "pcr_flag"},
+						{1, "opcr_flag"},
+						{1, "splicing_point_flag"},
+						{1, "transport_private_data_flag"},
+						{1, "adaptation_field_extension_flag"},
+					},
+					Val: flags,
+					Length: 8,
+				})
 			}
 
-			b := make([]byte, length)
-			if _, err = lr.Read(b); err != nil {
-				return
-			}
-		}
-
-		// Adaptation extension
-		if lr.N > 0 {
-			if DebugReader {
-				// rubish
-				fmt.Println("ts: skip", lr.N)
+			// random_access_indicator
+			if flags & 0x40 != 0 {
+				self.RandomAccessIndicator = true
 			}
 
-			if err = ReadDummy(lr, int(lr.N)); err != nil {
-				return
+			// PCR
+			if flags & 0x10 != 0 {
+				var v uint64
+				if v, err = ReadUInt64(lr, 6); err != nil {
+					return
+				}
+				// clock is 27MHz
+				self.PCR = UIntToPCR(v)
+				if DebugReader {
+					fmt.Printf("ts: PCR %d %f\n", self.PCR, float64(self.PCR)/PCR_HZ)
+				}
 			}
 
+			// OPCR
+			if flags & 0x08 != 0 {
+				var v uint64
+				if v, err = ReadUInt64(lr, 6); err != nil {
+					return
+				}
+				self.OPCR = UIntToPCR(v)
+			}
+
+			// Splice countdown
+			if flags & 0x04 != 0 {
+				if _, err = ReadUInt(lr, 1); err != nil {
+					return
+				}
+			}
+
+			// Transport private data
+			if flags & 0x02 != 0 {
+				var length uint
+				if length, err = ReadUInt(lr, 1); err != nil {
+					return
+				}
+
+				b := make([]byte, length)
+				if _, err = lr.Read(b); err != nil {
+					return
+				}
+			}
+
+			// Adaptation extension
+			if lr.N > 0 {
+				if DebugReader {
+					// rubish
+					fmt.Println("ts: skip", lr.N)
+				}
+
+				if err = ReadDummy(lr, int(lr.N)); err != nil {
+					return
+				}
+			}
 		}
 	}
 

@@ -6,23 +6,6 @@ import (
 	"io"
 )
 
-type Track struct {
-	SPS []byte
-	PPS []byte
-
-	PTS int64
-	TimeScale int64
-
-	writeSPS bool
-	spsHasWritten bool
-
-	mux *Muxer
-	streamId uint
-	tsw *TSWriter
-	dataBuf *iovec
-	cacheSize int
-}
-
 func (self *Track) setPCR() {
 	self.tsw.PCR = uint64(self.PTS)*PCR_HZ/uint64(self.TimeScale)
 }
