@@ -14,7 +14,7 @@ type Track struct {
 
 	pid uint
 	PTS int64
-	TimeScale int64
+	timeScale int64
 
 	mpeg4AudioConfig isom.MPEG4AudioConfig
 	buf bytes.Buffer
