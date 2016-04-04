@@ -3,8 +3,10 @@ package ts
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"github.com/nareix/mp4/isom"
+	"github.com/nareix/codec/h264parser"
 )
 
 type Muxer struct {
@@ -84,6 +86,7 @@ func (self *Muxer) WriteHeader() (err error) {
 		return
 	}
 
+	// about to remove
 	for _, track := range(self.Tracks) {
 		track.spsHasWritten = false
 	}
@@ -108,18 +111,29 @@ func (self *Track) SetMPEG4AudioConfig(config isom.MPEG4AudioConfig) {
 }
 
 func (self *Track) tsToPesTs(ts int64) uint64 {
-	return uint64(ts)*PTS_HZ/uint64(self.timeScale)
+	return uint64(ts)*PTS_HZ/uint64(self.timeScale)+PTS_HZ
 }
 
 func (self *Track) tsToPCR(ts int64) uint64 {
 	return uint64(ts)*PCR_HZ/uint64(self.timeScale)+PCR_HZ
 }
 
+func (self *Track) tsToTime(ts int64) float64 {
+	return float64(ts)/float64(self.timeScale)
+}
+
 func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byte) (err error) {
+	if false {
+		fmt.Println("WriteSample", self.Type, self.tsToTime(dts))
+	}
+
 	if self.Type == AAC {
 
 		if !isom.IsADTSFrame(data) {
-			data = append(data, isom.MakeADTSHeader(self.mpeg4AudioConfig, 1024, len(data))...)
+			data = append(isom.MakeADTSHeader(self.mpeg4AudioConfig, 1024, len(data)), data...)
+		}
+		if false {
+			fmt.Printf("WriteSample=%x\n", data[:5])
 		}
 
 		buf := &bytes.Buffer{}
@@ -147,17 +161,18 @@ func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byt
 		}
 		WritePESHeader(buf, pes, 0)
 
-		if isKeyFrame {
-			buf.Write([]byte{0,0,0,1,0x9,0xf0,0,0,0,1}) // AUD
-			buf.Write(self.SPS)
-			buf.Write([]byte{0,0,1})
-			buf.Write(self.PPS)
-			buf.Write([]byte{0,0,1})
-			buf.Write(data)
+		var nalus [][]byte
+		if ok, _nalus := h264parser.SplitNALUs(data); ok {
+			nalus = _nalus
 		} else {
-			buf.Write([]byte{0,0,0,1,0x9,0xf0,0,0,0,1}) // AUD
-			buf.Write(data)
+			nalus = [][]byte{data}
 		}
+		if isKeyFrame {
+			nalus = append([][]byte{self.SPS, self.PPS}, nalus...)
+		}
+		h264parser.WalkNALUsAnnexb(nalus, func(b []byte) {
+			buf.Write(b)
+		})
 
 		self.tsw.RandomAccessIndicator = isKeyFrame
 		self.tsw.PCR = self.tsToPCR(dts)
