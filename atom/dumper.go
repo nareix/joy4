@@ -15,10 +15,13 @@ type Walker interface {
 	EndStruct()
 	Name(string)
 	Int(int)
+	Int64(int64)
+	HexInt(int)
 	Fixed(Fixed)
 	String(string)
 	Bytes([]byte)
 	TimeStamp(TimeStamp)
+	Println(msg ...interface{})
 }
 
 type Dumper struct {
@@ -33,12 +36,12 @@ func (self Dumper) tab() string {
 	return strings.Repeat(" ", self.depth*2)
 }
 
-func (self Dumper) println(msg string) {
-	fmt.Fprintln(self.W, self.tab()+msg)
+func (self Dumper) Println(msg ...interface{}) {
+	fmt.Fprintln(self.W, self.tab()+fmt.Sprint(msg...))
 }
 
 func (self *Dumper) ArrayLeft(i int, n int) {
-	self.println(fmt.Sprintf("... total %d elements", n))
+	self.Println(fmt.Sprintf("... total %d elements", n))
 }
 
 func (self *Dumper) FilterArrayItem(name string, field string, i int, n int) bool {
@@ -53,7 +56,7 @@ func (self *Dumper) EndArray() {
 
 func (self *Dumper) StartStruct(name string) {
 	self.depth++
-	self.println(fmt.Sprintf("[%s]", name))
+	self.Println(fmt.Sprintf("[%s]", name))
 }
 
 func (self *Dumper) EndStruct() {
@@ -65,22 +68,30 @@ func (self *Dumper) Name(name string) {
 }
 
 func (self Dumper) Int(val int) {
-	self.println(fmt.Sprintf("%s: %d", self.name, val))
+	self.Int64(int64(val))
+}
+
+func (self Dumper) Int64(val int64) {
+	self.Println(fmt.Sprintf("%s: %d", self.name, val))
+}
+
+func (self Dumper) HexInt(val int) {
+	self.Println(fmt.Sprintf("%s: %x", self.name, val))
 }
 
 func (self Dumper) String(val string) {
-	self.println(fmt.Sprintf("%s: %s", self.name, val))
+	self.Println(fmt.Sprintf("%s: %s", self.name, val))
 }
 
 func (self Dumper) Fixed(val Fixed) {
-	self.println(fmt.Sprintf("%s: %d", self.name, FixedToInt(val)))
+	self.Println(fmt.Sprintf("%s: %d", self.name, FixedToInt(val)))
 }
 
 func (self Dumper) Bytes(val []byte) {
-	self.println(fmt.Sprintf("%s: %s", self.name, hex.EncodeToString(val)))
+	self.Println(fmt.Sprintf("%s: %s", self.name, hex.EncodeToString(val)))
 }
 
 func (self Dumper) TimeStamp(val TimeStamp) {
-	self.println(fmt.Sprintf("%s: %d", self.name, int(val)))
+	self.Println(fmt.Sprintf("%s: %d", self.name, int(val)))
 }
 
