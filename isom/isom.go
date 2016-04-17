@@ -81,40 +81,56 @@ var chanConfigTable = []int{
 	0, 1, 2, 3, 4, 5, 6, 8,
 }
 
-func IsADTSPayload(frames []byte) bool {
+func IsADTSFrame(frames []byte) bool {
 	return len(frames) > 7 && frames[0]==0xff&&frames[1]&0xf0==0xf0
 }
 
-func ReadADTSPayload(frames []byte) (config MPEG4AudioConfig, payload []byte, n int, next []byte, err error) {
-	if !IsADTSPayload(frames) {
+func ReadADTSFrame(frame []byte) (config MPEG4AudioConfig, payload []byte, samples int, framelen int, err error) {
+	if !IsADTSFrame(frame) {
 		err = fmt.Errorf("not adts frame")
 		return
 	}
-	config.ObjectType = uint(frames[2]>>6)+1
-	config.SampleRateIndex = uint(frames[2]>>2&0xf)
-	config.ChannelConfig = uint(frames[2]<<2&0x4|frames[3]>>6&0x3)
-	framelen := int(frames[3]&0x3)<<11|int(frames[4])<<3|int(frames[5]>>5)
-	n = (int(frames[6]&0x3)+1)*1024
+	config.ObjectType = uint(frame[2]>>6)+1
+	config.SampleRateIndex = uint(frame[2]>>2&0xf)
+	config.ChannelConfig = uint(frame[2]<<2&0x4|frame[3]>>6&0x3)
+	framelen = int(frame[3]&0x3)<<11|int(frame[4])<<3|int(frame[5]>>5)
+	samples = (int(frame[6]&0x3)+1)*1024
 	hdrlen := 7
-	if frames[1]&0x1 == 0 {
+	if frame[1]&0x1 == 0 {
 		hdrlen = 9
 	}
-	if framelen < hdrlen || len(frames) < framelen {
+	if framelen < hdrlen || len(frame) < framelen {
 		err = fmt.Errorf("invalid adts header length")
 		return
 	}
-	payload = append(payload, frames[hdrlen:framelen]...)
-	next = frames[framelen:]
+	payload = frame[hdrlen:framelen]
 	return
 }
 
-func ExtractADTSPayload(frames []byte) (config MPEG4AudioConfig, payload []byte, total int, err error) {
+func MakeADTSHeader(config MPEG4AudioConfig, samples int, payloadLength int) (header []byte) {
+	payloadLength += 7
+	//AAAAAAAA AAAABCCD EEFFFFGH HHIJKLMM MMMMMMMM MMMOOOOO OOOOOOPP (QQQQQQQQ QQQQQQQQ)
+	header = []byte{0xff,0xf1,0x50,0x80,0x043,0xff,0xcd}
+	//config.ObjectType = uint(frames[2]>>6)+1
+	//config.SampleRateIndex = uint(frames[2]>>2&0xf)
+	//config.ChannelConfig = uint(frames[2]<<2&0x4|frames[3]>>6&0x3)
+	header[2] = (byte(config.ObjectType-1)&0x3)<<6|(byte(config.SampleRateIndex)&0xf)<<2|byte(config.ChannelConfig>>2)&0x1
+	header[3] = header[3]&0x3f|byte(config.ChannelConfig&0x3)<<6
+	header[3] = header[3]&0xfc|byte(payloadLength>>11)&0x3
+	header[4] = byte(payloadLength>>3)
+	header[5] = header[5]&0x1f|(byte(payloadLength)&0x7)<<5
+	header[6] = header[6]&0xfc|byte(samples/1024-1)
+	return
+}
+
+func ExtractADTSFrames(frames []byte) (config MPEG4AudioConfig, payload []byte, samples int, err error) {
 	for len(frames) > 0 {
-		var n int
-		if config, payload, n, frames, err = ReadADTSPayload(frames); err != nil {
+		var n, framelen int
+		if config, payload, n, framelen, err = ReadADTSFrame(frames); err != nil {
 			return
 		}
-		total += n
+		frames = frames[framelen:]
+		samples += n
 	}
 	return
 }
