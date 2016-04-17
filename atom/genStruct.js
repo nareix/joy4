@@ -340,6 +340,72 @@ var atoms = {
 		],
 	},
 
+	movieFrag: {
+		cc4: 'moof',
+		fields: [
+			['$atoms', [
+				['header', '*movieFragHeader'],
+				['tracks', '[]*trackFrag'],
+			]],
+		],
+	},
+
+	trackFragDecodeTime: {
+		cc4: 'tfdt',
+	},
+
+	movieFragHeader: {
+		cc4: 'mfhd',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['seqNum', 'int32'],
+		],
+	},
+
+	trackFrag: {
+		cc4: 'traf',
+		fields: [
+			['$atoms', [
+				['header', '*trackFragHeader'],
+				['decodeTime', '*trackFragDecodeTime'],
+				['run', '*trackFragRun'],
+			]],
+		],
+	},
+
+	trackFragRun: {
+		cc4: 'trun',
+	},
+
+	trackFragHeader: {
+		cc4: 'tfhd',
+	},
+
+	/*
+	// need hand write
+	trackFragRun: {
+		cc4: 'trun',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['sampleCount', 'int32'],
+			['dataOffset', 'int32'],
+			['entries', '[]int32'],
+		],
+	},
+
+	trackFragHeader: {
+		cc4: 'tfhd',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['id', 'int32'],
+			['sampleDescriptionIndex', 'int32'],
+			['_', '[12]byte'],
+		],
+	},
+	*/
 };
 
 var DeclReadFunc = (opts) => {

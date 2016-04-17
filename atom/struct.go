@@ -2475,3 +2475,226 @@ func WalkChunkOffset(w Walker, self *ChunkOffset) {
 	w.EndStruct()
 	return
 }
+
+type MovieFrag struct {
+	Header *MovieFragHeader
+	Tracks []*TrackFrag
+}
+
+func ReadMovieFrag(r *io.LimitedReader) (res *MovieFrag, err error) {
+
+	self := &MovieFrag{}
+	for r.N > 0 {
+		var cc4 string
+		var ar *io.LimitedReader
+		if ar, cc4, err = ReadAtomHeader(r, ""); err != nil {
+			return
+		}
+		switch cc4 {
+		case "mfhd":
+			{
+				if self.Header, err = ReadMovieFragHeader(ar); err != nil {
+					return
+				}
+			}
+		case "traf":
+			{
+				var item *TrackFrag
+				if item, err = ReadTrackFrag(ar); err != nil {
+					return
+				}
+				self.Tracks = append(self.Tracks, item)
+			}
+
+		}
+		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
+			return
+		}
+	}
+	res = self
+	return
+}
+func WriteMovieFrag(w io.WriteSeeker, self *MovieFrag) (err error) {
+
+	var aw *Writer
+	if aw, err = WriteAtomHeader(w, "moof"); err != nil {
+		return
+	}
+	w = aw
+	if self.Header != nil {
+		if err = WriteMovieFragHeader(w, self.Header); err != nil {
+			return
+		}
+	}
+	if self.Tracks != nil {
+		for _, elem := range self.Tracks {
+			if err = WriteTrackFrag(w, elem); err != nil {
+				return
+			}
+		}
+	}
+	if err = aw.Close(); err != nil {
+		return
+	}
+	return
+}
+func WalkMovieFrag(w Walker, self *MovieFrag) {
+
+	w.StartStruct("MovieFrag")
+	if self.Header != nil {
+		WalkMovieFragHeader(w, self.Header)
+	}
+	for i, item := range self.Tracks {
+		if w.FilterArrayItem("MovieFrag", "Tracks", i, len(self.Tracks)) {
+			if item != nil {
+				WalkTrackFrag(w, item)
+			}
+		} else {
+			w.ArrayLeft(i, len(self.Tracks))
+			break
+		}
+	}
+	w.EndStruct()
+	return
+}
+
+type MovieFragHeader struct {
+	Version int
+	Flags   int
+	SeqNum  int
+}
+
+func ReadMovieFragHeader(r *io.LimitedReader) (res *MovieFragHeader, err error) {
+
+	self := &MovieFragHeader{}
+	if self.Version, err = ReadInt(r, 1); err != nil {
+		return
+	}
+	if self.Flags, err = ReadInt(r, 3); err != nil {
+		return
+	}
+	if self.SeqNum, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	res = self
+	return
+}
+func WriteMovieFragHeader(w io.WriteSeeker, self *MovieFragHeader) (err error) {
+
+	var aw *Writer
+	if aw, err = WriteAtomHeader(w, "mfhd"); err != nil {
+		return
+	}
+	w = aw
+	if err = WriteInt(w, self.Version, 1); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Flags, 3); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.SeqNum, 4); err != nil {
+		return
+	}
+	if err = aw.Close(); err != nil {
+		return
+	}
+	return
+}
+func WalkMovieFragHeader(w Walker, self *MovieFragHeader) {
+
+	w.StartStruct("MovieFragHeader")
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Flags")
+	w.Int(self.Flags)
+	w.Name("SeqNum")
+	w.Int(self.SeqNum)
+	w.EndStruct()
+	return
+}
+
+type TrackFrag struct {
+	Header     *TrackFragHeader
+	DecodeTime *TrackFragDecodeTime
+	Run        *TrackFragRun
+}
+
+func ReadTrackFrag(r *io.LimitedReader) (res *TrackFrag, err error) {
+
+	self := &TrackFrag{}
+	for r.N > 0 {
+		var cc4 string
+		var ar *io.LimitedReader
+		if ar, cc4, err = ReadAtomHeader(r, ""); err != nil {
+			return
+		}
+		switch cc4 {
+		case "tfhd":
+			{
+				if self.Header, err = ReadTrackFragHeader(ar); err != nil {
+					return
+				}
+			}
+		case "tfdt":
+			{
+				if self.DecodeTime, err = ReadTrackFragDecodeTime(ar); err != nil {
+					return
+				}
+			}
+		case "trun":
+			{
+				if self.Run, err = ReadTrackFragRun(ar); err != nil {
+					return
+				}
+			}
+
+		}
+		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
+			return
+		}
+	}
+	res = self
+	return
+}
+func WriteTrackFrag(w io.WriteSeeker, self *TrackFrag) (err error) {
+
+	var aw *Writer
+	if aw, err = WriteAtomHeader(w, "traf"); err != nil {
+		return
+	}
+	w = aw
+	if self.Header != nil {
+		if err = WriteTrackFragHeader(w, self.Header); err != nil {
+			return
+		}
+	}
+	if self.DecodeTime != nil {
+		if err = WriteTrackFragDecodeTime(w, self.DecodeTime); err != nil {
+			return
+		}
+	}
+	if self.Run != nil {
+		if err = WriteTrackFragRun(w, self.Run); err != nil {
+			return
+		}
+	}
+	if err = aw.Close(); err != nil {
+		return
+	}
+	return
+}
+func WalkTrackFrag(w Walker, self *TrackFrag) {
+
+	w.StartStruct("TrackFrag")
+	if self.Header != nil {
+		WalkTrackFragHeader(w, self.Header)
+	}
+	if self.DecodeTime != nil {
+		WalkTrackFragDecodeTime(w, self.DecodeTime)
+	}
+	if self.Run != nil {
+		WalkTrackFragRun(w, self.Run)
+	}
+	w.EndStruct()
+	return
+}
