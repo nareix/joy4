@@ -145,7 +145,33 @@ func (self *Track) SetTimeScale(timeScale int64) {
 	return
 }
 
-func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byte) (err error) {
+func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, frame []byte) (err error) {
+	if self.Type == AAC && isom.IsADTSFrame(frame) {
+		config := self.mpeg4AudioConfig.Complete()
+		if config.SampleRate == 0 {
+			err = fmt.Errorf("invalid sample rate")
+			return
+		}
+		for len(frame) > 0 {
+			var payload []byte
+			var samples int
+			var framelen int
+			if _, payload, samples, framelen, err = isom.ReadADTSFrame(frame); err != nil {
+				return
+			}
+			delta := int64(samples)*self.TimeScale()/int64(config.SampleRate)
+			pts += delta
+			dts += delta
+			frame = frame[framelen:]
+			if self.writeSample(pts, dts, isKeyFrame, payload); err != nil {
+				return
+			}
+		}
+	}
+	return self.writeSample(pts, dts, isKeyFrame, frame)
+}
+
+func (self *Track) writeSample(pts int64, dts int64, isKeyFrame bool, data []byte) (err error) {
 	var filePos int64
 	sampleSize := len(data)
 	if filePos, err = self.writeMdat(data); err != nil {
