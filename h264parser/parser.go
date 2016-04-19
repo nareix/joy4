@@ -303,6 +303,10 @@ func ParseSPS(data []byte) (self SPSInfo, err error) {
 		R: bytes.NewReader(data),
 	}
 
+	if _, err = r.ReadBits(8); err != nil {
+		return
+	}
+
 	if self.ProfileIdc, err = r.ReadBits(8); err != nil {
 		return
 	}
