@@ -195,9 +195,18 @@ func WalkNALUsAnnexb(nalus [][]byte, write func([]byte)) {
 	return
 }
 
-func SplitNALUs(b []byte) (ok bool, nalus [][]byte) {
+func WalkNALUsAVCC(nalus [][]byte, write func([]byte)) {
+	for _, nalu := range(nalus) {
+		var b [4]byte
+		bits.PutUIntBE(b[:], uint(len(nalu)), 32)
+		write(b[:])
+		write(nalu)
+	}
+}
+
+func SplitNALUs(b []byte) (nalus [][]byte, ok bool) {
 	if len(b) < 4 {
-		return
+		return [][]byte{b}, false
 	}
 
 	val3 := bits.GetUIntBE(b, 24)
@@ -262,10 +271,12 @@ func SplitNALUs(b []byte) (ok bool, nalus [][]byte) {
 		}
 		if len(b) == 0 {
 			ok = true
+			return
+		} else {
+			return [][]byte{b}, false
 		}
-		return
 	}
 
-	return
+	return [][]byte{b}, false
 }
 

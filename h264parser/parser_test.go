@@ -11,13 +11,13 @@ func TestParser(t *testing.T) {
 	var nalus [][]byte
 
 	annexbFrame, _ := hex.DecodeString("000001223322330000000122332233223300000133000001000001")
-	ok, nalus = SplitNALUs(annexbFrame)
+	nalus, ok = SplitNALUs(annexbFrame)
 	t.Log(ok, len(nalus))
 
 	avccFrame, _ := hex.DecodeString(
 		"00000008aabbccaabbccaabb00000001aa",
 	)
-	ok, nalus = SplitNALUs(avccFrame)
+	nalus, ok = SplitNALUs(avccFrame)
 	t.Log(ok, len(nalus))
 }
 
