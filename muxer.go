@@ -161,12 +161,7 @@ func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byt
 		}
 		WritePESHeader(buf, pes, 0)
 
-		var nalus [][]byte
-		if ok, _nalus := h264parser.SplitNALUs(data); ok {
-			nalus = _nalus
-		} else {
-			nalus = [][]byte{data}
-		}
+		nalus, _ := h264parser.SplitNALUs(data)
 		if isKeyFrame {
 			nalus = append([][]byte{self.SPS, self.PPS}, nalus...)
 		}
@@ -180,6 +175,7 @@ func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byt
 			return
 		}
 	}
+
 	return
 }
 
