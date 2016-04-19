@@ -118,7 +118,7 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 		}
 	}
 	if !found {
-		err = io.EOF
+		err = fmt.Errorf("stream[%d]: cannot locate sample index in chunk", self.idx)
 		return
 	}
 
@@ -126,7 +126,7 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 		self.sampleOffsetInChunk = int64(self.sampleIndexInChunk * self.sample.SampleSize.SampleSize)
 	} else {
 		if index >= len(self.sample.SampleSize.Entries) {
-			err = io.EOF
+			err = fmt.Errorf("stream[%d]: sample index out of range", self.idx)
 			return
 		}
 		self.sampleOffsetInChunk = int64(0)
@@ -145,6 +145,7 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 		if index >= start && index < start+n {
 			self.sampleIndexInSttsEntry = index - start
 			self.dts += int64((index - start) * entry.Duration)
+			found = true
 			break
 		}
 		start += n
@@ -152,7 +153,7 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 		self.sttsEntryIndex++
 	}
 	if !found {
-		err = io.EOF
+		err = fmt.Errorf("stream[%d]: cannot locate sample index in stts entry", self.idx)
 		return
 	}
 
@@ -164,13 +165,14 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 			n := self.sample.CompositionOffset.Entries[self.cttsEntryIndex].Count
 			if index >= start && index < start+n {
 				self.sampleIndexInCttsEntry = index - start
+				found = true
 				break
 			}
 			start += n
 			self.cttsEntryIndex++
 		}
 		if !found {
-			err = io.EOF
+			err = fmt.Errorf("stream[%d]: cannot locate sample index in ctts entry", self.idx)
 			return
 		}
 	}
@@ -283,9 +285,12 @@ func (self *Stream) sampleCount() int {
 func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
 	var choose *Stream
 	for _, stream := range(self.streams) {
-		if choose == nil || stream.dts < choose.dts {
+		if choose == nil || stream.TsToTime(stream.dts) < choose.TsToTime(choose.dts) {
 			choose = stream
 		}
+	}
+	if false {
+		fmt.Printf("ReadPacket: choose index=%v time=%v\n", choose.idx, choose.TsToTime(choose.dts))
 	}
 	pkt.StreamIdx = choose.idx
 	pkt.Pts, pkt.Dts, pkt.IsKeyFrame, pkt.Data, err = choose.readSample()
@@ -351,9 +356,15 @@ func (self *Stream) duration() float64 {
 	return float64(total) / float64(self.TimeScale())
 }
 
-func (self *Stream) seekToTime(time float64) error {
+func (self *Stream) seekToTime(time float64) (err error) {
 	index := self.timeToSampleIndex(time)
-	return self.setSampleIndex(index)
+	if err = self.setSampleIndex(index); err != nil {
+		return
+	}
+	if false {
+		fmt.Printf("stream[%d]: seekToTime index=%v time=%v cur=%v\n", self.idx, index, time, self.TsToTime(self.dts))
+	}
+	return
 }
 
 func (self *Stream) timeToSampleIndex(time float64) int {
