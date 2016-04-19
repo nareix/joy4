@@ -16,6 +16,13 @@ type Demuxer struct {
 	movieAtom *atom.Movie
 }
 
+func (self *Demuxer) Streams() (streams []av.Stream) {
+	for _, stream := range(self.streams) {
+		streams = append(streams, stream)
+	}
+	return
+}
+
 func (self *Demuxer) ReadHeader() (err error) {
 	var N int64
 	var moov *atom.Movie
@@ -54,10 +61,11 @@ func (self *Demuxer) ReadHeader() (err error) {
 	self.movieAtom = moov
 
 	self.streams = []*Stream{}
-	for _, atrack := range moov.Tracks {
+	for i, atrack := range moov.Tracks {
 		stream := &Stream{
 			trackAtom: atrack,
 			r:         self.R,
+			idx:       i,
 		}
 		if atrack.Media != nil && atrack.Media.Info != nil && atrack.Media.Info.Sample != nil {
 			stream.sample = atrack.Media.Info.Sample
@@ -66,21 +74,25 @@ func (self *Demuxer) ReadHeader() (err error) {
 			err = fmt.Errorf("sample table not found")
 			return
 		}
-		if record := atom.GetAVCDecoderConfRecordByTrack(atrack); record != nil {
-			if len(record.PPS) > 0 {
-				stream.pps = record.PPS[0]
-			}
-			if len(record.SPS) > 0 {
-				stream.sps = record.SPS[0]
-			}
+
+		if avc1 := atom.GetAvc1ConfByTrack(atrack); avc1 != nil {
 			stream.SetType(av.H264)
-			self.streams = append(self.streams, stream)
-		} else if mp4a := atom.GetMp4aDescByTrack(atrack); mp4a != nil && mp4a.Conf != nil {
-			if config, err := isom.ReadElemStreamDescAAC(bytes.NewReader(mp4a.Conf.Data)); err == nil {
-				stream.mpeg4AudioConfig = config.Complete()
-				stream.SetType(av.AAC)
-				self.streams = append(self.streams, stream)
+			if err = stream.SetCodecData(avc1.Data); err != nil {
+				return
 			}
+			self.streams = append(self.streams, stream)
+
+		} else if mp4a := atom.GetMp4aDescByTrack(atrack); mp4a != nil && mp4a.Conf != nil {
+			stream.SetType(av.AAC)
+			var config []byte
+			if config, err = isom.ReadElemStreamDesc(bytes.NewReader(mp4a.Conf.Data)); err != nil {
+				return
+			}
+			if err = stream.SetCodecData(config); err != nil {
+				return
+			}
+			self.streams = append(self.streams, stream)
+
 		}
 	}
 
@@ -250,7 +262,7 @@ func (self *Stream) incSampleIndex() {
 	self.sampleIndex++
 }
 
-func (self *Stream) SampleCount() int {
+func (self *Stream) sampleCount() int {
 	if self.sample.SampleSize.SampleSize == 0 {
 		chunkGroupIndex := 0
 		count := 0
@@ -269,6 +281,23 @@ func (self *Stream) SampleCount() int {
 }
 
 func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
+	var choose *Stream
+	for _, stream := range(self.streams) {
+		if choose == nil || stream.dts < choose.dts {
+			choose = stream
+		}
+	}
+	pkt.StreamIdx = choose.idx
+	pkt.Pts, pkt.Dts, pkt.IsKeyFrame, pkt.Data, err = choose.readSample()
+	return
+}
+
+func (self *Demuxer) SeekToTime(time float64) (err error) {
+	for _, stream := range(self.streams) {
+		if err = stream.seekToTime(time); err != nil {
+			return
+		}
+	}
 	return
 }
 
@@ -314,28 +343,20 @@ func (self *Stream) readSample() (pts int64, dts int64, isKeyFrame bool, data []
 	return
 }
 
-func (self *Stream) Duration() float64 {
+func (self *Stream) duration() float64 {
 	total := int64(0)
 	for _, entry := range self.sample.TimeToSample.Entries {
 		total += int64(entry.Duration * entry.Count)
 	}
-	return float64(total) / float64(self.trackAtom.Media.Header.TimeScale)
+	return float64(total) / float64(self.TimeScale())
 }
 
-func (self *Stream) CurSampleIndex() int {
-	return self.sampleIndex
-}
-
-func (self *Stream) SeekToTime(time float64) error {
-	index := self.TimeToSampleIndex(time)
+func (self *Stream) seekToTime(time float64) error {
+	index := self.timeToSampleIndex(time)
 	return self.setSampleIndex(index)
 }
 
-func (self *Stream) SeekToSampleIndex(index int) error {
-	return self.setSampleIndex(index)
-}
-
-func (self *Stream) TimeToSampleIndex(time float64) int {
+func (self *Stream) timeToSampleIndex(time float64) int {
 	targetTs := self.TimeToTs(time)
 	targetIndex := 0
 
@@ -374,3 +395,4 @@ func (self *Stream) TimeToSampleIndex(time float64) int {
 
 	return targetIndex
 }
+

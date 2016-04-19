@@ -1,14 +1,12 @@
 package atom
 
-func GetAVCDecoderConfRecordByTrack(stream *Track) (record *AVCDecoderConfRecord) {
+func GetAvc1ConfByTrack(stream *Track) (avc1 *Avc1Conf) {
 	if media := stream.Media; media != nil {
 		if info := media.Info; info != nil {
 			if sample := info.Sample; sample != nil {
 				if desc := sample.SampleDesc; desc != nil {
 					if avc1 := desc.Avc1Desc; avc1 != nil {
-						if conf := avc1.Conf; conf != nil {
-							return &conf.Record
-						}
+						return avc1.Conf
 					}
 				}
 			}
@@ -22,9 +20,7 @@ func GetMp4aDescByTrack(stream *Track) (mp4a *Mp4aDesc) {
 		if info := media.Info; info != nil {
 			if sample := info.Sample; sample != nil {
 				if desc := sample.SampleDesc; desc != nil {
-					if mp4a = desc.Mp4aDesc; mp4a != nil {
-						return
-					}
+					return desc.Mp4aDesc
 				}
 			}
 		}

@@ -565,11 +565,11 @@ func WalkTrackHeader(w Walker, self *TrackHeader) {
 }
 
 type HandlerRefer struct {
-	Version   int
-	Flags     int
-	CodecType string
-	SubType   string
-	Name      string
+	Version int
+	Flags   int
+	Type    string
+	SubType string
+	Name    string
 }
 
 func ReadHandlerRefer(r *io.LimitedReader) (res *HandlerRefer, err error) {
@@ -581,7 +581,7 @@ func ReadHandlerRefer(r *io.LimitedReader) (res *HandlerRefer, err error) {
 	if self.Flags, err = ReadInt(r, 3); err != nil {
 		return
 	}
-	if self.CodecType, err = ReadString(r, 4); err != nil {
+	if self.Type, err = ReadString(r, 4); err != nil {
 		return
 	}
 	if self.SubType, err = ReadString(r, 4); err != nil {
@@ -606,7 +606,7 @@ func WriteHandlerRefer(w io.WriteSeeker, self *HandlerRefer) (err error) {
 	if err = WriteInt(w, self.Flags, 3); err != nil {
 		return
 	}
-	if err = WriteString(w, self.CodecType, 4); err != nil {
+	if err = WriteString(w, self.Type, 4); err != nil {
 		return
 	}
 	if err = WriteString(w, self.SubType, 4); err != nil {
@@ -628,7 +628,7 @@ func WalkHandlerRefer(w Walker, self *HandlerRefer) {
 	w.Name("Flags")
 	w.Int(self.Flags)
 	w.Name("Type")
-	w.String(self.CodecType)
+	w.String(self.Type)
 	w.Name("SubType")
 	w.String(self.SubType)
 	w.Name("Name")
@@ -1874,13 +1874,13 @@ func WalkAvc1Desc(w Walker, self *Avc1Desc) {
 }
 
 type Avc1Conf struct {
-	Record AVCDecoderConfRecord
+	Data []byte
 }
 
 func ReadAvc1Conf(r *io.LimitedReader) (res *Avc1Conf, err error) {
 
 	self := &Avc1Conf{}
-	if self.Record, err = ReadAVCDecoderConfRecord(r); err != nil {
+	if self.Data, err = ReadBytes(r, int(r.N)); err != nil {
 		return
 	}
 	res = self
@@ -1893,7 +1893,7 @@ func WriteAvc1Conf(w io.WriteSeeker, self *Avc1Conf) (err error) {
 		return
 	}
 	w = aw
-	if err = WriteAVCDecoderConfRecord(w, self.Record); err != nil {
+	if err = WriteBytes(w, self.Data, len(self.Data)); err != nil {
 		return
 	}
 	if err = aw.Close(); err != nil {
@@ -1904,7 +1904,8 @@ func WriteAvc1Conf(w io.WriteSeeker, self *Avc1Conf) (err error) {
 func WalkAvc1Conf(w Walker, self *Avc1Conf) {
 
 	w.StartStruct("Avc1Conf")
-	WalkAVCDecoderConfRecord(w, self.Record)
+	w.Name("Data")
+	w.Bytes(self.Data)
 	w.EndStruct()
 	return
 }

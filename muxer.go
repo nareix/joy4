@@ -7,6 +7,7 @@ import (
 	"github.com/nareix/mp4/atom"
 	"github.com/nareix/mp4/isom"
 	"github.com/nareix/codec/h264parser"
+	"github.com/nareix/codec/aacparser"
 	"io"
 )
 
@@ -148,12 +149,12 @@ func (self *Muxer) WriteSample(pkt av.Packet) (err error) {
 	pts, dts, isKeyFrame, frame := pkt.Pts, pkt.Dts, pkt.IsKeyFrame, pkt.Data
 	stream := self.streams[pkt.StreamIdx]
 
-	if stream.Type() == av.AAC && isom.IsADTSFrame(frame) {
+	if stream.Type() == av.AAC && aacparser.IsADTSFrame(frame) {
 		for len(frame) > 0 {
 			var payload []byte
 			var samples int
 			var framelen int
-			if _, payload, samples, framelen, err = isom.ReadADTSFrame(frame); err != nil {
+			if _, payload, samples, framelen, err = aacparser.ReadADTSFrame(frame); err != nil {
 				return
 			}
 			delta := int64(samples) * stream.TimeScale() / int64(stream.SampleRate())
@@ -247,7 +248,7 @@ func (self *Muxer) WriteTrailer() (err error) {
 		if err = stream.fillTrackAtom(); err != nil {
 			return
 		}
-		dur := stream.Duration()
+		dur := stream.duration()
 		stream.trackAtom.Header.Duration = int(float64(timeScale) * dur)
 		if dur > maxDur {
 			maxDur = dur
