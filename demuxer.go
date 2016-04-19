@@ -1,21 +1,20 @@
-
 package ts
 
 import (
-	"io"
 	"bytes"
 	"fmt"
-	"github.com/nareix/mp4/isom"
+	"github.com/nareix/codec/aacparser"
+	"io"
 )
 
 type Demuxer struct {
 	R io.Reader
 
-	pat PAT
-	pmt *PMT
-	Tracks []*Track
+	pat       PAT
+	pmt       *PMT
+	Tracks    []*Track
 	TrackH264 *Track
-	TrackAAC *Track
+	TrackAAC  *Track
 }
 
 // ParsePacket() (pid uint, counter int, isStart bool, pts, dst int64, isKeyFrame bool)
@@ -33,7 +32,7 @@ func (self *Demuxer) ReadHeader() (err error) {
 	for {
 		if self.pmt != nil {
 			n := 0
-			for _, track := range(self.Tracks) {
+			for _, track := range self.Tracks {
 				if track.payloadReady {
 					n++
 				}
@@ -58,7 +57,7 @@ func (self *Demuxer) ReadSample() (track *Track, err error) {
 	}
 
 	for {
-		for _, _track := range(self.Tracks) {
+		for _, _track := range self.Tracks {
 			if _track.payloadReady {
 				track = _track
 				return
@@ -87,13 +86,13 @@ func (self *Demuxer) readPacket() (err error) {
 		}
 	} else {
 		if self.pmt == nil {
-			for _, entry := range(self.pat.Entries) {
+			for _, entry := range self.pat.Entries {
 				if entry.ProgramMapPID == header.PID {
 					self.pmt = new(PMT)
 					if *self.pmt, err = ReadPMT(bytes.NewReader(payload)); err != nil {
 						return
 					}
-					for _, info := range(self.pmt.ElementaryStreamInfos) {
+					for _, info := range self.pmt.ElementaryStreamInfos {
 						track := &Track{}
 
 						track.demuxer = self
@@ -113,7 +112,7 @@ func (self *Demuxer) readPacket() (err error) {
 			}
 		} else {
 
-			for _, track := range(self.Tracks) {
+			for _, track := range self.Tracks {
 				if header.PID == track.pid {
 					if err = track.appendPacket(header, payload); err != nil {
 						return
@@ -126,7 +125,7 @@ func (self *Demuxer) readPacket() (err error) {
 	return
 }
 
-func (self *Track) GetMPEG4AudioConfig() isom.MPEG4AudioConfig {
+func (self *Track) GetMPEG4AudioConfig() aacparser.MPEG4AudioConfig {
 	return self.mpeg4AudioConfig
 }
 
@@ -154,7 +153,7 @@ func (self *Track) appendPayload() (err error) {
 
 	if self.Type == AAC {
 		if !self.mpeg4AudioConfig.IsValid() {
-			if self.mpeg4AudioConfig, _, _, _, err = isom.ReadADTSFrame(self.payload); err != nil {
+			if self.mpeg4AudioConfig, _, _, _, err = aacparser.ReadADTSFrame(self.payload); err != nil {
 				return
 			}
 			self.mpeg4AudioConfig = self.mpeg4AudioConfig.Complete()
@@ -200,4 +199,3 @@ func (self *Track) appendPacket(header TSHeader, payload []byte) (err error) {
 
 	return
 }
-

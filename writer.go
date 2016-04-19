@@ -1,17 +1,16 @@
-
 package ts
 
 import (
+	"bytes"
 	"fmt"
 	"io"
-	"bytes"
 )
 
 var DebugWriter = false
 
 func WriteUInt64(w io.Writer, val uint64, n int) (err error) {
 	var b [8]byte
-	for i := n-1; i >= 0; i-- {
+	for i := n - 1; i >= 0; i-- {
 		b[i] = byte(val)
 		val >>= 8
 	}
@@ -51,13 +50,13 @@ func WriteTSHeader(w io.Writer, self TSHeader, dataLength int) (written int, err
 	// Payload flag(1) 0x10
 	// Continuity counter(4)
 
-	flags = 0x47<<24
+	flags = 0x47 << 24
 	flags |= 0x10
 	if self.PayloadUnitStart {
 		flags |= 0x400000
 	}
-	flags |= (self.PID&0x1fff)<<8
-	flags |= self.ContinuityCounter&0xf
+	flags |= (self.PID & 0x1fff) << 8
+	flags |= self.ContinuityCounter & 0xf
 
 	if DebugWriter {
 		fmt.Printf("tsw: pid=%x\n", self.PID)
@@ -94,26 +93,26 @@ func WriteTSHeader(w io.Writer, self TSHeader, dataLength int) (written int, err
 	}
 	written += 4
 
-	if flags & EXT != 0 {
+	if flags&EXT != 0 {
 		var length uint
 
-		// Discontinuity indicator	1	0x80	
-		// Random Access indicator	1	0x40	
-		// Elementary stream priority indicator	1	0x20	
+		// Discontinuity indicator	1	0x80
+		// Random Access indicator	1	0x40
+		// Elementary stream priority indicator	1	0x20
 		// PCR flag	1	0x10
-		// OPCR flag	1	0x08	
+		// OPCR flag	1	0x08
 
 		length = 1 // extFlags
-		if extFlags & PCR != 0 {
+		if extFlags&PCR != 0 {
 			length += 6
 		}
-		if extFlags & OPCR != 0 {
+		if extFlags&OPCR != 0 {
 			length += 6
 		}
 
 		paddingLength := 0
 		// need padding
-		if int(length) + 5 + dataLength < 188 {
+		if int(length)+5+dataLength < 188 {
 			paddingLength = 188 - dataLength - 5 - int(length)
 			length = 188 - uint(dataLength) - 5
 		}
@@ -129,13 +128,13 @@ func WriteTSHeader(w io.Writer, self TSHeader, dataLength int) (written int, err
 			return
 		}
 
-		if extFlags & PCR != 0 {
+		if extFlags&PCR != 0 {
 			if err = WriteUInt64(w, PCRToUInt(self.PCR), 6); err != nil {
 				return
 			}
 		}
 
-		if extFlags & OPCR != 0 {
+		if extFlags&OPCR != 0 {
 			if err = WriteUInt64(w, PCRToUInt(self.OPCR), 6); err != nil {
 				return
 			}
@@ -147,17 +146,17 @@ func WriteTSHeader(w io.Writer, self TSHeader, dataLength int) (written int, err
 			}
 		}
 
-		written += int(length)+1
+		written += int(length) + 1
 	}
 
 	return
 }
 
 type TSWriter struct {
-	W io.Writer
+	W   io.Writer
 	PID uint
 	TSHeader
-	DisableHeaderPadding bool
+	DisableHeaderPadding   bool
 	DiscontinuityIndicator bool
 
 	vecw *vecWriter
@@ -192,8 +191,8 @@ func (self *TSWriter) WriteIovec(data *iovec) (err error) {
 func (self *TSWriter) WriteIovecTo(w io.Writer, data *iovec) (err error) {
 	for i := 0; data.Len > 0; i++ {
 		header := TSHeader{
-			PID: self.PID,
-			ContinuityCounter: self.ContinuityCounter,
+			PID:                    self.PID,
+			ContinuityCounter:      self.ContinuityCounter,
 			DiscontinuityIndicator: self.DiscontinuityIndicator,
 		}
 
@@ -214,7 +213,7 @@ func (self *TSWriter) WriteIovecTo(w io.Writer, data *iovec) (err error) {
 		}
 		payloadLength := 188 - headerLength
 		if self.DisableHeaderPadding && data.Len < payloadLength {
-			data.Append(makeRepeatValBytes(0xff, payloadLength - data.Len))
+			data.Append(makeRepeatValBytes(0xff, payloadLength-data.Len))
 		}
 
 		if DebugWriter {
@@ -267,8 +266,8 @@ func WritePSI(w io.Writer, self PSI, data []byte) (err error) {
 
 	// section_syntax_indicator(1)=1,private_bit(1)=0,reserved(2)=3,unused(2)=0,section_length(10)
 	var flags, length uint
-	length = 2+3+4+uint(len(data))
-	flags = 0xa<<12|length
+	length = 2 + 3 + 4 + uint(len(data))
+	flags = 0xa<<12 | length
 	if err = WriteUInt(cw, flags, 2); err != nil {
 		return
 	}
@@ -283,7 +282,7 @@ func WritePSI(w io.Writer, self PSI, data []byte) (err error) {
 	}
 
 	// resverd(2)=3,version(5)=0,Current_next_indicator(1)=1
-	flags = 0x3<<6|1
+	flags = 0x3<<6 | 1
 	if err = WriteUInt(cw, flags, 1); err != nil {
 		return
 	}
@@ -312,7 +311,7 @@ func WritePSI(w io.Writer, self PSI, data []byte) (err error) {
 }
 
 func bswap32(v uint) uint {
-	return (v>>24)|((v>>16)&0xff)<<8|((v>>8)&0xff)<<16|(v&0xff)<<24
+	return (v >> 24) | ((v>>16)&0xff)<<8 | ((v>>8)&0xff)<<16 | (v&0xff)<<24
 }
 
 func WritePESHeader(w io.Writer, self PESHeader, dataLength int) (err error) {
@@ -340,8 +339,8 @@ func WritePESHeader(w io.Writer, self PESHeader, dataLength int) (err error) {
 		return
 	}
 
-	const PTS = 1<<7
-	const DTS = 1<<6
+	const PTS = 1 << 7
+	const DTS = 1 << 6
 
 	if self.PTS != 0 {
 		pts_dts_flags |= PTS
@@ -350,10 +349,10 @@ func WritePESHeader(w io.Writer, self PESHeader, dataLength int) (err error) {
 		}
 	}
 
-	if pts_dts_flags & PTS != 0 {
+	if pts_dts_flags&PTS != 0 {
 		header_length += 5
 	}
-	if pts_dts_flags & DTS != 0 {
+	if pts_dts_flags&DTS != 0 {
 		header_length += 5
 	}
 
@@ -361,8 +360,8 @@ func WritePESHeader(w io.Writer, self PESHeader, dataLength int) (err error) {
 		packet_length = uint(dataLength) + header_length + 3
 	}
 	// packet_length(16) if zero then variable length
-	// Specifies the number of bytes remaining in the packet after this field. Can be zero. 
-	// If the PES packet length is set to zero, the PES packet can be of any length. 
+	// Specifies the number of bytes remaining in the packet after this field. Can be zero.
+	// If the PES packet length is set to zero, the PES packet can be of any length.
 	// A value of zero for the PES packet length can be used only when the PES packet payload is a video elementary stream.
 	if err = WriteUInt(w, packet_length, 2); err != nil {
 		return
@@ -385,8 +384,8 @@ func WritePESHeader(w io.Writer, self PESHeader, dataLength int) (err error) {
 
 	// pts(40)?
 	// dts(40)?
-	if pts_dts_flags & PTS != 0 {
-		if pts_dts_flags & DTS != 0 {
+	if pts_dts_flags&PTS != 0 {
+		if pts_dts_flags&DTS != 0 {
 			if err = WriteUInt64(w, PESTsToUInt(self.PTS)|3<<36, 5); err != nil {
 				return
 			}
@@ -447,8 +446,8 @@ func WritePAT(w io.Writer, self PAT) (err error) {
 
 func WritePATPacket(w io.Writer, pat PAT) (err error) {
 	tsw := &TSWriter{
-		W: w,
-		PID: 0,
+		W:                    w,
+		PID:                  0,
 		DisableHeaderPadding: true,
 	}
 	bw := &bytes.Buffer{}
@@ -529,8 +528,8 @@ func WritePMT(w io.Writer, self PMT) (err error) {
 		return
 	}
 
-	psi := PSI {
-		TableId: 2,
+	psi := PSI{
+		TableId:          2,
 		TableIdExtension: 1,
 	}
 	if err = WritePSI(w, psi, bw.Bytes()); err != nil {
@@ -542,8 +541,8 @@ func WritePMT(w io.Writer, self PMT) (err error) {
 
 func WritePMTPacket(w io.Writer, pmt PMT, pid uint) (err error) {
 	tsw := &TSWriter{
-		W: w,
-		PID: pid,
+		W:                    w,
+		PID:                  pid,
 		DisableHeaderPadding: true,
 	}
 	bw := &bytes.Buffer{}
@@ -557,14 +556,14 @@ func WritePMTPacket(w io.Writer, pmt PMT, pid uint) (err error) {
 }
 
 type SimpleH264Writer struct {
-	W io.Writer
+	W         io.Writer
 	TimeScale int
 
 	SPS []byte
 	PPS []byte
 
-	tswPAT *TSWriter
-	tswPMT *TSWriter
+	tswPAT  *TSWriter
+	tswPMT  *TSWriter
 	tswH264 *TSWriter
 
 	PTS int64
@@ -668,7 +667,7 @@ func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, nalu []byte) (e
 
 	pes := PESHeader{
 		StreamId: StreamIdH264,
-		PTS: uint64(self.PTS)*PTS_HZ/uint64(self.TimeScale),
+		PTS:      uint64(self.PTS) * PTS_HZ / uint64(self.TimeScale),
 	}
 	if err = WritePESHeader(self.pesBuf, pes, 0); err != nil {
 		return
@@ -679,16 +678,16 @@ func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, nalu []byte) (e
 	for i, nalu := range nalus {
 		var startCode []byte
 		if i == 0 {
-			startCode = []byte{0,0,0,1,0x9,0xf0,0,0,0,1} // AUD
+			startCode = []byte{0, 0, 0, 1, 0x9, 0xf0, 0, 0, 0, 1} // AUD
 		} else {
-			startCode = []byte{0,0,1}
+			startCode = []byte{0, 0, 1}
 		}
 		data.Append(startCode)
 		data.Append(nalu)
 	}
 
 	self.tswH264.RandomAccessIndicator = sync
-	self.tswH264.PCR = uint64(self.PCR)*PCR_HZ/uint64(self.TimeScale)
+	self.tswH264.PCR = uint64(self.PCR) * PCR_HZ / uint64(self.TimeScale)
 
 	self.tswH264.W = self.W
 	if err = self.tswH264.WriteIovec(data); err != nil {
@@ -701,4 +700,3 @@ func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, nalu []byte) (e
 
 	return
 }
-

@@ -1,20 +1,19 @@
-
 package ts
 
 import (
-	"io"
-	"os"
-	"net"
 	"fmt"
-	"unsafe"
+	"io"
+	"net"
+	"os"
 	"syscall"
+	"unsafe"
 )
 
 type iovec struct {
 	data [][]byte
-	Len int
-	pos int
-	idx int
+	Len  int
+	pos  int
+	idx  int
 }
 
 func (self *iovec) Prepend(b []byte) {
@@ -57,13 +56,13 @@ func (self *iovec) WriteTo(w io.Writer, n int) (written int, err error) {
 
 type sysiovec struct {
 	Base uintptr
-	Len uint64
+	Len  uint64
 }
 
 type vecWriter struct {
-	fd uintptr
+	fd            uintptr
 	smallBytesBuf []byte
-	iov []sysiovec
+	iov           []sysiovec
 }
 
 func (self *vecWriter) Write(p []byte) (written int, err error) {
@@ -134,4 +133,3 @@ func newVecWriter(w io.Writer) (vecw *vecWriter) {
 	}
 	return
 }
-

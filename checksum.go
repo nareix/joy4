@@ -1,13 +1,12 @@
-
 package ts
 
 import (
-	"io"
-	"fmt"
 	"encoding/hex"
+	"fmt"
+	"io"
 )
 
-var ieeeCrc32Tbl = []uint32 {
+var ieeeCrc32Tbl = []uint32{
 	0x00000000, 0xB71DC104, 0x6E3B8209, 0xD926430D, 0xDC760413, 0x6B6BC517,
 	0xB24D861A, 0x0550471E, 0xB8ED0826, 0x0FF0C922, 0xD6D68A2F, 0x61CB4B2B,
 	0x649B0C35, 0xD386CD31, 0x0AA08E3C, 0xBDBD4F38, 0x70DB114C, 0xC7C6D048,
@@ -55,13 +54,13 @@ var ieeeCrc32Tbl = []uint32 {
 
 func updateIeeeCrc32(crc uint32, data []byte) uint32 {
 	for _, b := range data {
-		crc = ieeeCrc32Tbl[b^byte(crc)]^(crc>>8)
+		crc = ieeeCrc32Tbl[b^byte(crc)] ^ (crc >> 8)
 	}
 	return crc
 }
 
 type Crc32Reader struct {
-	R io.Reader
+	R     io.Reader
 	Crc32 uint32
 }
 
@@ -90,7 +89,7 @@ func (self *Crc32Reader) ReadCrc32UIntAndCheck() (err error) {
 }
 
 type Crc32Writer struct {
-	W io.Writer
+	W     io.Writer
 	Crc32 uint32
 }
 
@@ -101,4 +100,3 @@ func (self *Crc32Writer) Write(b []byte) (n int, err error) {
 	self.Crc32 = updateIeeeCrc32(self.Crc32, b)
 	return
 }
-

@@ -1,4 +1,3 @@
-
 package ts
 
 import (
@@ -32,7 +31,7 @@ func ReadUInt64(r io.Reader, n int) (res uint64, err error) {
 		if res32, err = ReadUInt(r, n-4); err != nil {
 			return
 		}
-		res |= uint64(res32)<<32
+		res |= uint64(res32) << 32
 		n = 4
 	}
 	if res32, err = ReadUInt(r, n); err != nil {
@@ -59,9 +58,9 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 
 	if DebugReader {
 		fmt.Printf("ts: flags %s\n", FieldsDumper{
-			Fields: []struct{
+			Fields: []struct {
 				Length int
-				Desc string
+				Desc   string
 			}{
 				{8, "sync"},
 				{1, "transport_error_indicator"},
@@ -73,17 +72,17 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 				{1, "payload_flag"},
 				{4, "continuity_counter"},
 			},
-			Val: flags,
+			Val:    flags,
 			Length: 32,
 		})
 	}
 
-	if flags & 0x400000 != 0 {
+	if flags&0x400000 != 0 {
 		//  When set to '1' it indicates that this TS packet contains the first PES packet.
 		self.PayloadUnitStart = true
 	}
 
-	if (flags & 0xff000000) >> 24 != 0x47 {
+	if (flags&0xff000000)>>24 != 0x47 {
 		err = fmt.Errorf("invalid sync")
 		return
 	}
@@ -91,7 +90,7 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 	self.PID = (flags & 0x1fff00) >> 8
 	self.ContinuityCounter = flags & 0xf
 
-	if flags & 0x20 != 0 {
+	if flags&0x20 != 0 {
 		var flags, length uint
 		if length, err = ReadUInt(r, 1); err != nil {
 			return
@@ -104,9 +103,9 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 
 			if DebugReader {
 				fmt.Printf("ts: ext_flags %s\n", FieldsDumper{
-					Fields: []struct{
+					Fields: []struct {
 						Length int
-						Desc string
+						Desc   string
 					}{
 						{1, "discontinuity_indicator"},
 						{1, "random_access_indicator"},
@@ -117,18 +116,18 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 						{1, "transport_private_data_flag"},
 						{1, "adaptation_field_extension_flag"},
 					},
-					Val: flags,
+					Val:    flags,
 					Length: 8,
 				})
 			}
 
 			// random_access_indicator
-			if flags & 0x40 != 0 {
+			if flags&0x40 != 0 {
 				self.RandomAccessIndicator = true
 			}
 
 			// PCR
-			if flags & 0x10 != 0 {
+			if flags&0x10 != 0 {
 				var v uint64
 				if v, err = ReadUInt64(lr, 6); err != nil {
 					return
@@ -141,7 +140,7 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 			}
 
 			// OPCR
-			if flags & 0x08 != 0 {
+			if flags&0x08 != 0 {
 				var v uint64
 				if v, err = ReadUInt64(lr, 6); err != nil {
 					return
@@ -150,14 +149,14 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 			}
 
 			// Splice countdown
-			if flags & 0x04 != 0 {
+			if flags&0x04 != 0 {
 				if _, err = ReadUInt(lr, 1); err != nil {
 					return
 				}
 			}
 
 			// Transport private data
-			if flags & 0x02 != 0 {
+			if flags&0x02 != 0 {
 				var length uint
 				if length, err = ReadUInt(lr, 1); err != nil {
 					return
@@ -212,7 +211,6 @@ func ReadPSI(r io.Reader) (self PSI, lr *io.LimitedReader, cr *Crc32Reader, err 
 		fmt.Printf("psi: pointer=%d\n", pointer)
 	}
 
-
 	if pointer != 0 {
 		if err = ReadDummy(r, int(pointer)); err != nil {
 			return
@@ -253,15 +251,15 @@ func ReadPSI(r io.Reader) (self PSI, lr *io.LimitedReader, cr *Crc32Reader, err 
 
 	if DebugReader {
 		fmt.Printf("psi: %s\n", FieldsDumper{
-			Fields: []struct{
+			Fields: []struct {
 				Length int
-				Desc string
+				Desc   string
 			}{
 				{2, "resverd"},
 				{5, "version"},
 				{1, "current_next_indicator"},
 			},
-			Val: flags,
+			Val:    flags,
 			Length: 8,
 		})
 	}
@@ -328,14 +326,14 @@ func ReadPMT(r io.Reader) (self PMT, err error) {
 
 	if DebugReader {
 		fmt.Printf("pmt: %s\n", FieldsDumper{
-			Fields: []struct{
+			Fields: []struct {
 				Length int
-				Desc string
+				Desc   string
 			}{
 				{3, "reserved"},
 				{13, "pcrpid"},
 			},
-			Val: flags,
+			Val:    flags,
 			Length: 16,
 		})
 	}
@@ -374,14 +372,14 @@ func ReadPMT(r io.Reader) (self PMT, err error) {
 
 		if DebugReader {
 			fmt.Printf("pmt: info1 %s\n", FieldsDumper{
-				Fields: []struct{
+				Fields: []struct {
 					Length int
-					Desc string
+					Desc   string
 				}{
 					{3, "reserved"},
 					{13, "elementary_pid"},
 				},
-				Val: flags,
+				Val:    flags,
 				Length: 16,
 			})
 		}
@@ -395,14 +393,14 @@ func ReadPMT(r io.Reader) (self PMT, err error) {
 
 		if DebugReader {
 			fmt.Printf("pmt: info2 %s\n", FieldsDumper{
-				Fields: []struct{
+				Fields: []struct {
 					Length int
-					Desc string
+					Desc   string
 				}{
 					{6, "reserved"},
 					{10, "es_info_length"},
 				},
-				Val: flags,
+				Val:    flags,
 				Length: 16,
 			})
 		}
@@ -500,7 +498,7 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 	}
 
 	if length == 0 {
-		length = 1<<31
+		length = 1 << 31
 	}
 	lrAll := &io.LimitedReader{R: r, N: int64(length)}
 	lr := lrAll
@@ -517,9 +515,9 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 
 	if DebugReader {
 		fmt.Printf("pes: %s\n", FieldsDumper{
-			Fields: []struct{
+			Fields: []struct {
 				Length int
-				Desc string
+				Desc   string
 			}{
 				{2, "scrambling_control"},
 				{1, "priority"},
@@ -527,7 +525,7 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 				{1, "copyright"},
 				{1, "original_or_copy"},
 			},
-			Val: flags,
+			Val:    flags,
 			Length: 6,
 		})
 	}
@@ -545,9 +543,9 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 
 	if DebugReader {
 		fmt.Printf("pes: %s\n", FieldsDumper{
-			Fields: []struct{
+			Fields: []struct {
 				Length int
-				Desc string
+				Desc   string
 			}{
 				{2, "pts_dts_flags"},
 				{1, "escr_flag"},
@@ -557,7 +555,7 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 				{1, "pes_crc_flag"},
 				{1, "pes_extension_flag"},
 			},
-			Val: flags,
+			Val:    flags,
 			Length: 8,
 		})
 	}
@@ -568,7 +566,7 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 	}
 	lr = &io.LimitedReader{R: lr, N: int64(length)}
 
-	if flags & 0x80 != 0 {
+	if flags&0x80 != 0 {
 		var v uint64
 		if v, err = ReadUInt64(lr, 5); err != nil {
 			return
@@ -580,7 +578,7 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		}
 	}
 
-	if flags & 0x40 != 0 && flags & 0x80 != 0 {
+	if flags&0x40 != 0 && flags&0x80 != 0 {
 		var v uint64
 		if v, err = ReadUInt64(lr, 5); err != nil {
 			return
@@ -592,35 +590,35 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 	}
 
 	// ESCR flag
-	if flags & 0x20 != 0 {
+	if flags&0x20 != 0 {
 		if _, err = ReadUInt64(lr, 6); err != nil {
 			return
 		}
 	}
 
 	// ES rate flag
-	if flags & 0x10 != 0 {
+	if flags&0x10 != 0 {
 		if _, err = ReadUInt64(lr, 3); err != nil {
 			return
 		}
 	}
 
 	// additional copy info flag
-	if flags & 0x04 != 0 {
+	if flags&0x04 != 0 {
 		if _, err = ReadUInt(lr, 1); err != nil {
 			return
 		}
 	}
 
 	// PES CRC flag
-	if flags & 0x02 != 0 {
+	if flags&0x02 != 0 {
 		if _, err = ReadUInt(lr, 2); err != nil {
 			return
 		}
 	}
 
 	// PES extension flag
-	if flags & 0x01 != 0 {
+	if flags&0x01 != 0 {
 		var flags uint
 
 		// PES private data flag(1)
@@ -634,7 +632,7 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		}
 
 		// PES private data flag(1)
-		if flags & 0x80 != 0 {
+		if flags&0x80 != 0 {
 			// if set to 1 16 bytes of user defined data is appended to the header data field
 			if err = ReadDummy(lr, 16); err != nil {
 				return
@@ -642,7 +640,7 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		}
 
 		// pack header field flag(1)
-		if flags & 0x40 != 0 {
+		if flags&0x40 != 0 {
 			// if set to 1 the 8-bit pack field length value is appended to the header data field
 			if err = ReadDummy(lr, 1); err != nil {
 				return
@@ -650,21 +648,21 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		}
 
 		// program packet sequence counter flag(1)
-		if flags & 0x20 != 0 {
+		if flags&0x20 != 0 {
 			if err = ReadDummy(lr, 2); err != nil {
 				return
 			}
 		}
 
 		// P-STD buffer flag(1)
-		if flags & 0x10 != 0 {
+		if flags&0x10 != 0 {
 			if err = ReadDummy(lr, 2); err != nil {
 				return
 			}
 		}
 
 		// PES extension flag 2(1)
-		if flags & 0x01 != 0 {
+		if flags&0x01 != 0 {
 			if err = ReadDummy(lr, 2); err != nil {
 				return
 			}
@@ -684,4 +682,3 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 	res = self
 	return
 }
-

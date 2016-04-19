@@ -1,52 +1,51 @@
-
 package main
 
 import (
-	"bytes"
-	"os"
-	"io"
 	ts "../"
-	"fmt"
-	"encoding/hex"
+	"bytes"
 	"encoding/gob"
-	"runtime/pprof"
+	"encoding/hex"
 	"flag"
+	"fmt"
+	"io"
+	"os"
+	"runtime/pprof"
 )
 
 type GobAllSamples struct {
 	TimeScale int
-	SPS []byte
-	PPS []byte
-	Samples []GobSample
+	SPS       []byte
+	PPS       []byte
+	Samples   []GobSample
 }
 
 type GobSample struct {
 	Duration int
-	Data []byte
-	Sync bool
+	Data     []byte
+	Sync     bool
 }
 
 type Stream struct {
-	PID uint
-	PESHeader *ts.PESHeader
+	PID           uint
+	PESHeader     *ts.PESHeader
 	FirstTSHeader ts.TSHeader
-	Title string
-	Data bytes.Buffer
-	Type uint
-	PCR uint64
+	Title         string
+	Data          bytes.Buffer
+	Type          uint
+	PCR           uint64
 }
 
 type Sample struct {
-	Type uint
-	PCR uint64
-	PTS uint64
-	DTS uint64
-	Data []byte
+	Type                  uint
+	PCR                   uint64
+	PTS                   uint64
+	DTS                   uint64
+	Data                  []byte
 	RandomAccessIndicator bool
 }
 
 var (
-	debugData = true
+	debugData   = true
 	debugStream = true
 )
 
@@ -75,7 +74,7 @@ func readSamples(filename string, ch chan Sample) {
 		stream, _ = streams[pid]
 		if stream == nil {
 			stream = &Stream{
-				PID: pid,
+				PID:  pid,
 				Type: info.StreamType,
 			}
 			if stream.Type == ts.ElementaryStreamTypeH264 {
@@ -99,9 +98,9 @@ func readSamples(filename string, ch chan Sample) {
 		ch <- Sample{
 			Type: stream.Type,
 			Data: stream.Data.Bytes(),
-			PTS: stream.PESHeader.PTS,
-			DTS: stream.PESHeader.DTS,
-			PCR: stream.FirstTSHeader.PCR,
+			PTS:  stream.PESHeader.PTS,
+			DTS:  stream.PESHeader.DTS,
+			PCR:  stream.FirstTSHeader.PCR,
 			RandomAccessIndicator: stream.FirstTSHeader.RandomAccessIndicator,
 		}
 	}
@@ -157,7 +156,7 @@ func readSamples(filename string, ch chan Sample) {
 			}
 		}
 
-		for _, entry := range(pat.Entries) {
+		for _, entry := range pat.Entries {
 			if entry.ProgramMapPID == header.PID {
 				//fmt.Println("matchs", entry)
 				if pmt, err = ts.ReadPMT(pr); err != nil {
@@ -167,7 +166,7 @@ func readSamples(filename string, ch chan Sample) {
 			}
 		}
 
-		for _, info = range(pmt.ElementaryStreamInfos) {
+		for _, info = range pmt.ElementaryStreamInfos {
 			if info.ElementaryPID == header.PID {
 				onStreamPayload()
 			}
@@ -231,7 +230,7 @@ func testInputGob(pathGob string, pathOut string, testSeg bool, writeM3u8 bool) 
 		if sample.Sync {
 			syncCount++
 			if testSeg {
-				if syncCount % 3 == 0 {
+				if syncCount%3 == 0 {
 					filename := fmt.Sprintf("%s.seg%d.ts", pathOut, segCount)
 
 					if debugStream {
@@ -241,7 +240,7 @@ func testInputGob(pathGob string, pathOut string, testSeg bool, writeM3u8 bool) 
 					if m3u8file != nil {
 						info, _ := outfile.Stat()
 						size := info.Size()
-						dur := float64(trackH264.PTS - lastPTS) / float64(allSamples.TimeScale)
+						dur := float64(trackH264.PTS-lastPTS) / float64(allSamples.TimeScale)
 						writeM3U8Item(m3u8file, lastFilename, size, dur)
 					}
 
@@ -353,8 +352,8 @@ func main() {
 
 		pes := ts.PESHeader{
 			StreamId: streamId,
-			PTS: sample.PTS,
-			DTS: sample.DTS,
+			PTS:      sample.PTS,
+			DTS:      sample.DTS,
 		}
 		w.PID = pid
 		w.PCR = sample.PCR
@@ -369,7 +368,7 @@ func main() {
 		writePAT()
 		writePMT()
 		w = &ts.TSWriter{
-			W: file,
+			W:   file,
 			PID: 0x100,
 		}
 		w.EnableVecWriter()
@@ -395,4 +394,3 @@ func main() {
 	}
 
 }
-

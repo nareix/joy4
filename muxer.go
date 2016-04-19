@@ -1,21 +1,20 @@
-
 package ts
 
 import (
 	"bytes"
 	"fmt"
-	"io"
-	"github.com/nareix/mp4/isom"
 	"github.com/nareix/codec/h264parser"
+	"github.com/nareix/codec/aacparser"
+	"io"
 )
 
 type Muxer struct {
-	W io.Writer
-	tswPAT *TSWriter
-	tswPMT *TSWriter
+	W           io.Writer
+	tswPAT      *TSWriter
+	tswPMT      *TSWriter
 	elemStreams []ElementaryStreamInfo
-	TrackH264 *Track
-	Tracks []*Track
+	TrackH264   *Track
+	Tracks      []*Track
 }
 
 func (self *Muxer) newTrack(pid uint, streamId uint) (track *Track) {
@@ -66,7 +65,7 @@ func (self *Muxer) WriteHeader() (err error) {
 	}
 	WritePAT(bufPAT, pat)
 	pmt := PMT{
-		PCRPID: 0x100,
+		PCRPID:                0x100,
 		ElementaryStreamInfos: self.elemStreams,
 	}
 	WritePMT(bufPMT, pmt)
@@ -87,7 +86,7 @@ func (self *Muxer) WriteHeader() (err error) {
 	}
 
 	// about to remove
-	for _, track := range(self.Tracks) {
+	for _, track := range self.Tracks {
 		track.spsHasWritten = false
 	}
 
@@ -106,20 +105,20 @@ func (self *Track) TimeScale() int64 {
 	return self.timeScale
 }
 
-func (self *Track) SetMPEG4AudioConfig(config isom.MPEG4AudioConfig) {
+func (self *Track) SetMPEG4AudioConfig(config aacparser.MPEG4AudioConfig) {
 	self.mpeg4AudioConfig = config
 }
 
 func (self *Track) tsToPesTs(ts int64) uint64 {
-	return uint64(ts)*PTS_HZ/uint64(self.timeScale)+PTS_HZ
+	return uint64(ts)*PTS_HZ/uint64(self.timeScale) + PTS_HZ
 }
 
 func (self *Track) tsToPCR(ts int64) uint64 {
-	return uint64(ts)*PCR_HZ/uint64(self.timeScale)+PCR_HZ
+	return uint64(ts)*PCR_HZ/uint64(self.timeScale) + PCR_HZ
 }
 
 func (self *Track) tsToTime(ts int64) float64 {
-	return float64(ts)/float64(self.timeScale)
+	return float64(ts) / float64(self.timeScale)
 }
 
 func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byte) (err error) {
@@ -129,8 +128,8 @@ func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byt
 
 	if self.Type == AAC {
 
-		if !isom.IsADTSFrame(data) {
-			data = append(isom.MakeADTSHeader(self.mpeg4AudioConfig, 1024, len(data)), data...)
+		if !aacparser.IsADTSFrame(data) {
+			data = append(aacparser.MakeADTSHeader(self.mpeg4AudioConfig, 1024, len(data)), data...)
 		}
 		if false {
 			fmt.Printf("WriteSample=%x\n", data[:5])
@@ -139,7 +138,7 @@ func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byt
 		buf := &bytes.Buffer{}
 		pes := PESHeader{
 			StreamId: self.streamId,
-			PTS: self.tsToPesTs(pts),
+			PTS:      self.tsToPesTs(pts),
 		}
 		WritePESHeader(buf, pes, len(data))
 		buf.Write(data)
@@ -154,7 +153,7 @@ func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byt
 		buf := &bytes.Buffer{}
 		pes := PESHeader{
 			StreamId: self.streamId,
-			PTS: self.tsToPesTs(pts),
+			PTS:      self.tsToPesTs(pts),
 		}
 		if dts != pts {
 			pes.DTS = self.tsToPesTs(dts)
@@ -182,17 +181,17 @@ func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byt
 /* about to remove */
 
 func (self *Track) setPCR() {
-	self.tsw.PCR = uint64(self.PTS)*PCR_HZ/uint64(self.timeScale)
+	self.tsw.PCR = uint64(self.PTS) * PCR_HZ / uint64(self.timeScale)
 }
 
-func (self *Track) getPesHeader(dataLength int) (data []byte){
+func (self *Track) getPesHeader(dataLength int) (data []byte) {
 	if self.PTS == 0 {
 		self.PTS = self.timeScale
 	}
 	buf := &bytes.Buffer{}
 	pes := PESHeader{
 		StreamId: self.streamId,
-		PTS: uint64(self.PTS)*PTS_HZ/uint64(self.timeScale),
+		PTS:      uint64(self.PTS) * PTS_HZ / uint64(self.timeScale),
 	}
 	WritePESHeader(buf, pes, dataLength)
 	return buf.Bytes()
@@ -216,9 +215,9 @@ func (self *Track) WriteH264NALU(sync bool, duration int, nalu []byte) (err erro
 	for i, nalu := range nalus {
 		var startCode []byte
 		if i == 0 {
-			startCode = []byte{0,0,0,1,0x9,0xf0,0,0,0,1} // AUD
+			startCode = []byte{0, 0, 0, 1, 0x9, 0xf0, 0, 0, 0, 1} // AUD
 		} else {
-			startCode = []byte{0,0,1}
+			startCode = []byte{0, 0, 1}
 		}
 		data.Append(startCode)
 		data.Append(nalu)
@@ -252,4 +251,3 @@ func (self *Track) WriteADTSAACFrame(duration int, frame []byte) (err error) {
 	self.incPTS(duration)
 	return
 }
-
