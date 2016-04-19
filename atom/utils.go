@@ -1,8 +1,7 @@
-
 package atom
 
-func GetAVCDecoderConfRecordByTrack(track *Track) (record *AVCDecoderConfRecord) {
-	if media := track.Media; media != nil {
+func GetAVCDecoderConfRecordByTrack(stream *Track) (record *AVCDecoderConfRecord) {
+	if media := stream.Media; media != nil {
 		if info := media.Info; info != nil {
 			if sample := info.Sample; sample != nil {
 				if desc := sample.SampleDesc; desc != nil {
@@ -18,8 +17,8 @@ func GetAVCDecoderConfRecordByTrack(track *Track) (record *AVCDecoderConfRecord)
 	return
 }
 
-func GetMp4aDescByTrack(track *Track) (mp4a *Mp4aDesc) {
-	if media := track.Media; media != nil {
+func GetMp4aDescByTrack(stream *Track) (mp4a *Mp4aDesc) {
+	if media := stream.Media; media != nil {
 		if info := media.Info; info != nil {
 			if sample := info.Sample; sample != nil {
 				if desc := sample.SampleDesc; desc != nil {
@@ -32,4 +31,3 @@ func GetMp4aDescByTrack(track *Track) (mp4a *Mp4aDesc) {
 	}
 	return
 }
-

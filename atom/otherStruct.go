@@ -3,8 +3,8 @@ package atom
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"github.com/nareix/bits"
+	"io"
 )
 
 type H264SPSInfo struct {
@@ -363,14 +363,14 @@ const (
 )
 
 type TrackFragHeader struct {
-	Version   int
-	Flags     int
-	Id        int
-	DefaultSize      int
-	DefaultDuration  int
-	DefaultFlags int
-	BaseDataOffset int64
-	StsdId int
+	Version         int
+	Flags           int
+	Id              int
+	DefaultSize     int
+	DefaultDuration int
+	DefaultFlags    int
+	BaseDataOffset  int64
+	StsdId          int
 }
 
 func WalkTrackFragHeader(w Walker, self *TrackFragHeader) {
@@ -431,7 +431,7 @@ func ReadTrackFragHeader(r *io.LimitedReader) (res *TrackFragHeader, err error) 
 	}
 
 	if self.Flags&TFHD_DEFAULT_FLAGS != 0 {
-		if self.DefaultFlags,err = ReadInt(r, 4); err != nil {
+		if self.DefaultFlags, err = ReadInt(r, 4); err != nil {
 			return
 		}
 	}
@@ -617,4 +617,3 @@ func WalkTrackFragDecodeTime(w Walker, self *TrackFragDecodeTime) {
 	w.EndStruct()
 	return
 }
-

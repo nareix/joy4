@@ -1,4 +1,3 @@
-
 package atom
 
 import (
@@ -16,7 +15,7 @@ func WriteBytes(w io.Writer, b []byte, n int) (err error) {
 
 func WriteUInt(w io.Writer, val uint, n int) (err error) {
 	var b [8]byte
-	for i := n-1; i >= 0; i-- {
+	for i := n - 1; i >= 0; i-- {
 		b[i] = byte(val)
 		val >>= 8
 	}
@@ -26,7 +25,7 @@ func WriteUInt(w io.Writer, val uint, n int) (err error) {
 func WriteInt(w io.Writer, val int, n int) (err error) {
 	var uval uint
 	if val < 0 {
-		uval = uint((1<<uint(n*8))+val)
+		uval = uint((1 << uint(n*8)) + val)
 	} else {
 		uval = uint(val)
 	}
@@ -37,7 +36,7 @@ func WriteFixed(w io.Writer, val Fixed, n int) (err error) {
 	var uval uint
 
 	if n == 2 {
-		uval = uint(val)>>8
+		uval = uint(val) >> 8
 	} else if n == 4 {
 		uval = uint(val)
 	} else {
@@ -96,7 +95,7 @@ func (self *Writer) Close() (err error) {
 	if curPos, err = self.Seek(0, 1); err != nil {
 		return
 	}
-	if err = RefillInt(self, self.sizePos, int(curPos - self.sizePos), 4); err != nil {
+	if err = RefillInt(self, self.sizePos, int(curPos-self.sizePos), 4); err != nil {
 		return
 	}
 	if false {
@@ -118,4 +117,3 @@ func WriteAtomHeader(w io.WriteSeeker, cc4 string) (res *Writer, err error) {
 	res = self
 	return
 }
-

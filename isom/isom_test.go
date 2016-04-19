@@ -46,7 +46,7 @@ func TestReadElemStreamDesc(t *testing.T) {
 	t.Logf("%v n=%d", aconfig.Complete(), n)
 
 	data = MakeADTSHeader(aconfig, 1024*3, 33)
-	data = append(data, []byte{1,2,3,4,5}...)
+	data = append(data, []byte{1, 2, 3, 4, 5}...)
 	t.Logf("%x", data)
 	aconfig, _, n, framelen, err = ReadADTSFrame(data)
 	t.Logf("%v n=%d framelen=%d err=%v", aconfig.Complete(), n, framelen, err)

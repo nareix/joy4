@@ -1,16 +1,15 @@
-
 package atom
 
 import (
-	"io"
-	"fmt"
-	"strings"
 	"encoding/hex"
+	"fmt"
+	"io"
+	"strings"
 )
 
 type Walker interface {
-	FilterArrayItem(string,string,int,int) bool
-	ArrayLeft(int,int)
+	FilterArrayItem(string, string, int, int) bool
+	ArrayLeft(int, int)
 	StartStruct(string)
 	EndStruct()
 	Name(string)
@@ -25,9 +24,9 @@ type Walker interface {
 }
 
 type Dumper struct {
-	W io.Writer
-	depth int
-	name string
+	W      io.Writer
+	depth  int
+	name   string
 	arrlen int
 	arridx int
 }
@@ -94,4 +93,3 @@ func (self Dumper) Bytes(val []byte) {
 func (self Dumper) TimeStamp(val TimeStamp) {
 	self.Println(fmt.Sprintf("%s: %d", self.name, int(val)))
 }
-

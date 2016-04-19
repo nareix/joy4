@@ -565,11 +565,11 @@ func WalkTrackHeader(w Walker, self *TrackHeader) {
 }
 
 type HandlerRefer struct {
-	Version int
-	Flags   int
-	Type    string
-	SubType string
-	Name    string
+	Version   int
+	Flags     int
+	CodecType string
+	SubType   string
+	Name      string
 }
 
 func ReadHandlerRefer(r *io.LimitedReader) (res *HandlerRefer, err error) {
@@ -581,7 +581,7 @@ func ReadHandlerRefer(r *io.LimitedReader) (res *HandlerRefer, err error) {
 	if self.Flags, err = ReadInt(r, 3); err != nil {
 		return
 	}
-	if self.Type, err = ReadString(r, 4); err != nil {
+	if self.CodecType, err = ReadString(r, 4); err != nil {
 		return
 	}
 	if self.SubType, err = ReadString(r, 4); err != nil {
@@ -606,7 +606,7 @@ func WriteHandlerRefer(w io.WriteSeeker, self *HandlerRefer) (err error) {
 	if err = WriteInt(w, self.Flags, 3); err != nil {
 		return
 	}
-	if err = WriteString(w, self.Type, 4); err != nil {
+	if err = WriteString(w, self.CodecType, 4); err != nil {
 		return
 	}
 	if err = WriteString(w, self.SubType, 4); err != nil {
@@ -628,7 +628,7 @@ func WalkHandlerRefer(w Walker, self *HandlerRefer) {
 	w.Name("Flags")
 	w.Int(self.Flags)
 	w.Name("Type")
-	w.String(self.Type)
+	w.String(self.CodecType)
 	w.Name("SubType")
 	w.String(self.SubType)
 	w.Name("Name")

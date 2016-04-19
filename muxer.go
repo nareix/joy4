@@ -1,57 +1,54 @@
-
 package mp4
 
 import (
+	"bytes"
+	"fmt"
+	"github.com/nareix/av"
 	"github.com/nareix/mp4/atom"
 	"github.com/nareix/mp4/isom"
 	"io"
-	"bytes"
-	"fmt"
 )
 
 type Muxer struct {
-	W io.WriteSeeker
-	Tracks []*Track
-	TrackH264 *Track
-	TrackAAC *Track
-
+	W          io.WriteSeeker
+	streams    []*Stream
 	mdatWriter *atom.Writer
 }
 
-func (self *Muxer) newTrack() *Track {
-	track := &Track{}
+func (self *Muxer) NewStream() av.Stream {
+	stream := &Stream{}
 
-	track.sample = &atom.SampleTable{
-		SampleDesc: &atom.SampleDesc{},
+	stream.sample = &atom.SampleTable{
+		SampleDesc:   &atom.SampleDesc{},
 		TimeToSample: &atom.TimeToSample{},
 		SampleToChunk: &atom.SampleToChunk{
 			Entries: []atom.SampleToChunkEntry{
 				{
-					FirstChunk: 1,
-					SampleDescId: 1,
+					FirstChunk:      1,
+					SampleDescId:    1,
 					SamplesPerChunk: 1,
 				},
 			},
 		},
-		SampleSize: &atom.SampleSize{},
+		SampleSize:  &atom.SampleSize{},
 		ChunkOffset: &atom.ChunkOffset{},
 	}
 
-	track.TrackAtom = &atom.Track{
+	stream.trackAtom = &atom.Track{
 		Header: &atom.TrackHeader{
-			TrackId: len(self.Tracks)+1,
-			Flags: 0x0003, // Track enabled | Track in movie
-			Duration: 0, // fill later
-			Matrix: [9]int{0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000},
+			TrackId:  len(self.streams) + 1,
+			Flags:    0x0003, // Track enabled | Track in movie
+			Duration: 0,      // fill later
+			Matrix:   [9]int{0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000},
 		},
 		Media: &atom.Media{
 			Header: &atom.MediaHeader{
 				TimeScale: 0, // fill later
-				Duration: 0, // fill later
-				Language: 21956,
+				Duration:  0, // fill later
+				Language:  21956,
 			},
 			Info: &atom.MediaInfo{
-				Sample: track.sample,
+				Sample: stream.sample,
 				Data: &atom.DataInfo{
 					Refer: &atom.DataRefer{
 						Url: &atom.DataReferUrl{
@@ -63,57 +60,86 @@ func (self *Muxer) newTrack() *Track {
 		},
 	}
 
-	track.writeMdat = self.writeMdat
-	self.Tracks = append(self.Tracks, track)
+	stream.writeMdat = self.writeMdat
+	self.streams = append(self.streams, stream)
 
-	return track
+	return stream
 }
 
-func (self *Muxer) AddAACTrack() (track *Track) {
-	track = self.newTrack()
-	self.TrackAAC = track
-	track.Type = AAC
-	track.sample.SampleDesc.Mp4aDesc = &atom.Mp4aDesc{
-		DataRefIdx: 1,
-		NumberOfChannels: 0, // fill later
-		SampleSize: 0, // fill later
-		SampleRate: 0, // fill later
-		Conf: &atom.ElemStreamDesc{},
+func (self *Stream) fillTrackAtom() (err error) {
+	if self.sampleIndex > 0 {
+		self.sttsEntry.Count++
 	}
-	track.TrackAtom.Header.Volume = atom.IntToFixed(1)
-	track.TrackAtom.Header.AlternateGroup = 1
-	track.TrackAtom.Media.Handler = &atom.HandlerRefer{
-		SubType: "soun",
-		Name: "Sound Handler",
-	}
-	track.TrackAtom.Media.Info.Sound = &atom.SoundMediaInfo{}
-	return
-}
 
-func (self *Muxer) AddH264Track() (track *Track) {
-	track = self.newTrack()
-	self.TrackH264 = track
-	track.Type = H264
-	track.sample.SampleDesc.Avc1Desc = &atom.Avc1Desc{
-		DataRefIdx: 1,
-		HorizontalResolution: 72,
-		VorizontalResolution: 72,
-		Width: 0, // fill later
-		Height: 0, // fill later
-		FrameCount: 1,
-		Depth: 24,
-		ColorTableId: -1,
-		Conf: &atom.Avc1Conf{},
+	self.trackAtom.Media.Header.TimeScale = int(self.TimeScale())
+	self.trackAtom.Media.Header.Duration = int(self.lastDts)
+
+	if self.Type() == av.H264 {
+		self.sample.SampleDesc.Avc1Desc.Conf.Record, err = atom.CreateAVCDecoderConfRecord(
+			self.sps,
+			self.pps,
+		)
+		if err != nil {
+			return
+		}
+		var info *atom.H264SPSInfo
+		if info, err = atom.ParseH264SPS(self.sps[1:]); err != nil {
+			return
+		}
+		self.sample.SampleDesc.Avc1Desc = &atom.Avc1Desc{
+			DataRefIdx:           1,
+			HorizontalResolution: 72,
+			VorizontalResolution: 72,
+			Width:                int(info.Width),
+			Height:               int(info.Height),
+			FrameCount:           1,
+			Depth:                24,
+			ColorTableId:         -1,
+			Conf:                 &atom.Avc1Conf{},
+		}
+		self.sample.SyncSample = &atom.SyncSample{}
+		self.trackAtom.Media.Handler = &atom.HandlerRefer{
+			SubType: "vide",
+			Name:    "Video Media Handler",
+		}
+		self.sample.CompositionOffset = &atom.CompositionOffset{}
+		self.trackAtom.Media.Info.Video = &atom.VideoMediaInfo{
+			Flags: 0x000001,
+		}
+		self.trackAtom.Header.TrackWidth = atom.IntToFixed(int(info.Width))
+		self.trackAtom.Header.TrackHeight = atom.IntToFixed(int(info.Height))
+
+	} else if self.Type() == av.AAC {
+		if !self.mpeg4AudioConfig.IsValid() {
+			err = fmt.Errorf("invalie MPEG4AudioConfig")
+			return
+		}
+		buf := &bytes.Buffer{}
+		config := self.mpeg4AudioConfig.Complete()
+		if err = isom.WriteElemStreamDescAAC(buf, config, uint(self.trackAtom.Header.TrackId)); err != nil {
+			return
+		}
+		self.sample.SampleDesc.Mp4aDesc = &atom.Mp4aDesc{
+			DataRefIdx:       1,
+			NumberOfChannels: config.ChannelCount,
+			SampleSize:       config.ChannelCount * 8,
+			SampleRate:       atom.IntToFixed(config.SampleRate),
+			Conf: &atom.ElemStreamDesc{
+				Data: buf.Bytes(),
+			},
+		}
+		self.trackAtom.Header.Volume = atom.IntToFixed(1)
+		self.trackAtom.Header.AlternateGroup = 1
+		self.trackAtom.Media.Handler = &atom.HandlerRefer{
+			SubType: "soun",
+			Name:    "Sound Handler",
+		}
+		self.trackAtom.Media.Info.Sound = &atom.SoundMediaInfo{}
+
+	} else {
+		err = fmt.Errorf("please specify stream type")
 	}
-	track.sample.SyncSample = &atom.SyncSample{}
-	track.TrackAtom.Media.Handler = &atom.HandlerRefer{
-		SubType: "vide",
-		Name: "Video Media Handler",
-	}
-	track.sample.CompositionOffset = &atom.CompositionOffset{}
-	track.TrackAtom.Media.Info.Video = &atom.VideoMediaInfo{
-		Flags: 0x000001,
-	}
+
 	return
 }
 
@@ -132,22 +158,12 @@ func (self *Muxer) WriteHeader() (err error) {
 	return
 }
 
-func (self *Track) SetH264PPSAndSPS(pps, sps []byte) {
-	self.pps, self.sps = pps, sps
-}
+func (self *Muxer) WriteSample(pkt av.Packet) (err error) {
+	pts, dts, isKeyFrame, frame := pkt.Pts, pkt.Dts, pkt.IsKeyFrame, pkt.Data
+	stream := self.streams[pkt.StreamIdx]
 
-func (self *Track) SetMPEG4AudioConfig(config isom.MPEG4AudioConfig) {
-	self.mpeg4AudioConfig = config
-}
-
-func (self *Track) SetTimeScale(timeScale int64) {
-	self.TrackAtom.Media.Header.TimeScale = int(timeScale)
-	return
-}
-
-func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, frame []byte) (err error) {
-	if self.Type == AAC && isom.IsADTSFrame(frame) {
-		config := self.mpeg4AudioConfig.Complete()
+	if stream.Type() == av.AAC && isom.IsADTSFrame(frame) {
+		config := stream.mpeg4AudioConfig.Complete()
 		if config.SampleRate == 0 {
 			err = fmt.Errorf("invalid sample rate")
 			return
@@ -159,19 +175,20 @@ func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, frame []by
 			if _, payload, samples, framelen, err = isom.ReadADTSFrame(frame); err != nil {
 				return
 			}
-			delta := int64(samples)*self.TimeScale()/int64(config.SampleRate)
+			delta := int64(samples) * stream.TimeScale() / int64(config.SampleRate)
 			pts += delta
 			dts += delta
 			frame = frame[framelen:]
-			if self.writeSample(pts, dts, isKeyFrame, payload); err != nil {
+			if stream.writeSample(pts, dts, isKeyFrame, payload); err != nil {
 				return
 			}
 		}
 	}
-	return self.writeSample(pts, dts, isKeyFrame, frame)
+
+	return stream.writeSample(pts, dts, isKeyFrame, frame)
 }
 
-func (self *Track) writeSample(pts int64, dts int64, isKeyFrame bool, data []byte) (err error) {
+func (self *Stream) writeSample(pts int64, dts int64, isKeyFrame bool, data []byte) (err error) {
 	var filePos int64
 	sampleSize := len(data)
 	if filePos, err = self.writeMdat(data); err != nil {
@@ -187,7 +204,7 @@ func (self *Track) writeSample(pts int64, dts int64, isKeyFrame bool, data []byt
 			err = fmt.Errorf("dts must be incremental")
 			return
 		}
-		duration := int(dts-self.lastDts)
+		duration := int(dts - self.lastDts)
 		if self.sttsEntry == nil || duration != self.sttsEntry.Duration {
 			self.sample.TimeToSample.Entries = append(self.sample.TimeToSample.Entries, atom.TimeToSampleEntry{Duration: duration})
 			self.sttsEntry = &self.sample.TimeToSample.Entries[len(self.sample.TimeToSample.Entries)-1]
@@ -200,7 +217,7 @@ func (self *Track) writeSample(pts int64, dts int64, isKeyFrame bool, data []byt
 			err = fmt.Errorf("pts must greater than dts")
 			return
 		}
-		offset := int(pts-dts)
+		offset := int(pts - dts)
 		if self.cttsEntry == nil || offset != self.cttsEntry.Offset {
 			table := self.sample.CompositionOffset
 			table.Entries = append(table.Entries, atom.CompositionOffsetEntry{Offset: offset})
@@ -217,71 +234,30 @@ func (self *Track) writeSample(pts int64, dts int64, isKeyFrame bool, data []byt
 	return
 }
 
-func (self *Track) fillTrackAtom() (err error) {
-	if self.sampleIndex > 0 {
-		self.sttsEntry.Count++
-	}
-
-	if self.Type == H264 {
-		self.sample.SampleDesc.Avc1Desc.Conf.Record, err = atom.CreateAVCDecoderConfRecord(
-			self.sps,
-			self.pps,
-		)
-		if err != nil {
-			return
-		}
-		var info *atom.H264SPSInfo
-		if info, err = atom.ParseH264SPS(self.sps[1:]); err != nil {
-			return
-		}
-		self.sample.SampleDesc.Avc1Desc.Width = int(info.Width)
-		self.sample.SampleDesc.Avc1Desc.Height = int(info.Height)
-		self.TrackAtom.Header.TrackWidth = atom.IntToFixed(int(info.Width))
-		self.TrackAtom.Header.TrackHeight = atom.IntToFixed(int(info.Height))
-		self.TrackAtom.Media.Header.Duration = int(self.lastDts)
-	} else if self.Type == AAC {
-		if !self.mpeg4AudioConfig.IsValid() {
-			err = fmt.Errorf("invalie MPEG4AudioConfig")
-			return
-		}
-		buf := &bytes.Buffer{}
-		config := self.mpeg4AudioConfig.Complete()
-		if err = isom.WriteElemStreamDescAAC(buf, config, uint(self.TrackAtom.Header.TrackId)); err != nil {
-			return
-		}
-		self.sample.SampleDesc.Mp4aDesc.Conf.Data = buf.Bytes()
-		self.sample.SampleDesc.Mp4aDesc.NumberOfChannels = config.ChannelCount
-		self.sample.SampleDesc.Mp4aDesc.SampleSize = config.ChannelCount*8
-		self.sample.SampleDesc.Mp4aDesc.SampleRate = atom.IntToFixed(config.SampleRate)
-		self.TrackAtom.Media.Header.Duration = int(self.lastDts)
-	}
-	return
-}
-
 func (self *Muxer) WriteTrailer() (err error) {
 	moov := &atom.Movie{}
 	moov.Header = &atom.MovieHeader{
-		PreferredRate: atom.IntToFixed(1),
+		PreferredRate:   atom.IntToFixed(1),
 		PreferredVolume: atom.IntToFixed(1),
-		Matrix: [9]int{0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000},
-		NextTrackId: 2,
+		Matrix:          [9]int{0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000},
+		NextTrackId:     2,
 	}
 
 	maxDur := float64(0)
 	timeScale := 10000
-	for _, track := range(self.Tracks) {
-		if err = track.fillTrackAtom(); err != nil {
+	for _, stream := range self.streams {
+		if err = stream.fillTrackAtom(); err != nil {
 			return
 		}
-		dur := track.Duration()
-		track.TrackAtom.Header.Duration = int(float64(timeScale)*dur)
+		dur := stream.Duration()
+		stream.trackAtom.Header.Duration = int(float64(timeScale) * dur)
 		if dur > maxDur {
 			maxDur = dur
 		}
-		moov.Tracks = append(moov.Tracks, track.TrackAtom)
+		moov.Tracks = append(moov.Tracks, stream.trackAtom)
 	}
 	moov.Header.TimeScale = timeScale
-	moov.Header.Duration = int(float64(timeScale)*maxDur)
+	moov.Header.Duration = int(float64(timeScale) * maxDur)
 
 	if err = self.mdatWriter.Close(); err != nil {
 		return
@@ -292,226 +268,3 @@ func (self *Muxer) WriteTrailer() (err error) {
 
 	return
 }
-
-/*
-type SimpleH264Writer struct {
-	W io.WriteSeeker
-
-	TimeScale int
-	sps []byte
-	pps []byte
-
-	Width int
-	Height int
-
-	duration int
-
-	sample *atom.SampleTable
-	sampleToChunk *atom.SampleToChunkEntry
-	sampleIdx int
-	timeToSample *atom.TimeToSampleEntry
-
-	mdatWriter *atom.Writer
-}
-
-func (self *SimpleH264Writer) prepare() (err error) {
-	if self.mdatWriter, err = atom.WriteAtomHeader(self.W, "mdat"); err != nil {
-		return
-	}
-
-	if len(self.sps) == 0 {
-		err = fmt.Errorf("invalid sps")
-		return
-	}
-
-	if len(self.pps) == 0 {
-		err = fmt.Errorf("invalid pps")
-		return
-	}
-
-	if self.Width == 0 || self.Height == 0 {
-		var info *atom.H264spsInfo
-		if info, err = atom.ParseH264sps(self.sps[1:]); err != nil {
-			return
-		}
-		self.Width = int(info.Width)
-		self.Height = int(info.Height)
-	}
-
-	self.sampleIdx = 1
-
-	self.sample = &atom.SampleTable{
-		SampleDesc: &atom.SampleDesc{
-			Avc1Desc: &atom.Avc1Desc{
-				DataRefIdx: 1,
-				HorizontalResolution: 72,
-				VorizontalResolution: 72,
-				Width: self.Width,
-				Height: self.Height,
-				FrameCount: 1,
-				Depth: 24,
-				ColorTableId: -1,
-				Conf: &atom.Avc1Conf{},
-			},
-		},
-		TimeToSample: &atom.TimeToSample{},
-		SampleToChunk: &atom.SampleToChunk{
-			Entries: []atom.SampleToChunkEntry{
-				{
-					FirstChunk: 1,
-					SampleDescId: 1,
-				},
-			},
-		},
-		SampleSize: &atom.SampleSize{},
-		ChunkOffset: &atom.ChunkOffset{
-			Entries: []int{8},
-		},
-		SyncSample: &atom.SyncSample{},
-	}
-	self.sampleToChunk = &self.sample.SampleToChunk.Entries[0]
-
-	return
-}
-
-func (self *SimpleH264Writer) WriteSample(sync bool, duration int, data []byte) (err error) {
-	return self.writeSample(false, sync, duration, data)
-}
-
-func (self *SimpleH264Writer) WriteNALU(sync bool, duration int, data []byte) (err error) {
-	return self.writeSample(true, sync, duration, data)
-}
-
-func splitNALUByStartCode(data []byte) (out [][]byte) {
-	last := 0
-	for i := 0; i < len(data)-3; {
-		if data[i] == 0 && data[i+1] == 0 && data[i+2] == 1 {
-			out = append(out, data[last:i])
-			i += 3
-			last = i
-		} else {
-			i++
-		}
-	}
-	out = append(out, data[last:])
-	return
-}
-
-func (self *SimpleH264Writer) writeSample(isNALU, sync bool, duration int, data []byte) (err error) {
-	if self.mdatWriter == nil {
-		if err = self.prepare(); err != nil {
-			return
-		}
-	}
-
-	var sampleSize int
-
-	if isNALU {
-		if sampleSize, err = atom.WriteSampleByNALU(self.mdatWriter, data); err != nil {
-			return
-		}
-	} else {
-		sampleSize = len(data)
-		if _, err = self.mdatWriter.Write(data); err != nil {
-			return
-		}
-	}
-
-	if sync {
-		self.sample.SyncSample.Entries = append(self.sample.SyncSample.Entries, self.sampleIdx)
-	}
-
-	if self.timeToSample != nil && duration != self.timeToSample.Duration {
-		self.sample.TimeToSample.Entries = append(self.sample.TimeToSample.Entries, *self.timeToSample)
-		self.timeToSample = nil
-	}
-	if self.timeToSample == nil {
-		self.timeToSample = &atom.TimeToSampleEntry{
-			Duration: duration,
-		}
-	}
-
-	self.duration += duration
-	self.sampleIdx++
-	self.timeToSample.Count++
-	self.sampleToChunk.SamplesPerChunk++
-	self.sample.SampleSize.Entries = append(self.sample.SampleSize.Entries, sampleSize)
-
-	return
-}
-
-func (self *SimpleH264Writer) Finish() (err error) {
-	self.sample.SampleDesc.Avc1Desc.Conf.Record, err = atom.CreateAVCDecoderConfRecord(
-		self.sps,
-		self.pps,
-	)
-	if err != nil {
-		return
-	}
-
-	if self.timeToSample != nil {
-		self.sample.TimeToSample.Entries = append(
-			self.sample.TimeToSample.Entries,
-			*self.timeToSample,
-		)
-	}
-
-	if err = self.mdatWriter.Close(); err != nil {
-		return
-	}
-
-	moov := &atom.Movie{}
-	moov.Header = &atom.MovieHeader{
-		TimeScale: self.TimeScale,
-		Duration: self.duration,
-		PreferredRate: atom.IntToFixed(1),
-		PreferredVolume: atom.IntToFixed(1),
-		Matrix: [9]int{0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000},
-		NextTrackId: 2,
-	}
-
-	track := &atom.Track{
-		Header: &atom.TrackHeader{
-			TrackId: 1,
-			Flags: 0x0003, // Track enabled | Track in movie
-			Duration: self.duration,
-			Volume: atom.IntToFixed(1),
-			Matrix: [9]int{0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000},
-			TrackWidth: atom.IntToFixed(self.Width),
-			TrackHeight: atom.IntToFixed(self.Height),
-		},
-
-		Media: &atom.Media{
-			Header: &atom.MediaHeader{
-				TimeScale: self.TimeScale,
-				Duration: self.duration,
-			},
-			Info: &atom.MediaInfo{
-				Video: &atom.VideoMediaInfo{
-					Flags: 0x000001,
-				},
-				Sample: self.sample,
-				Data: &atom.DataInfo{
-					Refer: &atom.DataRefer{
-						Url: &atom.DataReferUrl{
-							Flags: 0x000001, // Self reference
-						},
-					},
-				},
-			},
-			Handler: &atom.HandlerRefer{
-				SubType: "vide",
-				Name: "Video Media Handler",
-			},
-		},
-	}
-	moov.Tracks = append(moov.Tracks, track)
-
-	if err = atom.WriteMovie(self.W, moov); err != nil {
-		return
-	}
-
-	return
-}
-*/
-

@@ -1,4 +1,3 @@
-
 package atom
 
 import (
@@ -33,7 +32,7 @@ func ReadInt(r io.Reader, n int) (res int, err error) {
 		return
 	}
 	if uval&(1<<uint(n*8-1)) != 0 {
-		res = -int((1<<uint(n*8))-uval)
+		res = -int((1 << uint(n*8)) - uval)
 	} else {
 		res = int(uval)
 	}
@@ -47,7 +46,7 @@ func ReadFixed(r io.Reader, n int) (res Fixed, err error) {
 	}
 
 	if n == 2 {
-		res = Fixed(ui<<8)
+		res = Fixed(ui << 8)
 	} else if n == 4 {
 		res = Fixed(ui)
 	} else {
@@ -114,4 +113,3 @@ func ReadAtomHeader(r io.Reader, targetCC4 string) (res *io.LimitedReader, cc4 s
 		return
 	}
 }
-
