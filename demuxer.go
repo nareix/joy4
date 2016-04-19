@@ -299,10 +299,23 @@ func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
 
 func (self *Demuxer) SeekToTime(time float64) (err error) {
 	for _, stream := range(self.streams) {
-		if err = stream.seekToTime(time); err != nil {
-			return
+		if stream.IsVideo() {
+			if err = stream.seekToTime(time); err != nil {
+				return
+			}
+			time = stream.TsToTime(stream.dts)
+			break
 		}
 	}
+
+	for _, stream := range(self.streams) {
+		if !stream.IsVideo() {
+			if err = stream.seekToTime(time); err != nil {
+				return
+			}
+		}
+	}
+
 	return
 }
 
