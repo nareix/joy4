@@ -137,38 +137,20 @@ func (self *Track) ReadSample() (pts int64, dts int64, isKeyFrame bool, data []b
 		}
 	}
 
-	if self.Type == AAC {
-		var n, framelen int
-		if _, data, n, framelen, err = isom.ReadADTSFrame(self.payload); err != nil {
-			return
-		}
-		self.payload = self.payload[framelen:]
-		pts = self.PTS
+	dts = int64(self.peshdr.DTS)
+	pts = int64(self.peshdr.PTS)
+	if dts == 0 {
 		dts = pts
-		self.PTS += int64(PTS_HZ*n)/int64(self.mpeg4AudioConfig.SampleRate)
-		if len(self.payload) == 0 {
-			self.payloadReady = false
-		}
-	} else {
-		dts = int64(self.peshdr.DTS)
-		pts = int64(self.peshdr.PTS)
-		if dts == 0 {
-			dts = pts
-		}
-		isKeyFrame = self.tshdr.RandomAccessIndicator
-		data = self.payload
-		self.payloadReady = false
 	}
+	isKeyFrame = self.tshdr.RandomAccessIndicator
+	data = self.payload
+	self.payloadReady = false
 
 	return
 }
 
 func (self *Track) appendPayload() (err error) {
 	self.payload = self.buf.Bytes()
-	if len(self.payload) == 0 {
-		err = fmt.Errorf("empty payload")
-		return
-	}
 
 	if self.Type == AAC {
 		if !self.mpeg4AudioConfig.IsValid() {
@@ -181,7 +163,6 @@ func (self *Track) appendPayload() (err error) {
 				return
 			}
 		}
-		self.PTS = int64(self.peshdr.PTS)
 	}
 
 	self.payloadReady = true
