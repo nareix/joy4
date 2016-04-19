@@ -6,6 +6,7 @@ import (
 	"github.com/nareix/av"
 	"github.com/nareix/mp4/atom"
 	"github.com/nareix/mp4/isom"
+	"github.com/nareix/codec/h264parser"
 	"io"
 )
 
@@ -60,7 +61,7 @@ func (self *Muxer) NewStream() av.Stream {
 		},
 	}
 
-	stream.writeMdat = self.writeMdat
+	stream.muxer = self
 	self.streams = append(self.streams, stream)
 
 	return stream
@@ -75,27 +76,17 @@ func (self *Stream) fillTrackAtom() (err error) {
 	self.trackAtom.Media.Header.Duration = int(self.lastDts)
 
 	if self.Type() == av.H264 {
-		self.sample.SampleDesc.Avc1Desc.Conf.Record, err = atom.CreateAVCDecoderConfRecord(
-			self.sps,
-			self.pps,
-		)
-		if err != nil {
-			return
-		}
-		var info *atom.H264SPSInfo
-		if info, err = atom.ParseH264SPS(self.sps[1:]); err != nil {
-			return
-		}
+		width, height := self.Width(), self.Height()
 		self.sample.SampleDesc.Avc1Desc = &atom.Avc1Desc{
 			DataRefIdx:           1,
 			HorizontalResolution: 72,
 			VorizontalResolution: 72,
-			Width:                int(info.Width),
-			Height:               int(info.Height),
+			Width:                int(width),
+			Height:               int(height),
 			FrameCount:           1,
 			Depth:                24,
 			ColorTableId:         -1,
-			Conf:                 &atom.Avc1Conf{},
+			Conf:                 &atom.Avc1Conf{Data: self.CodecData()},
 		}
 		self.sample.SyncSample = &atom.SyncSample{}
 		self.trackAtom.Media.Handler = &atom.HandlerRefer{
@@ -106,24 +97,19 @@ func (self *Stream) fillTrackAtom() (err error) {
 		self.trackAtom.Media.Info.Video = &atom.VideoMediaInfo{
 			Flags: 0x000001,
 		}
-		self.trackAtom.Header.TrackWidth = atom.IntToFixed(int(info.Width))
-		self.trackAtom.Header.TrackHeight = atom.IntToFixed(int(info.Height))
+		self.trackAtom.Header.TrackWidth = atom.IntToFixed(int(width))
+		self.trackAtom.Header.TrackHeight = atom.IntToFixed(int(height))
 
 	} else if self.Type() == av.AAC {
-		if !self.mpeg4AudioConfig.IsValid() {
-			err = fmt.Errorf("invalie MPEG4AudioConfig")
-			return
-		}
 		buf := &bytes.Buffer{}
-		config := self.mpeg4AudioConfig.Complete()
-		if err = isom.WriteElemStreamDescAAC(buf, config, uint(self.trackAtom.Header.TrackId)); err != nil {
+		if err = isom.WriteElemStreamDesc(buf, self.CodecData(), uint(self.trackAtom.Header.TrackId)); err != nil {
 			return
 		}
 		self.sample.SampleDesc.Mp4aDesc = &atom.Mp4aDesc{
 			DataRefIdx:       1,
-			NumberOfChannels: config.ChannelCount,
-			SampleSize:       config.ChannelCount * 8,
-			SampleRate:       atom.IntToFixed(config.SampleRate),
+			NumberOfChannels: self.ChannelCount(),
+			SampleSize:       self.ChannelCount() * 8,
+			SampleRate:       atom.IntToFixed(self.SampleRate()),
 			Conf: &atom.ElemStreamDesc{
 				Data: buf.Bytes(),
 			},
@@ -163,11 +149,6 @@ func (self *Muxer) WriteSample(pkt av.Packet) (err error) {
 	stream := self.streams[pkt.StreamIdx]
 
 	if stream.Type() == av.AAC && isom.IsADTSFrame(frame) {
-		config := stream.mpeg4AudioConfig.Complete()
-		if config.SampleRate == 0 {
-			err = fmt.Errorf("invalid sample rate")
-			return
-		}
 		for len(frame) > 0 {
 			var payload []byte
 			var samples int
@@ -175,7 +156,7 @@ func (self *Muxer) WriteSample(pkt av.Packet) (err error) {
 			if _, payload, samples, framelen, err = isom.ReadADTSFrame(frame); err != nil {
 				return
 			}
-			delta := int64(samples) * stream.TimeScale() / int64(config.SampleRate)
+			delta := int64(samples) * stream.TimeScale() / int64(stream.SampleRate())
 			pts += delta
 			dts += delta
 			frame = frame[framelen:]
@@ -190,9 +171,26 @@ func (self *Muxer) WriteSample(pkt av.Packet) (err error) {
 
 func (self *Stream) writeSample(pts int64, dts int64, isKeyFrame bool, data []byte) (err error) {
 	var filePos int64
-	sampleSize := len(data)
-	if filePos, err = self.writeMdat(data); err != nil {
+	var sampleSize int
+
+	if filePos, err = self.muxer.mdatWriter.Seek(0, 1); err != nil {
 		return
+	}
+
+	if self.Type() == av.H264 {
+		nalus, _ := h264parser.SplitNALUs(data)
+		h264parser.WalkNALUsAVCC(nalus, func(b []byte) {
+			sampleSize += len(b)
+			_, err = self.muxer.mdatWriter.Write(b)
+		})
+		if err != nil {
+			return
+		}
+	} else {
+		sampleSize = len(data)
+		if _, err = self.muxer.mdatWriter.Write(data); err != nil {
+			return
+		}
 	}
 
 	if isKeyFrame && self.sample.SyncSample != nil {
