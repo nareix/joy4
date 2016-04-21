@@ -26,6 +26,15 @@ func (self *Demuxer) Streams() (streams []av.Stream) {
 	return
 }
 
+func (self *Demuxer) Time() float64 {
+	for _, stream := range self.streams {
+		if len(stream.pkts) > 0 {
+			return stream.pkts[len(stream.pkts)-1].time
+		}
+	}
+	return 0.0
+}
+
 func (self *Demuxer) ReadHeader() (err error) {
 	self.streams = []*Stream{}
 
@@ -163,7 +172,7 @@ func (self *Stream) appendPayload() (err error) {
 	}
 
 	if pts != dts {
-		pkt.Duration = float64(pts-dts)/float64(PTS_HZ)
+		pkt.CompositionTime = float64(pts-dts)/float64(PTS_HZ)
 	}
 
 	if len(self.pkts) > 0 {
