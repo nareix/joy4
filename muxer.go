@@ -3,8 +3,8 @@ package ts
 import (
 	"bytes"
 	"fmt"
-	"github.com/nareix/codec/h264parser"
 	"github.com/nareix/codec/aacparser"
+	"github.com/nareix/codec/h264parser"
 	"io"
 )
 
@@ -17,8 +17,8 @@ type Muxer struct {
 	Tracks      []*Track
 }
 
-func (self *Muxer) newTrack(pid uint, streamId uint) (track *Track) {
-	track = &Track{
+func (self *Muxer) newTrack(pid uint, streamId uint) (stream *Track) {
+	stream = &Track{
 		mux: self,
 		tsw: &TSWriter{
 			PID: pid,
@@ -26,31 +26,31 @@ func (self *Muxer) newTrack(pid uint, streamId uint) (track *Track) {
 		},
 		streamId: streamId,
 	}
-	track.tsw.EnableVecWriter()
+	stream.tsw.EnableVecWriter()
 	return
 }
 
-func (self *Muxer) AddAACTrack() (track *Track) {
+func (self *Muxer) AddAACTrack() (stream *Track) {
 	self.elemStreams = append(
 		self.elemStreams,
 		ElementaryStreamInfo{StreamType: ElementaryStreamTypeAdtsAAC, ElementaryPID: 0x101},
 	)
-	track = self.newTrack(0x101, StreamIdAAC)
-	track.Type = AAC
-	track.cacheSize = 3000
-	self.Tracks = append(self.Tracks, track)
+	stream = self.newTrack(0x101, StreamIdAAC)
+	stream.Type = AAC
+	stream.cacheSize = 3000
+	self.Tracks = append(self.Tracks, stream)
 	return
 }
 
-func (self *Muxer) AddH264Track() (track *Track) {
+func (self *Muxer) AddH264Track() (stream *Track) {
 	self.elemStreams = append(
 		self.elemStreams,
 		ElementaryStreamInfo{StreamType: ElementaryStreamTypeH264, ElementaryPID: 0x100},
 	)
-	track = self.newTrack(0x100, StreamIdH264)
-	track.Type = H264
-	self.TrackH264 = track
-	self.Tracks = append(self.Tracks, track)
+	stream = self.newTrack(0x100, StreamIdH264)
+	stream.Type = H264
+	self.TrackH264 = stream
+	self.Tracks = append(self.Tracks, stream)
 	return
 }
 
@@ -86,8 +86,8 @@ func (self *Muxer) WriteHeader() (err error) {
 	}
 
 	// about to remove
-	for _, track := range self.Tracks {
-		track.spsHasWritten = false
+	for _, stream := range self.Tracks {
+		stream.spsHasWritten = false
 	}
 
 	return

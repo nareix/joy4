@@ -32,8 +32,8 @@ func (self *Demuxer) ReadHeader() (err error) {
 	for {
 		if self.pmt != nil {
 			n := 0
-			for _, track := range self.Tracks {
-				if track.payloadReady {
+			for _, stream := range self.Tracks {
+				if stream.payloadReady {
 					n++
 				}
 			}
@@ -50,7 +50,7 @@ func (self *Demuxer) ReadHeader() (err error) {
 	return
 }
 
-func (self *Demuxer) ReadSample() (track *Track, err error) {
+func (self *Demuxer) ReadSample() (stream *Track, err error) {
 	if len(self.Tracks) == 0 {
 		err = fmt.Errorf("no track")
 		return
@@ -59,7 +59,7 @@ func (self *Demuxer) ReadSample() (track *Track, err error) {
 	for {
 		for _, _track := range self.Tracks {
 			if _track.payloadReady {
-				track = _track
+				stream = _track
 				return
 			}
 		}
@@ -93,28 +93,28 @@ func (self *Demuxer) readPacket() (err error) {
 						return
 					}
 					for _, info := range self.pmt.ElementaryStreamInfos {
-						track := &Track{}
+						stream := &Track{}
 
-						track.demuxer = self
-						track.pid = info.ElementaryPID
+						stream.demuxer = self
+						stream.pid = info.ElementaryPID
 						switch info.StreamType {
 						case ElementaryStreamTypeH264:
-							track.Type = H264
-							self.TrackH264 = track
-							self.Tracks = append(self.Tracks, track)
+							stream.Type = H264
+							self.TrackH264 = stream
+							self.Tracks = append(self.Tracks, stream)
 						case ElementaryStreamTypeAdtsAAC:
-							track.Type = AAC
-							self.TrackAAC = track
-							self.Tracks = append(self.Tracks, track)
+							stream.Type = AAC
+							self.TrackAAC = stream
+							self.Tracks = append(self.Tracks, stream)
 						}
 					}
 				}
 			}
 		} else {
 
-			for _, track := range self.Tracks {
-				if header.PID == track.pid {
-					if err = track.appendPacket(header, payload); err != nil {
+			for _, stream := range self.Tracks {
+				if header.PID == stream.pid {
+					if err = stream.appendPacket(header, payload); err != nil {
 						return
 					}
 				}
