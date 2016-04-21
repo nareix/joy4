@@ -105,6 +105,10 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 	self.chunkGroupIndex = 0
 
 	for self.chunkIndex = range self.sample.ChunkOffset.Entries {
+		if self.chunkGroupIndex+1 < len(self.sample.SampleToChunk.Entries) &&
+			self.chunkIndex+1 == self.sample.SampleToChunk.Entries[self.chunkGroupIndex+1].FirstChunk {
+			self.chunkGroupIndex++
+		}
 		n := self.sample.SampleToChunk.Entries[self.chunkGroupIndex].SamplesPerChunk
 		if index >= start && index < start+n {
 			found = true
@@ -112,10 +116,6 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 			break
 		}
 		start += n
-		if self.chunkGroupIndex+1 < len(self.sample.SampleToChunk.Entries) &&
-			self.chunkIndex+1 == self.sample.SampleToChunk.Entries[self.chunkGroupIndex+1].FirstChunk {
-			self.chunkGroupIndex++
-		}
 	}
 	if !found {
 		err = fmt.Errorf("stream[%d]: cannot locate sample index in chunk", self.idx)
@@ -187,6 +187,11 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 		}
 	}
 
+	if false {
+		fmt.Printf("stream[%d]: setSampleIndex chunkGroupIndex=%d chunkIndex=%d sampleOffsetInChunk=%d\n",
+			self.idx, self.chunkGroupIndex, self.chunkIndex, self.sampleOffsetInChunk)
+	}
+
 	self.sampleIndex = index
 	return
 }
@@ -220,6 +225,10 @@ func (self *Stream) isSampleValid() bool {
 }
 
 func (self *Stream) incSampleIndex() (duration int64) {
+	if false {
+		fmt.Printf("incSampleIndex sampleIndex=%d sampleOffsetInChunk=%d sampleIndexInChunk=%d chunkGroupIndex=%d chunkIndex=%d\n",
+			self.sampleIndex, self.sampleOffsetInChunk, self.sampleIndexInChunk, self.chunkGroupIndex, self.chunkIndex)
+	}
 	self.sampleIndexInChunk++
 	if self.sampleIndexInChunk == self.sample.SampleToChunk.Entries[self.chunkGroupIndex].SamplesPerChunk {
 		self.chunkIndex++
