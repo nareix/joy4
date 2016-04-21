@@ -229,6 +229,7 @@ func (self *Stream) incSampleIndex() (duration int64) {
 		fmt.Printf("incSampleIndex sampleIndex=%d sampleOffsetInChunk=%d sampleIndexInChunk=%d chunkGroupIndex=%d chunkIndex=%d\n",
 			self.sampleIndex, self.sampleOffsetInChunk, self.sampleIndexInChunk, self.chunkGroupIndex, self.chunkIndex)
 	}
+
 	self.sampleIndexInChunk++
 	if self.sampleIndexInChunk == self.sample.SampleToChunk.Entries[self.chunkGroupIndex].SamplesPerChunk {
 		self.chunkIndex++

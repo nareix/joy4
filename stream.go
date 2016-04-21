@@ -37,7 +37,6 @@ type Stream struct {
 
 	sttsEntry *atom.TimeToSampleEntry
 	cttsEntry *atom.CompositionOffsetEntry
-	writeMdat func([]byte) (int64, error)
 }
 
 func (self *Stream) timeToTs(time float64) int64 {

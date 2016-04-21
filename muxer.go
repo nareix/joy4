@@ -91,7 +91,6 @@ func (self *Stream) fillTrackAtom() (err error) {
 			SubType: "vide",
 			Name:    "Video Media Handler",
 		}
-		self.sample.CompositionOffset = &atom.CompositionOffset{}
 		self.trackAtom.Media.Info.Video = &atom.VideoMediaInfo{
 			Flags: 0x000001,
 		}
@@ -130,6 +129,11 @@ func (self *Stream) fillTrackAtom() (err error) {
 func (self *Muxer) WriteHeader() (err error) {
 	if self.mdatWriter, err = atom.WriteAtomHeader(self.W, "mdat"); err != nil {
 		return
+	}
+	for _, stream := range self.streams {
+		if stream.Type().IsVideo() {
+			stream.sample.CompositionOffset = &atom.CompositionOffset{}
+		}
 	}
 	return
 }
