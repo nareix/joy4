@@ -100,10 +100,8 @@ func (self *Muxer) WritePacket(streamIndex int, pkt av.Packet) (err error) {
 		buf := &bytes.Buffer{}
 		pes := PESHeader{
 			StreamId: StreamIdH264,
-			PTS:      timeToPesTs(stream.time),
-		}
-		if pkt.CompositionTime > 0.0 {
-			pes.DTS = timeToPesTs(stream.time + pkt.CompositionTime)
+			PTS:      timeToPesTs(stream.time + pkt.CompositionTime),
+			DTS:      timeToPesTs(stream.time),
 		}
 		WritePESHeader(buf, pes, 0)
 
