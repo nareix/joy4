@@ -26,6 +26,10 @@ func (self *Muxer) NewStream() av.Stream {
 	return stream
 }
 
+func (self *Muxer) WriteTrailer() (err error) {
+	return
+}
+
 func (self *Muxer) WriteHeader() (err error) {
 	bufPAT := &bytes.Buffer{}
 	bufPMT := &bytes.Buffer{}
