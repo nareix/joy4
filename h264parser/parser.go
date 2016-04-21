@@ -214,6 +214,27 @@ func SplitNALUs(b []byte) (nalus [][]byte, ok bool) {
 	val3 := bits.GetUIntBE(b, 24)
 	val4 := bits.GetUIntBE(b, 32)
 
+	// maybe AVCC
+	if val4 <= uint(len(b)) {
+		b = b[4:]
+		nalus := [][]byte{}
+		for {
+			nalus = append(nalus, b[:val4])
+			b = b[val4:]
+			if len(b) < 4 {
+				break
+			}
+			val4 = bits.GetUIntBE(b, 32)
+			b = b[4:]
+			if val4 > uint(len(b)) {
+				break
+			}
+		}
+		if len(b) == 0 {
+			return nalus, true
+		}
+	}
+
 	// is Annex B
 	if val3 == 1 || val4 == 1 {
 		start := 0
@@ -254,29 +275,6 @@ func SplitNALUs(b []byte) (nalus [][]byte, ok bool) {
 		}
 		ok = true
 		return
-	}
-
-	// maybe AVCC
-	if val4 <= uint(len(b)) {
-		b = b[4:]
-		for {
-			nalus = append(nalus, b[:val4])
-			b = b[val4:]
-			if len(b) < 4 {
-				break
-			}
-			val4 = bits.GetUIntBE(b, 32)
-			b = b[4:]
-			if val4 > uint(len(b)) {
-				break
-			}
-		}
-		if len(b) == 0 {
-			ok = true
-			return
-		} else {
-			return [][]byte{b}, false
-		}
 	}
 
 	return [][]byte{b}, false
