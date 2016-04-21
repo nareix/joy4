@@ -12,9 +12,9 @@ type Demuxer struct {
 
 	pat       PAT
 	pmt       *PMT
-	Tracks    []*Track
-	TrackH264 *Track
-	TrackAAC  *Track
+	Tracks    []*Stream
+	TrackH264 *Stream
+	TrackAAC  *Stream
 }
 
 // ParsePacket() (pid uint, counter int, isStart bool, pts, dst int64, isKeyFrame bool)
@@ -25,7 +25,7 @@ func (self *Demuxer) TimeScale() int64 {
 }
 
 func (self *Demuxer) ReadHeader() (err error) {
-	self.Tracks = []*Track{}
+	self.Tracks = []*Stream{}
 	self.TrackH264 = nil
 	self.TrackAAC = nil
 
@@ -50,7 +50,7 @@ func (self *Demuxer) ReadHeader() (err error) {
 	return
 }
 
-func (self *Demuxer) ReadSample() (stream *Track, err error) {
+func (self *Demuxer) ReadSample() (stream *Stream, err error) {
 	if len(self.Tracks) == 0 {
 		err = fmt.Errorf("no track")
 		return
@@ -93,7 +93,7 @@ func (self *Demuxer) readPacket() (err error) {
 						return
 					}
 					for _, info := range self.pmt.ElementaryStreamInfos {
-						stream := &Track{}
+						stream := &Stream{}
 
 						stream.demuxer = self
 						stream.pid = info.ElementaryPID
@@ -125,11 +125,11 @@ func (self *Demuxer) readPacket() (err error) {
 	return
 }
 
-func (self *Track) GetMPEG4AudioConfig() aacparser.MPEG4AudioConfig {
+func (self *Stream) GetMPEG4AudioConfig() aacparser.MPEG4AudioConfig {
 	return self.mpeg4AudioConfig
 }
 
-func (self *Track) ReadSample() (pts int64, dts int64, isKeyFrame bool, data []byte, err error) {
+func (self *Stream) ReadSample() (pts int64, dts int64, isKeyFrame bool, data []byte, err error) {
 	for !self.payloadReady {
 		if err = self.demuxer.readPacket(); err != nil {
 			return
@@ -148,7 +148,7 @@ func (self *Track) ReadSample() (pts int64, dts int64, isKeyFrame bool, data []b
 	return
 }
 
-func (self *Track) appendPayload() (err error) {
+func (self *Stream) appendPayload() (err error) {
 	self.payload = self.buf.Bytes()
 
 	if self.Type == AAC {
@@ -168,7 +168,7 @@ func (self *Track) appendPayload() (err error) {
 	return
 }
 
-func (self *Track) appendPacket(header TSHeader, payload []byte) (err error) {
+func (self *Stream) appendPacket(header TSHeader, payload []byte) (err error) {
 	r := bytes.NewReader(payload)
 	lr := &io.LimitedReader{R: r, N: int64(len(payload))}
 

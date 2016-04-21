@@ -5,7 +5,7 @@ import (
 	"github.com/nareix/codec/aacparser"
 )
 
-type Track struct {
+type Stream struct {
 	SPS []byte
 	PPS []byte
 

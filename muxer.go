@@ -13,12 +13,12 @@ type Muxer struct {
 	tswPAT      *TSWriter
 	tswPMT      *TSWriter
 	elemStreams []ElementaryStreamInfo
-	TrackH264   *Track
-	Tracks      []*Track
+	TrackH264   *Stream
+	Tracks      []*Stream
 }
 
-func (self *Muxer) newTrack(pid uint, streamId uint) (stream *Track) {
-	stream = &Track{
+func (self *Muxer) newTrack(pid uint, streamId uint) (stream *Stream) {
+	stream = &Stream{
 		mux: self,
 		tsw: &TSWriter{
 			PID: pid,
@@ -30,7 +30,7 @@ func (self *Muxer) newTrack(pid uint, streamId uint) (stream *Track) {
 	return
 }
 
-func (self *Muxer) AddAACTrack() (stream *Track) {
+func (self *Muxer) AddAACTrack() (stream *Stream) {
 	self.elemStreams = append(
 		self.elemStreams,
 		ElementaryStreamInfo{StreamType: ElementaryStreamTypeAdtsAAC, ElementaryPID: 0x101},
@@ -42,7 +42,7 @@ func (self *Muxer) AddAACTrack() (stream *Track) {
 	return
 }
 
-func (self *Muxer) AddH264Track() (stream *Track) {
+func (self *Muxer) AddH264Track() (stream *Stream) {
 	self.elemStreams = append(
 		self.elemStreams,
 		ElementaryStreamInfo{StreamType: ElementaryStreamTypeH264, ElementaryPID: 0x100},
@@ -93,35 +93,35 @@ func (self *Muxer) WriteHeader() (err error) {
 	return
 }
 
-func (self *Track) SetH264PPSAndSPS(pps []byte, sps []byte) {
+func (self *Stream) SetH264PPSAndSPS(pps []byte, sps []byte) {
 	self.PPS, self.SPS = pps, sps
 }
 
-func (self *Track) SetTimeScale(timeScale int64) {
+func (self *Stream) SetTimeScale(timeScale int64) {
 	self.timeScale = timeScale
 }
 
-func (self *Track) TimeScale() int64 {
+func (self *Stream) TimeScale() int64 {
 	return self.timeScale
 }
 
-func (self *Track) SetMPEG4AudioConfig(config aacparser.MPEG4AudioConfig) {
+func (self *Stream) SetMPEG4AudioConfig(config aacparser.MPEG4AudioConfig) {
 	self.mpeg4AudioConfig = config
 }
 
-func (self *Track) tsToPesTs(ts int64) uint64 {
+func (self *Stream) tsToPesTs(ts int64) uint64 {
 	return uint64(ts)*PTS_HZ/uint64(self.timeScale) + PTS_HZ
 }
 
-func (self *Track) tsToPCR(ts int64) uint64 {
+func (self *Stream) tsToPCR(ts int64) uint64 {
 	return uint64(ts)*PCR_HZ/uint64(self.timeScale) + PCR_HZ
 }
 
-func (self *Track) tsToTime(ts int64) float64 {
+func (self *Stream) tsToTime(ts int64) float64 {
 	return float64(ts) / float64(self.timeScale)
 }
 
-func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byte) (err error) {
+func (self *Stream) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byte) (err error) {
 	if false {
 		fmt.Println("WriteSample", self.Type, self.tsToTime(dts))
 	}
@@ -180,11 +180,11 @@ func (self *Track) WriteSample(pts int64, dts int64, isKeyFrame bool, data []byt
 
 /* about to remove */
 
-func (self *Track) setPCR() {
+func (self *Stream) setPCR() {
 	self.tsw.PCR = uint64(self.PTS) * PCR_HZ / uint64(self.timeScale)
 }
 
-func (self *Track) getPesHeader(dataLength int) (data []byte) {
+func (self *Stream) getPesHeader(dataLength int) (data []byte) {
 	if self.PTS == 0 {
 		self.PTS = self.timeScale
 	}
@@ -197,11 +197,11 @@ func (self *Track) getPesHeader(dataLength int) (data []byte) {
 	return buf.Bytes()
 }
 
-func (self *Track) incPTS(delta int) {
+func (self *Stream) incPTS(delta int) {
 	self.PTS += int64(delta)
 }
 
-func (self *Track) WriteH264NALU(sync bool, duration int, nalu []byte) (err error) {
+func (self *Stream) WriteH264NALU(sync bool, duration int, nalu []byte) (err error) {
 	nalus := [][]byte{}
 
 	if !self.spsHasWritten {
@@ -234,7 +234,7 @@ func (self *Track) WriteH264NALU(sync bool, duration int, nalu []byte) (err erro
 	return
 }
 
-func (self *Track) WriteADTSAACFrame(duration int, frame []byte) (err error) {
+func (self *Stream) WriteADTSAACFrame(duration int, frame []byte) (err error) {
 	if self.dataBuf != nil && self.dataBuf.Len > self.cacheSize {
 		self.dataBuf.Prepend(self.getPesHeader(self.dataBuf.Len))
 		self.tsw.RandomAccessIndicator = true
