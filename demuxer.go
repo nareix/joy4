@@ -3,6 +3,7 @@ package ts
 import (
 	"bytes"
 	"fmt"
+	"github.com/nareix/av"
 	"github.com/nareix/codec/aacparser"
 	"io"
 )
@@ -10,34 +11,26 @@ import (
 type Demuxer struct {
 	R io.Reader
 
-	pat       PAT
-	pmt       *PMT
-	Tracks    []*Stream
-	TrackH264 *Stream
-	TrackAAC  *Stream
+	pat     PAT
+	pmt     *PMT
+	streams []*Stream
 }
 
 // ParsePacket() (pid uint, counter int, isStart bool, pts, dst int64, isKeyFrame bool)
 // WritePayload(pid, pts, dts, isKeyFrame, payloads, isVideoFrame)
 
-func (self *Demuxer) TimeScale() int64 {
-	return PTS_HZ
-}
-
 func (self *Demuxer) ReadHeader() (err error) {
-	self.Tracks = []*Stream{}
-	self.TrackH264 = nil
-	self.TrackAAC = nil
+	self.streams = []*Stream{}
 
 	for {
 		if self.pmt != nil {
 			n := 0
-			for _, stream := range self.Tracks {
-				if stream.payloadReady {
+			for _, stream := range self.streams {
+				if len(stream.pkts) > 0 {
 					n++
 				}
 			}
-			if n == len(self.Tracks) {
+			if n == len(self.streams) {
 				break
 			}
 		}
@@ -50,16 +43,18 @@ func (self *Demuxer) ReadHeader() (err error) {
 	return
 }
 
-func (self *Demuxer) ReadSample() (stream *Stream, err error) {
-	if len(self.Tracks) == 0 {
-		err = fmt.Errorf("no track")
+func (self *Demuxer) ReadPacket() (streamIndex int, pkt av.Packet, err error) {
+	if len(self.streams) == 0 {
+		err = fmt.Errorf("no stream")
 		return
 	}
 
 	for {
-		for _, _track := range self.Tracks {
-			if _track.payloadReady {
-				stream = _track
+		for i, stream := range self.streams {
+			if len(stream.pkts) > 1 {
+				streamIndex = i
+				pkt = stream.pkts[0].Packet
+				stream.pkts = stream.pkts[1:]
 				return
 			}
 		}
@@ -99,51 +94,27 @@ func (self *Demuxer) readPacket() (err error) {
 						stream.pid = info.ElementaryPID
 						switch info.StreamType {
 						case ElementaryStreamTypeH264:
-							stream.Type = H264
-							self.TrackH264 = stream
-							self.Tracks = append(self.Tracks, stream)
+							stream.SetType(av.H264)
+							self.streams = append(self.streams, stream)
 						case ElementaryStreamTypeAdtsAAC:
-							stream.Type = AAC
-							self.TrackAAC = stream
-							self.Tracks = append(self.Tracks, stream)
+							stream.SetType(av.AAC)
+							self.streams = append(self.streams, stream)
 						}
 					}
 				}
 			}
-		} else {
 
-			for _, stream := range self.Tracks {
+		} else {
+			for _, stream := range self.streams {
 				if header.PID == stream.pid {
 					if err = stream.appendPacket(header, payload); err != nil {
 						return
 					}
 				}
 			}
+
 		}
 	}
-
-	return
-}
-
-func (self *Stream) GetMPEG4AudioConfig() aacparser.MPEG4AudioConfig {
-	return self.mpeg4AudioConfig
-}
-
-func (self *Stream) ReadSample() (pts int64, dts int64, isKeyFrame bool, data []byte, err error) {
-	for !self.payloadReady {
-		if err = self.demuxer.readPacket(); err != nil {
-			return
-		}
-	}
-
-	dts = int64(self.peshdr.DTS)
-	pts = int64(self.peshdr.PTS)
-	if dts == 0 {
-		dts = pts
-	}
-	isKeyFrame = self.tshdr.RandomAccessIndicator
-	data = self.payload
-	self.payloadReady = false
 
 	return
 }
@@ -151,20 +122,49 @@ func (self *Stream) ReadSample() (pts int64, dts int64, isKeyFrame bool, data []
 func (self *Stream) appendPayload() (err error) {
 	self.payload = self.buf.Bytes()
 
-	if self.Type == AAC {
-		if !self.mpeg4AudioConfig.IsValid() {
-			if self.mpeg4AudioConfig, _, _, _, err = aacparser.ReadADTSFrame(self.payload); err != nil {
+	if self.Type() == av.AAC {
+		if len(self.CodecData()) == 0 {
+			var config aacparser.MPEG4AudioConfig
+			if config, _, _, _, err = aacparser.ReadADTSFrame(self.payload); err != nil {
+				err = fmt.Errorf("ReadADTSFrame failed: %s", err)
 				return
 			}
-			self.mpeg4AudioConfig = self.mpeg4AudioConfig.Complete()
-			if !self.mpeg4AudioConfig.IsValid() {
-				err = fmt.Errorf("invalid MPEG4AudioConfig")
+			bw := &bytes.Buffer{}
+			if err = aacparser.WriteMPEG4AudioConfig(bw, config); err != nil {
+				err = fmt.Errorf("WriteMPEG4AudioConfig failed: %s", err)
+				return
+			}
+			if err = self.SetCodecData(bw.Bytes()); err != nil {
+				err = fmt.Errorf("SetCodecData failed: %s", err)
 				return
 			}
 		}
 	}
 
-	self.payloadReady = true
+	dts := self.peshdr.DTS
+	pts := self.peshdr.PTS
+	if dts == 0 {
+		dts = pts
+	}
+
+	pkt := tsPacket{
+		Packet: av.Packet{
+			IsKeyFrame: self.tshdr.RandomAccessIndicator,
+			Data: self.payload,
+		},
+		time: float64(dts)/float64(PTS_HZ),
+	}
+
+	if pts != dts {
+		pkt.Duration = float64(pts-dts)/float64(PTS_HZ)
+	}
+
+	if len(self.pkts) > 0 {
+		lastPkt := &self.pkts[len(self.pkts)-1]
+		lastPkt.Duration = pkt.time - lastPkt.time
+	}
+	self.pkts = append(self.pkts, pkt)
+
 	return
 }
 
@@ -179,7 +179,6 @@ func (self *Stream) appendPacket(header TSHeader, payload []byte) (err error) {
 	}
 
 	if header.PayloadUnitStart {
-		self.payloadReady = false
 		self.buf = bytes.Buffer{}
 		if self.peshdr, err = ReadPESHeader(lr); err != nil {
 			return

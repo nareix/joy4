@@ -2,26 +2,26 @@ package ts
 
 import (
 	"bytes"
-	"github.com/nareix/codec/aacparser"
+	"github.com/nareix/av"
 )
 
+type tsPacket struct {
+	av.Packet
+	time float64
+}
+
 type Stream struct {
-	SPS []byte
-	PPS []byte
+	av.StreamCommon
 
-	Type int
+	time float64
 
-	pid       uint
-	PTS       int64
-	timeScale int64
+	pid           uint
+	buf           bytes.Buffer
+	payload       []byte
+	peshdr        *PESHeader
+	tshdr         TSHeader
 
-	mpeg4AudioConfig aacparser.MPEG4AudioConfig
-	buf              bytes.Buffer
-	payload          []byte
-	peshdr           *PESHeader
-	tshdr            TSHeader
-	spsHasWritten    bool
-	payloadReady     bool
+	pkts []tsPacket
 
 	demuxer   *Demuxer
 	mux       *Muxer
@@ -31,7 +31,10 @@ type Stream struct {
 	cacheSize int
 }
 
-const (
-	H264 = 1
-	AAC  = 2
-)
+func timeToPesTs(time float64) uint64 {
+	return uint64(time*PTS_HZ) + PTS_HZ
+}
+
+func timeToPCR(time float64) uint64 {
+	return uint64(time*PCR_HZ) + PCR_HZ
+}
