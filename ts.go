@@ -2,6 +2,7 @@ package ts
 
 import (
 	"fmt"
+	"os"
 )
 
 const (
@@ -94,6 +95,10 @@ func PCRToUInt(pcr uint64) uint64 {
 	ext := pcr % 300
 	return base<<15 | 0x3f<<9 | ext
 }
+
+var DebugOutput = os.Stdout
+var DebugReader = false
+var DebugWriter = false
 
 type FieldsDumper struct {
 	Fields []struct {

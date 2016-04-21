@@ -19,6 +19,13 @@ type Demuxer struct {
 // ParsePacket() (pid uint, counter int, isStart bool, pts, dst int64, isKeyFrame bool)
 // WritePayload(pid, pts, dts, isKeyFrame, payloads, isVideoFrame)
 
+func (self *Demuxer) Streams() (streams []av.Stream) {
+	for _, stream := range self.streams {
+		streams = append(streams, stream)
+	}
+	return
+}
+
 func (self *Demuxer) ReadHeader() (err error) {
 	self.streams = []*Stream{}
 

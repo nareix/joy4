@@ -6,8 +6,6 @@ import (
 	"io"
 )
 
-var DebugWriter = false
-
 func WriteUInt64(w io.Writer, val uint64, n int) (err error) {
 	var b [8]byte
 	for i := n - 1; i >= 0; i-- {
@@ -59,7 +57,7 @@ func WriteTSHeader(w io.Writer, self TSHeader, dataLength int) (written int, err
 	flags |= self.ContinuityCounter & 0xf
 
 	if DebugWriter {
-		fmt.Printf("tsw: pid=%x\n", self.PID)
+		fmt.Fprintf(DebugOutput, "tsw: pid=%x\n", self.PID)
 	}
 
 	const PCR = 0x10
@@ -118,7 +116,7 @@ func WriteTSHeader(w io.Writer, self TSHeader, dataLength int) (written int, err
 		}
 
 		if DebugWriter {
-			fmt.Printf("tsw: header padding=%d\n", paddingLength)
+			fmt.Fprintf(DebugOutput, "tsw: header padding=%d\n", paddingLength)
 		}
 
 		if err = WriteUInt(w, length, 1); err != nil {
@@ -167,7 +165,7 @@ func (self *TSWriter) EnableVecWriter() {
 		self.vecw = newVecWriter(self.W)
 
 		if DebugWriter && self.vecw != nil {
-			fmt.Println("tsw: enabled vec writer")
+			fmt.Fprintln(DebugOutput, "tsw: enabled vec writer")
 		}
 	}
 }
@@ -217,7 +215,7 @@ func (self *TSWriter) WriteIovecTo(w io.Writer, data *iovec) (err error) {
 		}
 
 		if DebugWriter {
-			fmt.Printf("tsw: payloadLength=%d dataLength=%d\n", payloadLength, data.Len)
+			fmt.Fprintf(DebugOutput, "tsw: payloadLength=%d dataLength=%d\n", payloadLength, data.Len)
 		}
 
 		if _, err = data.WriteTo(w, payloadLength); err != nil {
@@ -273,7 +271,7 @@ func WritePSI(w io.Writer, self PSI, data []byte) (err error) {
 	}
 
 	if DebugWriter {
-		fmt.Printf("psiw: length=%d\n", length)
+		fmt.Fprintf(DebugOutput, "psiw: length=%d\n", length)
 	}
 
 	// Table ID extension(16)

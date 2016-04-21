@@ -6,8 +6,6 @@ import (
 	"io/ioutil"
 )
 
-var DebugReader = false
-
 func ReadUInt(r io.Reader, n int) (res uint, err error) {
 	var b [4]byte
 	if _, err = r.Read(b[0:n]); err != nil {
@@ -57,7 +55,7 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 	}
 
 	if DebugReader {
-		fmt.Printf("ts: flags %s\n", FieldsDumper{
+		fmt.Fprintf(DebugOutput, "ts: flags %s\n", FieldsDumper{
 			Fields: []struct {
 				Length int
 				Desc   string
@@ -102,7 +100,7 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 			}
 
 			if DebugReader {
-				fmt.Printf("ts: ext_flags %s\n", FieldsDumper{
+				fmt.Fprintf(DebugOutput, "ts: ext_flags %s\n", FieldsDumper{
 					Fields: []struct {
 						Length int
 						Desc   string
@@ -135,7 +133,7 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 				// clock is 27MHz
 				self.PCR = UIntToPCR(v)
 				if DebugReader {
-					fmt.Printf("ts: PCR %d %f\n", self.PCR, float64(self.PCR)/PCR_HZ)
+					fmt.Fprintf(DebugOutput, "ts: PCR %d %f\n", self.PCR, float64(self.PCR)/PCR_HZ)
 				}
 			}
 
@@ -172,7 +170,7 @@ func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
 			if lr.N > 0 {
 				if DebugReader {
 					// rubish
-					fmt.Println("ts: skip", lr.N)
+					fmt.Fprintln(DebugOutput, "ts: skip", lr.N)
 				}
 
 				if err = ReadDummy(lr, int(lr.N)); err != nil {
@@ -191,7 +189,7 @@ func ReadTSPacket(r io.Reader, data []byte) (self TSHeader, n int, err error) {
 		return
 	}
 	if DebugReader {
-		fmt.Println("ts: data len", lr.N)
+		fmt.Fprintln(DebugOutput, "ts: data len", lr.N)
 	}
 	if n, err = lr.Read(data[:lr.N]); err != nil {
 		return
@@ -208,7 +206,7 @@ func ReadPSI(r io.Reader) (self PSI, lr *io.LimitedReader, cr *Crc32Reader, err 
 	}
 
 	if DebugReader {
-		fmt.Printf("psi: pointer=%d\n", pointer)
+		fmt.Fprintf(DebugOutput, "psi: pointer=%d\n", pointer)
 	}
 
 	if pointer != 0 {
@@ -232,7 +230,7 @@ func ReadPSI(r io.Reader) (self PSI, lr *io.LimitedReader, cr *Crc32Reader, err 
 	length = flags & 0x3FF
 
 	if DebugReader {
-		fmt.Printf("psi: tableid=%d len=%d\n", self.TableId, length)
+		fmt.Fprintf(DebugOutput, "psi: tableid=%d len=%d\n", self.TableId, length)
 	}
 
 	lr = &io.LimitedReader{R: cr, N: int64(length)}
@@ -250,7 +248,7 @@ func ReadPSI(r io.Reader) (self PSI, lr *io.LimitedReader, cr *Crc32Reader, err 
 	}
 
 	if DebugReader {
-		fmt.Printf("psi: %s\n", FieldsDumper{
+		fmt.Fprintf(DebugOutput, "psi: %s\n", FieldsDumper{
 			Fields: []struct {
 				Length int
 				Desc   string
@@ -275,7 +273,7 @@ func ReadPSI(r io.Reader) (self PSI, lr *io.LimitedReader, cr *Crc32Reader, err 
 	}
 
 	if DebugReader {
-		fmt.Printf("psi: table_id=%x table_extension=%x secnum=%x lastsecnum=%x\n",
+		fmt.Fprintf(DebugOutput, "psi: table_id=%x table_extension=%x secnum=%x lastsecnum=%x\n",
 			self.TableId,
 			self.TableIdExtension,
 			self.SecNum,
@@ -325,7 +323,7 @@ func ReadPMT(r io.Reader) (self PMT, err error) {
 	self.PCRPID = flags & 0x1fff
 
 	if DebugReader {
-		fmt.Printf("pmt: %s\n", FieldsDumper{
+		fmt.Fprintf(DebugOutput, "pmt: %s\n", FieldsDumper{
 			Fields: []struct {
 				Length int
 				Desc   string
@@ -347,7 +345,7 @@ func ReadPMT(r io.Reader) (self PMT, err error) {
 	length = flags & 0x3ff
 
 	if DebugReader {
-		fmt.Printf("pmt: ProgramDescriptorsLen=%d\n", length)
+		fmt.Fprintf(DebugOutput, "pmt: ProgramDescriptorsLen=%d\n", length)
 	}
 
 	if length > 0 {
@@ -371,7 +369,7 @@ func ReadPMT(r io.Reader) (self PMT, err error) {
 		info.ElementaryPID = flags & 0x1fff
 
 		if DebugReader {
-			fmt.Printf("pmt: info1 %s\n", FieldsDumper{
+			fmt.Fprintf(DebugOutput, "pmt: info1 %s\n", FieldsDumper{
 				Fields: []struct {
 					Length int
 					Desc   string
@@ -392,7 +390,7 @@ func ReadPMT(r io.Reader) (self PMT, err error) {
 		length = flags & 0x3ff
 
 		if DebugReader {
-			fmt.Printf("pmt: info2 %s\n", FieldsDumper{
+			fmt.Fprintf(DebugOutput, "pmt: info2 %s\n", FieldsDumper{
 				Fields: []struct {
 					Length int
 					Desc   string
@@ -415,13 +413,13 @@ func ReadPMT(r io.Reader) (self PMT, err error) {
 	}
 
 	if DebugReader {
-		fmt.Printf("pmt: ProgramDescriptors %v\n", self.ProgramDescriptors)
-		fmt.Printf("pmt: ElementaryStreamInfos %v\n", self.ElementaryStreamInfos)
+		fmt.Fprintf(DebugOutput, "pmt: ProgramDescriptors %v\n", self.ProgramDescriptors)
+		fmt.Fprintf(DebugOutput, "pmt: ElementaryStreamInfos %v\n", self.ElementaryStreamInfos)
 	}
 
 	if err = cr.ReadCrc32UIntAndCheck(); err != nil {
 		if DebugReader {
-			fmt.Printf("pmt: %s\n", err)
+			fmt.Fprintf(DebugOutput, "pmt: %s\n", err)
 		}
 		return
 	}
@@ -459,13 +457,13 @@ func ReadPAT(r io.Reader) (self PAT, err error) {
 
 	if err = cr.ReadCrc32UIntAndCheck(); err != nil {
 		if DebugReader {
-			fmt.Printf("pat: %s\n", err)
+			fmt.Fprintf(DebugOutput, "pat: %s\n", err)
 		}
 		return
 	}
 
 	if DebugReader {
-		fmt.Printf("pat: %v\n", self)
+		fmt.Fprintf(DebugOutput, "pat: %v\n", self)
 	}
 
 	return
@@ -494,7 +492,7 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		return
 	}
 	if DebugReader {
-		fmt.Printf("pes: StreamId=%x length=%d\n", self.StreamId, length)
+		fmt.Fprintf(DebugOutput, "pes: StreamId=%x length=%d\n", self.StreamId, length)
 	}
 
 	if length == 0 {
@@ -514,7 +512,7 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 	}
 
 	if DebugReader {
-		fmt.Printf("pes: %s\n", FieldsDumper{
+		fmt.Fprintf(DebugOutput, "pes: %s\n", FieldsDumper{
 			Fields: []struct {
 				Length int
 				Desc   string
@@ -542,7 +540,7 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 	}
 
 	if DebugReader {
-		fmt.Printf("pes: %s\n", FieldsDumper{
+		fmt.Fprintf(DebugOutput, "pes: %s\n", FieldsDumper{
 			Fields: []struct {
 				Length int
 				Desc   string
@@ -574,7 +572,7 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		self.PTS = PESUIntToTs(v)
 
 		if DebugReader {
-			fmt.Printf("pes: pts %d %f\n", self.PTS, float64(self.PTS)/float64(PTS_HZ))
+			fmt.Fprintf(DebugOutput, "pes: pts %d %f\n", self.PTS, float64(self.PTS)/float64(PTS_HZ))
 		}
 	}
 
@@ -585,7 +583,7 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		}
 		self.DTS = PESUIntToTs(v)
 		if DebugReader {
-			fmt.Printf("pes: dts %d %f\n", self.DTS, float64(self.DTS)/float64(PTS_HZ))
+			fmt.Fprintf(DebugOutput, "pes: dts %d %f\n", self.DTS, float64(self.DTS)/float64(PTS_HZ))
 		}
 	}
 
