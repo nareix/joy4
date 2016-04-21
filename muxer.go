@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/nareix/av"
+	"github.com/nareix/codec/aacparser"
+	"github.com/nareix/codec/h264parser"
 	"github.com/nareix/mp4/atom"
 	"github.com/nareix/mp4/isom"
-	"github.com/nareix/codec/h264parser"
-	"github.com/nareix/codec/aacparser"
 	"io"
 )
 
@@ -62,6 +62,7 @@ func (self *Muxer) NewStream() av.Stream {
 		},
 	}
 
+	stream.timeScale = 90000
 	stream.muxer = self
 	self.streams = append(self.streams, stream)
 
@@ -69,12 +70,8 @@ func (self *Muxer) NewStream() av.Stream {
 }
 
 func (self *Stream) fillTrackAtom() (err error) {
-	if self.sampleIndex > 0 {
-		self.sttsEntry.Count++
-	}
-
-	self.trackAtom.Media.Header.TimeScale = int(self.TimeScale())
-	self.trackAtom.Media.Header.Duration = int(self.lastDts)
+	self.trackAtom.Media.Header.TimeScale = int(self.timeScale)
+	self.trackAtom.Media.Header.Duration = int(self.duration)
 
 	if self.Type() == av.H264 {
 		width, height := self.Width(), self.Height()
@@ -130,14 +127,6 @@ func (self *Stream) fillTrackAtom() (err error) {
 	return
 }
 
-func (self *Muxer) writeMdat(data []byte) (pos int64, err error) {
-	if pos, err = self.mdatWriter.Seek(0, 1); err != nil {
-		return
-	}
-	_, err = self.mdatWriter.Write(data)
-	return
-}
-
 func (self *Muxer) WriteHeader() (err error) {
 	if self.mdatWriter, err = atom.WriteAtomHeader(self.W, "mdat"); err != nil {
 		return
@@ -145,11 +134,12 @@ func (self *Muxer) WriteHeader() (err error) {
 	return
 }
 
-func (self *Muxer) WriteSample(pkt av.Packet) (err error) {
-	pts, dts, isKeyFrame, frame := pkt.Pts, pkt.Dts, pkt.IsKeyFrame, pkt.Data
-	stream := self.streams[pkt.StreamIdx]
+func (self *Muxer) WritePacket(streamIndex int, pkt av.Packet) (err error) {
+	stream := self.streams[streamIndex]
+	frame := pkt.Data
 
 	if stream.Type() == av.AAC && aacparser.IsADTSFrame(frame) {
+		sampleRate := stream.SampleRate()
 		for len(frame) > 0 {
 			var payload []byte
 			var samples int
@@ -157,20 +147,21 @@ func (self *Muxer) WriteSample(pkt av.Packet) (err error) {
 			if _, payload, samples, framelen, err = aacparser.ReadADTSFrame(frame); err != nil {
 				return
 			}
-			delta := int64(samples) * stream.TimeScale() / int64(stream.SampleRate())
-			pts += delta
-			dts += delta
-			frame = frame[framelen:]
-			if stream.writeSample(pts, dts, isKeyFrame, payload); err != nil {
+			newpkt := pkt
+			newpkt.Data = payload
+			newpkt.Duration = float64(samples)/float64(sampleRate)
+			if err = stream.writePacket(newpkt); err != nil {
 				return
 			}
+			frame = frame[framelen:]
 		}
+		return
 	}
 
-	return stream.writeSample(pts, dts, isKeyFrame, frame)
+	return stream.writePacket(pkt)
 }
 
-func (self *Stream) writeSample(pts int64, dts int64, isKeyFrame bool, data []byte) (err error) {
+func (self *Stream) writePacket(pkt av.Packet) (err error) {
 	var filePos int64
 	var sampleSize int
 
@@ -179,7 +170,7 @@ func (self *Stream) writeSample(pts int64, dts int64, isKeyFrame bool, data []by
 	}
 
 	if self.Type() == av.H264 {
-		nalus, _ := h264parser.SplitNALUs(data)
+		nalus, _ := h264parser.SplitNALUs(pkt.Data)
 		h264parser.WalkNALUsAVCC(nalus, func(b []byte) {
 			sampleSize += len(b)
 			_, err = self.muxer.mdatWriter.Write(b)
@@ -188,35 +179,25 @@ func (self *Stream) writeSample(pts int64, dts int64, isKeyFrame bool, data []by
 			return
 		}
 	} else {
-		sampleSize = len(data)
-		if _, err = self.muxer.mdatWriter.Write(data); err != nil {
+		sampleSize = len(pkt.Data)
+		if _, err = self.muxer.mdatWriter.Write(pkt.Data); err != nil {
 			return
 		}
 	}
 
-	if isKeyFrame && self.sample.SyncSample != nil {
+	if pkt.IsKeyFrame && self.sample.SyncSample != nil {
 		self.sample.SyncSample.Entries = append(self.sample.SyncSample.Entries, self.sampleIndex+1)
 	}
 
-	if self.sampleIndex > 0 {
-		if dts <= self.lastDts {
-			err = fmt.Errorf("dts must be incremental")
-			return
-		}
-		duration := int(dts - self.lastDts)
-		if self.sttsEntry == nil || duration != self.sttsEntry.Duration {
-			self.sample.TimeToSample.Entries = append(self.sample.TimeToSample.Entries, atom.TimeToSampleEntry{Duration: duration})
-			self.sttsEntry = &self.sample.TimeToSample.Entries[len(self.sample.TimeToSample.Entries)-1]
-		}
-		self.sttsEntry.Count++
+	duration := int(self.timeToTs(pkt.Duration))
+	if self.sttsEntry == nil || duration != self.sttsEntry.Duration {
+		self.sample.TimeToSample.Entries = append(self.sample.TimeToSample.Entries, atom.TimeToSampleEntry{Duration: duration})
+		self.sttsEntry = &self.sample.TimeToSample.Entries[len(self.sample.TimeToSample.Entries)-1]
 	}
+	self.sttsEntry.Count++
 
 	if self.sample.CompositionOffset != nil {
-		if pts < dts {
-			err = fmt.Errorf("pts must greater than dts")
-			return
-		}
-		offset := int(pts - dts)
+		offset := int(self.timeToTs(pkt.CompositionTime))
 		if self.cttsEntry == nil || offset != self.cttsEntry.Offset {
 			table := self.sample.CompositionOffset
 			table.Entries = append(table.Entries, atom.CompositionOffsetEntry{Offset: offset})
@@ -225,7 +206,7 @@ func (self *Stream) writeSample(pts int64, dts int64, isKeyFrame bool, data []by
 		self.cttsEntry.Count++
 	}
 
-	self.lastDts = dts
+	self.duration += int64(duration)
 	self.sampleIndex++
 	self.sample.ChunkOffset.Entries = append(self.sample.ChunkOffset.Entries, int(filePos))
 	self.sample.SampleSize.Entries = append(self.sample.SampleSize.Entries, sampleSize)
@@ -248,7 +229,7 @@ func (self *Muxer) WriteTrailer() (err error) {
 		if err = stream.fillTrackAtom(); err != nil {
 			return
 		}
-		dur := stream.duration()
+		dur := stream.tsToTime(stream.duration)
 		stream.trackAtom.Header.Duration = int(float64(timeScale) * dur)
 		if dur > maxDur {
 			maxDur = dur

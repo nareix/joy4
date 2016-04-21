@@ -17,7 +17,7 @@ type Demuxer struct {
 }
 
 func (self *Demuxer) Streams() (streams []av.Stream) {
-	for _, stream := range(self.streams) {
+	for _, stream := range self.streams {
 		streams = append(streams, stream)
 	}
 	return
@@ -69,7 +69,7 @@ func (self *Demuxer) ReadHeader() (err error) {
 		}
 		if atrack.Media != nil && atrack.Media.Info != nil && atrack.Media.Info.Sample != nil {
 			stream.sample = atrack.Media.Info.Sample
-			stream.SetTimeScale(int64(atrack.Media.Header.TimeScale))
+			stream.timeScale = int64(atrack.Media.Header.TimeScale)
 		} else {
 			err = fmt.Errorf("sample table not found")
 			return
@@ -219,7 +219,7 @@ func (self *Stream) isSampleValid() bool {
 	return true
 }
 
-func (self *Stream) incSampleIndex() {
+func (self *Stream) incSampleIndex() (duration int64) {
 	self.sampleIndexInChunk++
 	if self.sampleIndexInChunk == self.sample.SampleToChunk.Entries[self.chunkGroupIndex].SamplesPerChunk {
 		self.chunkIndex++
@@ -239,8 +239,9 @@ func (self *Stream) incSampleIndex() {
 	}
 
 	sttsEntry := self.sample.TimeToSample.Entries[self.sttsEntryIndex]
+	duration = int64(sttsEntry.Duration)
 	self.sampleIndexInSttsEntry++
-	self.dts += int64(sttsEntry.Duration)
+	self.dts += duration
 	if self.sampleIndexInSttsEntry == sttsEntry.Count {
 		self.sampleIndexInSttsEntry = 0
 		self.sttsEntryIndex++
@@ -262,6 +263,7 @@ func (self *Stream) incSampleIndex() {
 	}
 
 	self.sampleIndex++
+	return
 }
 
 func (self *Stream) sampleCount() int {
@@ -282,33 +284,41 @@ func (self *Stream) sampleCount() int {
 	}
 }
 
-func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
+func (self *Demuxer) ReadPacket() (streamIndex int, pkt av.Packet, err error) {
 	var choose *Stream
-	for _, stream := range(self.streams) {
-		if choose == nil || stream.TsToTime(stream.dts) < choose.TsToTime(choose.dts) {
+	for i, stream := range self.streams {
+		if choose == nil || stream.tsToTime(stream.dts) < choose.tsToTime(choose.dts) {
 			choose = stream
+			streamIndex = i
 		}
 	}
 	if false {
-		fmt.Printf("ReadPacket: choose index=%v time=%v\n", choose.idx, choose.TsToTime(choose.dts))
+		fmt.Printf("ReadPacket: choose index=%v time=%v\n", choose.idx, choose.tsToTime(choose.dts))
 	}
-	pkt.StreamIdx = choose.idx
-	pkt.Pts, pkt.Dts, pkt.IsKeyFrame, pkt.Data, err = choose.readSample()
+	pkt, err = choose.readPacket()
+	return
+}
+
+func (self *Demuxer) Time() (time float64) {
+	if len(self.streams) > 0 {
+		stream := self.streams[0]
+		time = stream.tsToTime(stream.dts)
+	}
 	return
 }
 
 func (self *Demuxer) SeekToTime(time float64) (err error) {
-	for _, stream := range(self.streams) {
+	for _, stream := range self.streams {
 		if stream.IsVideo() {
 			if err = stream.seekToTime(time); err != nil {
 				return
 			}
-			time = stream.TsToTime(stream.dts)
+			time = stream.tsToTime(stream.dts)
 			break
 		}
 	}
 
-	for _, stream := range(self.streams) {
+	for _, stream := range self.streams {
 		if !stream.IsVideo() {
 			if err = stream.seekToTime(time); err != nil {
 				return
@@ -319,11 +329,12 @@ func (self *Demuxer) SeekToTime(time float64) (err error) {
 	return
 }
 
-func (self *Stream) readSample() (pts int64, dts int64, isKeyFrame bool, data []byte, err error) {
+func (self *Stream) readPacket() (pkt av.Packet, err error) {
 	if !self.isSampleValid() {
 		err = io.EOF
 		return
 	}
+	//fmt.Println("readPacket", self.sampleIndex)
 
 	chunkOffset := self.sample.ChunkOffset.Entries[self.chunkIndex]
 	sampleSize := 0
@@ -334,39 +345,31 @@ func (self *Stream) readSample() (pts int64, dts int64, isKeyFrame bool, data []
 	}
 
 	sampleOffset := int64(chunkOffset) + self.sampleOffsetInChunk
-	if _, err = self.r.Seek(int64(sampleOffset), 0); err != nil {
+	if _, err = self.r.Seek(sampleOffset, 0); err != nil {
 		return
 	}
 
-	data = make([]byte, sampleSize)
-	if _, err = self.r.Read(data); err != nil {
+	pkt.Data = make([]byte, sampleSize)
+	if _, err = self.r.Read(pkt.Data); err != nil {
 		return
 	}
 
 	if self.sample.SyncSample != nil {
 		if self.sample.SyncSample.Entries[self.syncSampleIndex]-1 == self.sampleIndex {
-			isKeyFrame = true
+			pkt.IsKeyFrame = true
 		}
 	}
 
 	//println("pts/dts", self.ptsEntryIndex, self.dtsEntryIndex)
-	dts = self.dts
 	if self.sample.CompositionOffset != nil && len(self.sample.CompositionOffset.Entries) > 0 {
-		pts = self.dts + int64(self.sample.CompositionOffset.Entries[self.cttsEntryIndex].Offset)
-	} else {
-		pts = dts
+		cts := int64(self.sample.CompositionOffset.Entries[self.cttsEntryIndex].Offset)
+		pkt.CompositionTime = self.tsToTime(cts)
 	}
 
-	self.incSampleIndex()
+	duration := self.incSampleIndex()
+	pkt.Duration = self.tsToTime(duration)
+
 	return
-}
-
-func (self *Stream) duration() float64 {
-	total := int64(0)
-	for _, entry := range self.sample.TimeToSample.Entries {
-		total += int64(entry.Duration * entry.Count)
-	}
-	return float64(total) / float64(self.TimeScale())
 }
 
 func (self *Stream) seekToTime(time float64) (err error) {
@@ -375,13 +378,13 @@ func (self *Stream) seekToTime(time float64) (err error) {
 		return
 	}
 	if false {
-		fmt.Printf("stream[%d]: seekToTime index=%v time=%v cur=%v\n", self.idx, index, time, self.TsToTime(self.dts))
+		fmt.Printf("stream[%d]: seekToTime index=%v time=%v cur=%v\n", self.idx, index, time, self.tsToTime(self.dts))
 	}
 	return
 }
 
 func (self *Stream) timeToSampleIndex(time float64) int {
-	targetTs := self.TimeToTs(time)
+	targetTs := self.timeToTs(time)
 	targetIndex := 0
 
 	startTs := int64(0)
@@ -419,4 +422,3 @@ func (self *Stream) timeToSampleIndex(time float64) int {
 
 	return targetIndex
 }
-

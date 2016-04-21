@@ -11,7 +11,10 @@ type Stream struct {
 
 	trackAtom *atom.Track
 	r         io.ReadSeeker
-	idx int
+	idx       int
+
+	timeScale int64
+	duration int64
 
 	muxer *Muxer
 
@@ -35,7 +38,12 @@ type Stream struct {
 	sttsEntry *atom.TimeToSampleEntry
 	cttsEntry *atom.CompositionOffsetEntry
 	writeMdat func([]byte) (int64, error)
-	lastDts   int64
 }
 
+func (self *Stream) timeToTs(time float64) int64 {
+	return int64(time * float64(self.timeScale))
+}
 
+func (self *Stream) tsToTime(ts int64) float64 {
+	return float64(ts) / float64(self.timeScale)
+}
