@@ -3,6 +3,7 @@ package h264parser
 
 import (
 	"github.com/nareix/bits"
+	"io"
 	"fmt"
 	"bytes"
 )
@@ -510,51 +511,51 @@ func MakeAVCDecoderConfRecord(
 	self.LengthSizeMinusOne = 3
 	return
 }
+*/
 
 func WriteAVCDecoderConfRecord(w io.Writer, self AVCDecoderConfRecord) (err error) {
-	if err = WriteInt(w, 1, 1); err != nil {
+	if err = bits.WriteUIntBE(w, 1, 8); err != nil {
 		return
 	}
-	if err = WriteInt(w, self.AVCProfileIndication, 1); err != nil {
+	if err = bits.WriteUIntBE(w, uint(self.AVCProfileIndication), 8); err != nil {
 		return
 	}
-	if err = WriteInt(w, self.ProfileCompatibility, 1); err != nil {
+	if err = bits.WriteUIntBE(w, uint(self.ProfileCompatibility), 8); err != nil {
 		return
 	}
-	if err = WriteInt(w, self.AVCLevelIndication, 1); err != nil {
+	if err = bits.WriteUIntBE(w, uint(self.AVCLevelIndication), 8); err != nil {
 		return
 	}
-	if err = WriteInt(w, self.LengthSizeMinusOne|0xfc, 1); err != nil {
+	if err = bits.WriteUIntBE(w, uint(self.LengthSizeMinusOne|0xfc), 8); err != nil {
 		return
 	}
 
-	if err = WriteInt(w, len(self.SPS)|0xe0, 1); err != nil {
+	if err = bits.WriteUIntBE(w, uint(len(self.SPS)|0xe0), 8); err != nil {
 		return
 	}
 	for _, data := range self.SPS {
-		if err = WriteInt(w, len(data), 2); err != nil {
+		if err = bits.WriteUIntBE(w, uint(len(data)), 16); err != nil {
 			return
 		}
-		if err = WriteBytes(w, data, len(data)); err != nil {
+		if err = bits.WriteBytes(w, data, len(data)); err != nil {
 			return
 		}
 	}
 
-	if err = WriteInt(w, len(self.PPS), 1); err != nil {
+	if err = bits.WriteUIntBE(w, uint(len(self.PPS)), 8); err != nil {
 		return
 	}
 	for _, data := range self.PPS {
-		if err = WriteInt(w, len(data), 2); err != nil {
+		if err = bits.WriteUIntBE(w, uint(len(data)), 16); err != nil {
 			return
 		}
-		if err = WriteBytes(w, data, len(data)); err != nil {
+		if err = bits.WriteBytes(w, data, len(data)); err != nil {
 			return
 		}
 	}
 
 	return
 }
-*/
 
 type CodecInfo struct {
 	Record AVCDecoderConfRecord
@@ -574,6 +575,24 @@ func ParseCodecData(config []byte) (info CodecInfo, err error) {
 		err = fmt.Errorf("CodecData invalid: parse SPS failed(%s)", err)
 		return
 	}
+	return
+}
+
+func CreateCodecDataBySPSAndPPS(SPS, PPS []byte) (codecData []byte, err error) {
+	self := AVCDecoderConfRecord{}
+	self.AVCProfileIndication = uint(SPS[1])
+	self.ProfileCompatibility = uint(SPS[2])
+	self.AVCLevelIndication = uint(SPS[3])
+	self.SPS = [][]byte{SPS}
+	self.PPS = [][]byte{PPS}
+	self.LengthSizeMinusOne = 3
+
+	buf := &bytes.Buffer{}
+	if err = WriteAVCDecoderConfRecord(buf, self); err != nil {
+		return
+	}
+	codecData = buf.Bytes()
+
 	return
 }
 
