@@ -14,10 +14,10 @@ type Stream struct {
 	av.StreamCommon
 
 	time float64
+	lastDuration float64
 
 	pid           uint
 	buf           bytes.Buffer
-	payload       []byte
 	peshdr        *PESHeader
 	tshdr         TSHeader
 
