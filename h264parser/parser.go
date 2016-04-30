@@ -216,55 +216,58 @@ func SplitNALUs(b []byte) (nalus [][]byte, ok bool) {
 
 	// maybe AVCC
 	if val4 <= uint(len(b)) {
-		b = b[4:]
+		_val4 := val4
+		_b := b[4:]
 		nalus := [][]byte{}
 		for {
-			nalus = append(nalus, b[:val4])
-			b = b[val4:]
-			if len(b) < 4 {
+			nalus = append(nalus, _b[:_val4])
+			_b = _b[_val4:]
+			if len(_b) < 4 {
 				break
 			}
-			val4 = bits.GetUIntBE(b, 32)
-			b = b[4:]
-			if val4 > uint(len(b)) {
+			_val4 = bits.GetUIntBE(_b, 32)
+			_b = _b[4:]
+			if _val4 > uint(len(_b)) {
 				break
 			}
 		}
-		if len(b) == 0 {
+		if len(_b) == 0 {
 			return nalus, true
 		}
 	}
 
 	// is Annex B
 	if val3 == 1 || val4 == 1 {
+		_val3 := val3
+		_val4 := val4
 		start := 0
 		pos := 0
 		for {
 			if start != pos {
 				nalus = append(nalus, b[start:pos])
 			}
-			if val3 == 1 {
+			if _val3 == 1 {
 				pos += 3
-			} else if val4 == 1 {
+			} else if _val4 == 1 {
 				pos += 4
 			}
 			start = pos
 			if start == len(b) {
 				break
 			}
-			val3 = 0
-			val4 = 0
+			_val3 = 0
+			_val4 = 0
 			for pos < len(b) {
 				if pos+2 < len(b) && b[pos] == 0 {
-					val3 = bits.GetUIntBE(b[pos:], 24)
-					if val3 == 0 {
+					_val3 = bits.GetUIntBE(b[pos:], 24)
+					if _val3 == 0 {
 						if pos+3 < len(b) {
-							val4 = uint(b[pos+3])
-							if val4 == 1 {
+							_val4 = uint(b[pos+3])
+							if _val4 == 1 {
 								break
 							}
 						}
-					} else if val3 == 1 {
+					} else if _val3 == 1 {
 						break
 					}
 					pos++
