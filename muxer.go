@@ -12,6 +12,10 @@ import (
 type Muxer struct {
 	W       io.Writer
 	streams []*Stream
+	PaddingToMakeCounterCont bool
+
+	tswPAT       *TSWriter
+	tswPMT       *TSWriter
 }
 
 func (self *Muxer) NewStream() av.Stream {
@@ -26,7 +30,28 @@ func (self *Muxer) NewStream() av.Stream {
 	return stream
 }
 
+func (self *Muxer) writePaddingTSPackets(tsw *TSWriter) (err error) {
+	for tsw.ContinuityCounter&0xf != 0x0 {
+		header := TSHeader{
+			PID: tsw.PID,
+			ContinuityCounter: tsw.ContinuityCounter,
+		}
+		if _, err = WriteTSHeader(self.W, header, 0); err != nil {
+			return
+		}
+		tsw.ContinuityCounter++
+	}
+	return
+}
+
 func (self *Muxer) WriteTrailer() (err error) {
+	if self.PaddingToMakeCounterCont {
+		for _, stream := range self.streams {
+			if err = self.writePaddingTSPackets(stream.tsw); err != nil {
+				return
+			}
+		}
+	}
 	return
 }
 
@@ -57,18 +82,18 @@ func (self *Muxer) WriteHeader() (err error) {
 	}
 	WritePMT(bufPMT, pmt)
 
-	tswPMT := &TSWriter{
+	self.tswPMT = &TSWriter{
 		PID: 0x1000,
 		DiscontinuityIndicator: true,
 	}
-	tswPAT := &TSWriter{
+	self.tswPAT = &TSWriter{
 		PID: 0,
 		DiscontinuityIndicator: true,
 	}
-	if err = tswPAT.WriteTo(self.W, bufPAT.Bytes()); err != nil {
+	if err = self.tswPAT.WriteTo(self.W, bufPAT.Bytes()); err != nil {
 		return
 	}
-	if err = tswPMT.WriteTo(self.W, bufPMT.Bytes()); err != nil {
+	if err = self.tswPMT.WriteTo(self.W, bufPMT.Bytes()); err != nil {
 		return
 	}
 

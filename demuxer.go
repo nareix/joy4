@@ -45,7 +45,7 @@ func (self *Demuxer) ReadHeader() (err error) {
 		if self.pmt != nil {
 			n := 0
 			for _, stream := range self.streams {
-				if len(stream.pkts) > 0 {
+				if len(stream.CodecData()) > 0 {
 					n++
 				}
 			}
@@ -186,10 +186,6 @@ func (self *Stream) readPacket() (ret av.Packet, ok bool) {
 }
 
 func (self *Stream) payloadStart() {
-	if false {
-		fmt.Println("payloadStart:", self)
-	}
-
 	dts := self.peshdr.DTS
 	pts := self.peshdr.PTS
 	if dts == 0 {
@@ -218,10 +214,6 @@ func (self *Stream) payloadStart() {
 }
 
 func (self *Stream) payloadEnd() (err error) {
-	if false {
-		fmt.Println("payloadEnd:", self)
-	}
-
 	payload := self.buf.Bytes()
 
 	curpkt := &self.pkts[len(self.pkts)-1]
