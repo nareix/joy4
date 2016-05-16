@@ -301,9 +301,7 @@ type SPSInfo struct {
 }
 
 func ParseSPS(data []byte) (self SPSInfo, err error) {
-	r := &bits.GolombBitReader{
-		R: bytes.NewReader(data),
-	}
+	r := &bits.GolombBitReader{R: bytes.NewReader(data)}
 
 	if _, err = r.ReadBits(8); err != nil {
 		return
@@ -657,6 +655,72 @@ func ParseAVCDecoderConfRecord(config []byte) (self AVCDecoderConfRecord, err er
 			return
 		}
 		self.PPS = append(self.PPS, data)
+	}
+
+	return
+}
+
+type SliceType uint
+
+func (self SliceType) String() string {
+	switch self {
+	case P:
+		return "P"
+	case B:
+		return "B"
+	case I:
+		return "I"
+	}
+	return ""
+}
+
+const (
+	P = iota+1
+	B
+	I
+)
+
+func ParseSliceHeaderFromNALU(packet []byte) (sliceType SliceType, err error) {
+
+	if len(packet) <= 1 {
+		err = fmt.Errorf("packet too short to parse slice header")
+		return
+	}
+
+	nal_unit_type := packet[0]&0x1f
+	switch nal_unit_type {
+	case 1,2,5,19:
+		// slice_layer_without_partitioning_rbsp
+		// slice_data_partition_a_layer_rbsp
+
+	default:
+		err = fmt.Errorf("nal_unit_type=%d has no slice header", nal_unit_type)
+		return
+	}
+
+	r := &bits.GolombBitReader{R: bytes.NewReader(packet[1:])}
+
+	// first_mb_in_slice
+	if _, err = r.ReadExponentialGolombCode(); err != nil {
+		return
+	}
+
+	// slice_type
+	var u uint
+	if u, err = r.ReadExponentialGolombCode(); err != nil {
+		return
+	}
+
+	switch u {
+	case 0,3,5,8:
+		sliceType = P
+	case 1,6:
+		sliceType = B
+	case 2,4,7,9:
+		sliceType = I
+	default:
+		err = fmt.Errorf("slice_type=%d invalid", u)
+		return
 	}
 
 	return
