@@ -9,6 +9,3 @@ typedef struct {
 	AVFrame *frame;
 } FFCtx;
 
-int FFCtxFindEncoderByName(FFCtx *ff, const char *name);
-int FFCtxFindDecoderByName(FFCtx *ff, const char *name);
-
