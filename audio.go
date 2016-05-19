@@ -67,18 +67,22 @@ func (self *AudioEncoder) Encode(sample []byte, flush bool) (gotPkt bool, pkt []
 	nbSamples := 1024
 	expectedSize := nbSamples*self.sampleSize*self.ChannelCount
 
-	if len(sample) != expectedSize {
-		err = fmt.Errorf("len(sample) should be %d", expectedSize)
-		return
-	}
-
 	frame := self.ff.frame
-	frame.nb_samples = C.int(nbSamples)
-	for i := 0; i < self.ChannelCount; i++ {
-		frame.data[i] = (*C.uint8_t)(unsafe.Pointer(&sample[i*nbSamples*self.sampleSize]))
-		frame.linesize[i] = C.int(nbSamples*self.sampleSize)
+	if flush {
+		frame = nil
+	} else {
+		if len(sample) != expectedSize {
+			err = fmt.Errorf("len(sample) should be %d", expectedSize)
+			return
+		}
+
+		frame.nb_samples = C.int(nbSamples)
+		for i := 0; i < self.ChannelCount; i++ {
+			frame.data[i] = (*C.uint8_t)(unsafe.Pointer(&sample[i*nbSamples*self.sampleSize]))
+			frame.linesize[i] = C.int(nbSamples*self.sampleSize)
+		}
+		frame.extended_data = &frame.data[0]
 	}
-	frame.extended_data = &frame.data[0]
 
 	cpkt := C.AVPacket{}
 	cgotpkt := C.int(0)
