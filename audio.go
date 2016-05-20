@@ -10,15 +10,24 @@ import (
 	void set_sample_fmt(AVCodecContext *ctx, int sample_fmt) {
 		ctx->sample_fmt = sample_fmt;
 	}
+	int wrap_av_get_bytes_per_sample(int sample_fmt) {
+		return av_get_bytes_per_sample(sample_fmt);
+	}
 	*/
 	"C"
 	"unsafe"
 	"fmt"
 )
 
+type SampleFormat int
+
+func (self SampleFormat) BytesPerSample() int {
+	return int(C.wrap_av_get_bytes_per_sample(C.int(self)))
+}
+
 const (
-	S16 = C.AV_SAMPLE_FMT_S16
-	FLTP = C.AV_SAMPLE_FMT_FLTP
+	S16 = SampleFormat(C.AV_SAMPLE_FMT_S16)
+	FLTP = SampleFormat(C.AV_SAMPLE_FMT_FLTP)
 )
 
 type AudioEncoder struct {
@@ -26,8 +35,8 @@ type AudioEncoder struct {
 	SampleRate int
 	BitRate int
 	ChannelCount int
-	SampleFormat int
-	sampleSize int
+	SampleFormat SampleFormat
+	FrameSampleCount int
 }
 
 func (self *AudioEncoder) Setup() (err error) {
@@ -46,28 +55,26 @@ func (self *AudioEncoder) Setup() (err error) {
 		err = fmt.Errorf("avcodec_open2 failed")
 		return
 	}
+	self.SampleFormat = SampleFormat(int(ff.codecCtx.sample_fmt))
+	self.ChannelCount = int(ff.codecCtx.channels)
+	self.FrameSampleCount = int(ff.codecCtx.frame_size)
 
 	return
 }
 
 func (self *AudioEncoder) Extradata() (data []byte) {
-	data = make([]byte, (int)(self.ff.codecCtx.extradata_size))
-	C.memcpy(
-		unsafe.Pointer(&data[0]),
-		unsafe.Pointer(self.ff.codecCtx.extradata),
-		(C.size_t)(len(data)),
-	)
+	data = C.GoBytes(unsafe.Pointer(self.ff.codecCtx.extradata), self.ff.codecCtx.extradata_size)
 	return
 }
 
 func (self *AudioEncoder) Encode(sample []byte, flush bool) (gotPkt bool, pkt []byte, err error) {
 	ff := &self.ff
-	nbSamples := int(ff.codecCtx.frame_size)
+	nbSamples := self.FrameSampleCount
 	channelCount := int(ff.codecCtx.channels)
 	sampleSize := int(C.av_get_bytes_per_sample(ff.codecCtx.sample_fmt))
 	expectedSize := nbSamples*sampleSize*channelCount
 
-	frame := self.ff.frame
+	frame := ff.frame
 	if flush {
 		frame = nil
 	} else {
@@ -77,6 +84,8 @@ func (self *AudioEncoder) Encode(sample []byte, flush bool) (gotPkt bool, pkt []
 		}
 
 		frame.nb_samples = C.int(nbSamples)
+		frame.format = C.int(ff.codecCtx.sample_fmt)
+		frame.channel_layout = ff.codecCtx.channel_layout
 		if C.av_sample_fmt_is_planar(ff.codecCtx.sample_fmt) != 0 {
 			for i := 0; i < self.ChannelCount; i++ {
 				frame.data[i] = (*C.uint8_t)(unsafe.Pointer(&sample[i*nbSamples*sampleSize]))
@@ -84,7 +93,7 @@ func (self *AudioEncoder) Encode(sample []byte, flush bool) (gotPkt bool, pkt []
 			}
 		} else {
 			frame.data[0] = (*C.uint8_t)(unsafe.Pointer(&sample[0]))
-			frame.linesize[0] = C.int(channelCount*nbSamples*self.sampleSize)
+			frame.linesize[0] = C.int(channelCount*nbSamples*sampleSize)
 		}
 		//frame.extended_data = &frame.data[0]
 	}
@@ -109,7 +118,7 @@ func (self *AudioEncoder) Encode(sample []byte, flush bool) (gotPkt bool, pkt []
 type AudioDecoder struct {
 	ff C.FFCtx
 	ChannelCount int
-	SampleFormat int
+	SampleFormat SampleFormat
 	Extradata []byte
 }
 
@@ -128,6 +137,8 @@ func (self *AudioDecoder) Setup() (err error) {
 		err = fmt.Errorf("avcodec_open2 failed")
 		return
 	}
+	self.SampleFormat = SampleFormat(int(ff.codecCtx.sample_fmt))
+	self.ChannelCount = int(ff.codecCtx.channels)
 
 	return
 }
