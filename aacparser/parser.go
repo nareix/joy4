@@ -2,6 +2,7 @@ package aacparser
 
 import (
 	"github.com/nareix/bits"
+	"github.com/nareix/av"
 	"fmt"
 	"bytes"
 	"io"
@@ -247,6 +248,16 @@ func (self MPEG4AudioConfig) Complete() (config MPEG4AudioConfig) {
 	return
 }
 
+func ParseMPEG4AudioConfig(data []byte) (config MPEG4AudioConfig, err error) {
+	r := bytes.NewReader(data)
+	if config, err = ReadMPEG4AudioConfig(r); err != nil {
+		err = fmt.Errorf("CodecData invalid: parse MPEG4AudioConfig failed(%s)", err)
+		return
+	}
+	config = config.Complete()
+	return
+}
+
 func ReadMPEG4AudioConfig(r io.Reader) (config MPEG4AudioConfig, err error) {
 	// copied from libavcodec/mpeg4audio.c avpriv_mpeg4audio_get_config()
 	br := &bits.Reader{R: r}
@@ -298,17 +309,51 @@ func WriteMPEG4AudioConfig(w io.Writer, config MPEG4AudioConfig) (err error) {
 	return
 }
 
-type CodecInfo struct {
-	MPEG4AudioConfig
+type CodecData struct {
+	Config []byte
+	ConfigInfo MPEG4AudioConfig
 }
 
-func ParseCodecData(config []byte) (info CodecInfo, err error) {
-	r := bytes.NewReader(config)
-	if info.MPEG4AudioConfig, err = ReadMPEG4AudioConfig(r); err != nil {
-		err = fmt.Errorf("CodecData invalid: parse MPEG4AudioConfig failed(%s)", err)
+func (self CodecData) IsVideo() bool {
+	return false
+}
+
+func (self CodecData) IsAudio() bool {
+	return true
+}
+
+func (self CodecData) Type() int {
+	return av.AAC
+}
+
+func (self CodecData) MPEG4AudioConfigBytes() []byte {
+	return self.Config
+}
+
+func (self CodecData) ChannelCount() int {
+	return self.ConfigInfo.ChannelCount
+}
+
+func (self CodecData) SampleRate() int {
+	return self.ConfigInfo.SampleRate
+}
+
+func (self CodecData) SampleFormat() av.SampleFormat {
+	return av.FLTP
+}
+
+func (self CodecData) MakeADTSHeader(samples int, payloadLength int) []byte {
+	return MakeADTSHeader(self.ConfigInfo, samples, payloadLength)
+}
+
+func NewCodecDataFromMPEG4AudioConfigBytes(config []byte) (codec av.AACCodecData, err error) {
+	self := CodecData{}
+	self.Config = config
+	if self.ConfigInfo, err = ParseMPEG4AudioConfig(config); err != nil {
+		err = fmt.Errorf("parse MPEG4AudioConfig failed(%s)", err)
 		return
 	}
-	info.MPEG4AudioConfig = info.MPEG4AudioConfig.Complete()
+	codec = self
 	return
 }
 
