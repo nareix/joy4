@@ -9,6 +9,15 @@ import (
 	"io"
 )
 
+func Create(W io.Writer, streams []av.CodecData) (muxer *Muxer, err error) {
+	_muxer := &Muxer{W: W}
+	if err = _muxer.WriteHeader(streams); err != nil {
+		return
+	}
+	muxer = _muxer
+	return
+}
+
 type Muxer struct {
 	W       io.Writer
 	streams []*Stream
@@ -18,16 +27,17 @@ type Muxer struct {
 	tswPMT       *TSWriter
 }
 
-func (self *Muxer) NewStream() av.Stream {
+func (self *Muxer) NewStream(codec av.CodecData) (err error) {
 	stream := &Stream{
-		mux: self,
+		muxer: self,
+		CodecData: codec,
 		tsw: &TSWriter{
 			DiscontinuityIndicator: true,
 			PID: uint(len(self.streams) + 0x100),
 		},
 	}
 	self.streams = append(self.streams, stream)
-	return stream
+	return
 }
 
 func (self *Muxer) writePaddingTSPackets(tsw *TSWriter) (err error) {
@@ -55,7 +65,13 @@ func (self *Muxer) WriteTrailer() (err error) {
 	return
 }
 
-func (self *Muxer) WriteHeader() (err error) {
+func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
+	for _, stream := range streams {
+		if err = self.NewStream(stream); err != nil {
+			return
+		}
+	}
+
 	bufPAT := &bytes.Buffer{}
 	bufPMT := &bytes.Buffer{}
 
@@ -104,9 +120,10 @@ func (self *Muxer) WritePacket(streamIndex int, pkt av.Packet) (err error) {
 	stream := self.streams[streamIndex]
 
 	if stream.Type() == av.AAC {
+		codec := stream.CodecData.(av.AACCodecData)
 		data := pkt.Data
 		if !aacparser.IsADTSFrame(data) {
-			data = append(aacparser.MakeADTSHeader(stream.AACCodecInfo.MPEG4AudioConfig, 1024, len(data)), data...)
+			data = append(codec.MakeADTSHeader(1024, len(data)), data...)
 		}
 
 		buf := &bytes.Buffer{}
@@ -126,6 +143,7 @@ func (self *Muxer) WritePacket(streamIndex int, pkt av.Packet) (err error) {
 		stream.time += pkt.Duration
 
 	} else if stream.Type() == av.H264 {
+		codec := stream.CodecData.(av.H264CodecData)
 		buf := &bytes.Buffer{}
 		pes := PESHeader{
 			StreamId: StreamIdH264,
@@ -136,9 +154,7 @@ func (self *Muxer) WritePacket(streamIndex int, pkt av.Packet) (err error) {
 
 		nalus, _ := h264parser.SplitNALUs(pkt.Data)
 		if pkt.IsKeyFrame {
-			sps := stream.H264CodecInfo.Record.SPS[0]
-			pps := stream.H264CodecInfo.Record.PPS[0]
-			nalus = append([][]byte{sps, pps}, nalus...)
+			nalus = append([][]byte{codec.SPS(), codec.PPS()}, nalus...)
 		}
 		h264parser.WalkNALUsAnnexb(nalus, func(b []byte) {
 			buf.Write(b)
