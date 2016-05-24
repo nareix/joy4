@@ -11,14 +11,23 @@ import (
 	"io"
 )
 
+func Create(W io.WriteSeeker, streams []av.CodecData) (muxer *Muxer, err error) {
+	_muxer := &Muxer{W: W}
+	if err = _muxer.WriteHeader(streams); err != nil {
+		return
+	}
+	muxer = _muxer
+	return
+}
+
 type Muxer struct {
 	W          io.WriteSeeker
 	streams    []*Stream
 	mdatWriter *atom.Writer
 }
 
-func (self *Muxer) NewStream() av.Stream {
-	stream := &Stream{}
+func (self *Muxer) NewStream(codec av.CodecData) (err error) {
+	stream := &Stream{CodecData: codec}
 
 	stream.sample = &atom.SampleTable{
 		SampleDesc:   &atom.SampleDesc{},
@@ -66,7 +75,7 @@ func (self *Muxer) NewStream() av.Stream {
 	stream.muxer = self
 	self.streams = append(self.streams, stream)
 
-	return stream
+	return
 }
 
 func (self *Stream) fillTrackAtom() (err error) {
@@ -74,7 +83,8 @@ func (self *Stream) fillTrackAtom() (err error) {
 	self.trackAtom.Media.Header.Duration = int(self.duration)
 
 	if self.Type() == av.H264 {
-		width, height := self.Width(), self.Height()
+		codec := self.CodecData.(av.H264CodecData)
+		width, height := codec.Width(), codec.Height()
 		self.sample.SampleDesc.Avc1Desc = &atom.Avc1Desc{
 			DataRefIdx:           1,
 			HorizontalResolution: 72,
@@ -84,7 +94,7 @@ func (self *Stream) fillTrackAtom() (err error) {
 			FrameCount:           1,
 			Depth:                24,
 			ColorTableId:         -1,
-			Conf:                 &atom.Avc1Conf{Data: self.CodecData()},
+			Conf:                 &atom.Avc1Conf{Data: codec.AVCDecoderConfRecordBytes()},
 		}
 		self.sample.SyncSample = &atom.SyncSample{}
 		self.trackAtom.Media.Handler = &atom.HandlerRefer{
@@ -98,15 +108,16 @@ func (self *Stream) fillTrackAtom() (err error) {
 		self.trackAtom.Header.TrackHeight = atom.IntToFixed(int(height))
 
 	} else if self.Type() == av.AAC {
+		codec := self.CodecData.(av.AACCodecData)
 		buf := &bytes.Buffer{}
-		if err = isom.WriteElemStreamDesc(buf, self.CodecData(), uint(self.trackAtom.Header.TrackId)); err != nil {
+		if err = isom.WriteElemStreamDesc(buf, codec.MPEG4AudioConfigBytes(), uint(self.trackAtom.Header.TrackId)); err != nil {
 			return
 		}
 		self.sample.SampleDesc.Mp4aDesc = &atom.Mp4aDesc{
 			DataRefIdx:       1,
-			NumberOfChannels: self.ChannelCount(),
-			SampleSize:       self.ChannelCount() * 8,
-			SampleRate:       atom.IntToFixed(self.SampleRate()),
+			NumberOfChannels: codec.ChannelCount(),
+			SampleSize:       codec.ChannelCount() * 8,
+			SampleRate:       atom.IntToFixed(codec.SampleRate()),
 			Conf: &atom.ElemStreamDesc{
 				Data: buf.Bytes(),
 			},
@@ -126,12 +137,18 @@ func (self *Stream) fillTrackAtom() (err error) {
 	return
 }
 
-func (self *Muxer) WriteHeader() (err error) {
+func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
+	for _, stream := range streams {
+		if err = self.NewStream(stream); err != nil {
+			return
+		}
+	}
+
 	if self.mdatWriter, err = atom.WriteAtomHeader(self.W, "mdat"); err != nil {
 		return
 	}
 	for _, stream := range self.streams {
-		if stream.Type().IsVideo() {
+		if stream.IsVideo() {
 			stream.sample.CompositionOffset = &atom.CompositionOffset{}
 		}
 	}
@@ -143,7 +160,7 @@ func (self *Muxer) WritePacket(streamIndex int, pkt av.Packet) (err error) {
 	frame := pkt.Data
 
 	if stream.Type() == av.AAC && aacparser.IsADTSFrame(frame) {
-		sampleRate := stream.SampleRate()
+		sampleRate := stream.CodecData.(av.AudioCodecData).SampleRate()
 		for len(frame) > 0 {
 			var payload []byte
 			var samples int

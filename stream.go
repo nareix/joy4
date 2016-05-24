@@ -7,7 +7,7 @@ import (
 )
 
 type Stream struct {
-	av.StreamCommon
+	av.CodecData
 
 	trackAtom *atom.Track
 	r         io.ReadSeeker

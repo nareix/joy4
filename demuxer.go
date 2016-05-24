@@ -6,8 +6,19 @@ import (
 	"github.com/nareix/av"
 	"github.com/nareix/mp4/atom"
 	"github.com/nareix/mp4/isom"
+	"github.com/nareix/codec/aacparser"
+	"github.com/nareix/codec/h264parser"
 	"io"
 )
+
+func Open(R io.ReadSeeker) (demuxer *Demuxer, err error) {
+	_demuxer := &Demuxer{R: R}
+	if err = _demuxer.ReadHeader(); err != nil {
+		return
+	}
+	demuxer = _demuxer
+	return
+}
 
 type Demuxer struct {
 	R io.ReadSeeker
@@ -16,7 +27,7 @@ type Demuxer struct {
 	movieAtom *atom.Movie
 }
 
-func (self *Demuxer) Streams() (streams []av.Stream) {
+func (self *Demuxer) Streams() (streams []av.CodecData) {
 	for _, stream := range self.streams {
 		streams = append(streams, stream)
 	}
@@ -76,19 +87,17 @@ func (self *Demuxer) ReadHeader() (err error) {
 		}
 
 		if avc1 := atom.GetAvc1ConfByTrack(atrack); avc1 != nil {
-			stream.SetType(av.H264)
-			if err = stream.SetCodecData(avc1.Data); err != nil {
+			if stream.CodecData, err = h264parser.NewCodecDataFromAVCDecoderConfRecord(avc1.Data); err != nil {
 				return
 			}
 			self.streams = append(self.streams, stream)
 
 		} else if mp4a := atom.GetMp4aDescByTrack(atrack); mp4a != nil && mp4a.Conf != nil {
-			stream.SetType(av.AAC)
 			var config []byte
 			if config, err = isom.ReadElemStreamDesc(bytes.NewReader(mp4a.Conf.Data)); err != nil {
 				return
 			}
-			if err = stream.SetCodecData(config); err != nil {
+			if stream.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(config); err != nil {
 				return
 			}
 			self.streams = append(self.streams, stream)
@@ -295,17 +304,17 @@ func (self *Stream) sampleCount() int {
 }
 
 func (self *Demuxer) ReadPacket() (streamIndex int, pkt av.Packet, err error) {
-	var choose *Stream
+	var chosen *Stream
 	for i, stream := range self.streams {
-		if choose == nil || stream.tsToTime(stream.dts) < choose.tsToTime(choose.dts) {
-			choose = stream
+		if chosen == nil || stream.tsToTime(stream.dts) < chosen.tsToTime(chosen.dts) {
+			chosen = stream
 			streamIndex = i
 		}
 	}
 	if false {
-		fmt.Printf("ReadPacket: choose index=%v time=%v\n", choose.idx, choose.tsToTime(choose.dts))
+		fmt.Printf("ReadPacket: chosen index=%v time=%v\n", chosen.idx, chosen.tsToTime(chosen.dts))
 	}
-	pkt, err = choose.readPacket()
+	pkt, err = chosen.readPacket()
 	return
 }
 
