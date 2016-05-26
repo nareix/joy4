@@ -318,7 +318,7 @@ func (self *Demuxer) ReadPacket() (streamIndex int, pkt av.Packet, err error) {
 	return
 }
 
-func (self *Demuxer) Time() (time float64) {
+func (self *Demuxer) CurrentTime() (time float64) {
 	if len(self.streams) > 0 {
 		stream := self.streams[0]
 		time = stream.tsToTime(stream.dts)
