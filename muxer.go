@@ -27,7 +27,21 @@ type Muxer struct {
 	tswPMT       *TSWriter
 }
 
+func (self *Muxer) IsCodecSupported(codec av.CodecData) bool {
+	switch codec.Type() {
+	case av.H264, av.AAC:
+		return true
+	default:
+		return false
+	}
+}
+
 func (self *Muxer) NewStream(codec av.CodecData) (err error) {
+	if !self.IsCodecSupported(codec) {
+		err = fmt.Errorf("codec type=%x is not supported", codec.Type())
+		return
+	}
+
 	stream := &Stream{
 		muxer: self,
 		CodecData: codec,
