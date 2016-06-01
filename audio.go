@@ -25,48 +25,122 @@ type Resampler struct {
 	inChannelLayout, OutChannelLayout av.ChannelLayout
 	inSampleRate, OutSampleRate int
 	avr *C.AVAudioResampleContext
-	inframe, outframe *C.AVFrame
-}
-
-func freeResampler(self *Resampler) {
-	if self.avr != nil {
-		C.avresample_free(&self.avr)
-		self.avr = nil
-	}
-}
-
-func (self *Resampler) setupAvr() {
-	avr := C.avresample_alloc_context()
-	C.av_opt_set_int(avr, C.CString("in_channel_layout"), C.int64_t(channelLayoutAV2FF(self.inChannelLayout)), 0)
-	C.av_opt_set_int(avr, C.CString("out_channel_layout"), C.int64_t(channelLayoutAV2FF(self.OutChannelLayout)), 0)
-	C.av_opt_set_int(avr, C.CString("in_sample_rate"), C.int64_t(self.inSampleRate), 0)
-	C.av_opt_set_int(avr, C.CString("out_sample_rate"), C.int64_t(self.OutSampleRate), 0)
-	C.av_opt_set_int(avr, C.CString("in_sample_fmt"), C.int64_t(sampleFormatAV2FF(self.inSampleFormat)), 0)
-	C.av_opt_set_int(avr, C.CString("out_sample_fmt"), C.int64_t(sampleFormatAV2FF(self.OutSampleFormat)), 0)
-	self.avr = avr
 }
 
 func (self *Resampler) Resample(in av.AudioFrame) (out av.AudioFrame, err error) {
-	if self.inframe == nil {
-		self.inframe = C.av_frame_alloc()
-		self.outframe = C.av_frame_alloc()
-		runtime.SetFinalizer(self, freeResampler)
-	}
-	if in.SampleRate != self.inSampleRate || in.SampleFormat != self.inSampleFormat || in.ChannelLayout != self.inChannelLayout {
-		// TODO: flush left bytes
-		freeResampler(self)
+	formatChange := in.SampleRate != self.inSampleRate || in.SampleFormat != self.inSampleFormat || in.ChannelLayout != self.inChannelLayout
+
+	var flush av.AudioFrame
+
+	if formatChange {
+		if self.avr != nil {
+			outChannels := self.OutChannelLayout.Count()
+			if !self.OutSampleFormat.IsPlanar() {
+				outChannels = 1
+			}
+			outData := make([]*C.uint8_t, outChannels)
+			outSampleCount := int(C.avresample_get_out_samples(self.avr, C.int(in.SampleCount)))
+			outLinesize := outSampleCount*self.OutSampleFormat.BytesPerSample()
+			flush.Data = make([][]byte, outChannels)
+			for i := 0; i < outChannels; i++ {
+				flush.Data[i] = make([]byte, outLinesize)
+				outData[i] = (*C.uint8_t)(unsafe.Pointer(&flush.Data[i][0]))
+			}
+			flush.ChannelLayout = self.OutChannelLayout
+			flush.SampleFormat = self.OutSampleFormat
+			flush.SampleRate = self.OutSampleRate
+
+			convertSamples := int(C.avresample_convert(
+				self.avr,
+				unsafe.Pointer(&outData[0]), C.int(outLinesize), C.int(outSampleCount),
+				nil, C.int(0), C.int(0),
+			))
+			if convertSamples < 0 {
+				err = fmt.Errorf("avresample_convert_frame failed")
+				return
+			}
+			flush.SampleCount = convertSamples
+			if convertSamples < outSampleCount {
+				for i := 0; i < outChannels; i++ {
+					flush.Data[i] = flush.Data[i][:convertSamples*self.OutSampleFormat.BytesPerSample()]
+				}
+			}
+
+			//fmt.Println("flush:", "outSampleCount", outSampleCount, "convertSamples", convertSamples, "datasize", len(flush.Data[0]))
+		} else {
+			runtime.SetFinalizer(self, func(self *Resampler) {
+				self.Close()
+			})
+		}
+
+		C.avresample_free(&self.avr)
 		self.inSampleFormat = in.SampleFormat
 		self.inSampleRate = in.SampleRate
 		self.inChannelLayout = in.ChannelLayout
-		self.setupAvr()
+		avr := C.avresample_alloc_context()
+		C.av_opt_set_int(unsafe.Pointer(avr), C.CString("in_channel_layout"), C.int64_t(channelLayoutAV2FF(self.inChannelLayout)), 0)
+		C.av_opt_set_int(unsafe.Pointer(avr), C.CString("out_channel_layout"), C.int64_t(channelLayoutAV2FF(self.OutChannelLayout)), 0)
+		C.av_opt_set_int(unsafe.Pointer(avr), C.CString("in_sample_rate"), C.int64_t(self.inSampleRate), 0)
+		C.av_opt_set_int(unsafe.Pointer(avr), C.CString("out_sample_rate"), C.int64_t(self.OutSampleRate), 0)
+		C.av_opt_set_int(unsafe.Pointer(avr), C.CString("in_sample_fmt"), C.int64_t(sampleFormatAV2FF(self.inSampleFormat)), 0)
+		C.av_opt_set_int(unsafe.Pointer(avr), C.CString("out_sample_fmt"), C.int64_t(sampleFormatAV2FF(self.OutSampleFormat)), 0)
+		C.avresample_open(avr)
+		self.avr = avr
 	}
-	audioFrameAssignToFF(in, self.inframe)
-	if C.avresample_convert_frame(self.avr, self.outframe, self.inframe) != 0 {
+
+	inChannels := self.inChannelLayout.Count()
+	if !self.inSampleFormat.IsPlanar() {
+		inChannels = 1
+	}
+	inSampleCount := in.SampleCount
+	inLinesize := inSampleCount*in.SampleFormat.BytesPerSample()
+	inData := make([]*C.uint8_t, inChannels)
+	for i := 0; i < inChannels; i++ {
+		inData[i] = (*C.uint8_t)(unsafe.Pointer(&in.Data[i][0]))
+	}
+
+	outChannels := self.OutChannelLayout.Count()
+	if !self.OutSampleFormat.IsPlanar() {
+		outChannels = 1
+	}
+	outData := make([]*C.uint8_t, outChannels)
+	outSampleCount := int(C.avresample_get_out_samples(self.avr, C.int(in.SampleCount)))
+	outLinesize := outSampleCount*self.OutSampleFormat.BytesPerSample()
+	out.Data = make([][]byte, outChannels)
+	for i := 0; i < outChannels; i++ {
+		out.Data[i] = make([]byte, outLinesize)
+		outData[i] = (*C.uint8_t)(unsafe.Pointer(&out.Data[i][0]))
+	}
+	out.ChannelLayout = self.OutChannelLayout
+	out.SampleFormat = self.OutSampleFormat
+	out.SampleRate = self.OutSampleRate
+
+	convertSamples := int(C.avresample_convert(
+		self.avr,
+		unsafe.Pointer(&outData[0]), C.int(outLinesize), C.int(outSampleCount),
+		unsafe.Pointer(&inData[0]), C.int(inLinesize), C.int(inSampleCount),
+	))
+	if convertSamples < 0 {
 		err = fmt.Errorf("avresample_convert_frame failed")
 		return
 	}
-	audioFrameAssignToAV(self.outframe, &out)
+	out.SampleCount = convertSamples
+	if convertSamples < outSampleCount {
+		for i := 0; i < outChannels; i++ {
+			out.Data[i] = out.Data[i][:convertSamples*self.OutSampleFormat.BytesPerSample()]
+		}
+	}
+	//fmt.Println("outSampleCount", outSampleCount, "convertSamples", convertSamples)
+
+	if flush.SampleCount > 0 {
+		out = flush.Concat(out)
+	}
+
 	return
+}
+
+func (self *Resampler) Close() {
+	C.avresample_free(&self.avr)
 }
 
 type AudioEncoder struct {
@@ -150,7 +224,6 @@ func (self *AudioEncoder) Setup() (err error) {
 		self.ChannelLayout = av.CH_STEREO
 	}
 
-	//C.set_sample_fmt(ff.codecCtx, C.int(self.SampleFormat))
 	ff.codecCtx.sample_fmt = sampleFormatAV2FF(self.SampleFormat)
 	ff.codecCtx.sample_rate = C.int(self.SampleRate)
 	ff.codecCtx.bit_rate = C.int(self.BitRate)
@@ -190,9 +263,25 @@ func (self *AudioEncoder) CodecData() (codec av.AudioCodecData) {
 func (self *AudioEncoder) encodeOne(frame av.AudioFrame) (gotpkt bool, pkt av.Packet, err error) {
 	ff := &self.ff.ff
 
+	if ff.frame == nil {
+		if err = self.Setup(); err != nil {
+			return
+		}
+	}
+
 	cpkt := C.AVPacket{}
 	cgotpkt := C.int(0)
 	audioFrameAssignToFF(frame, ff.frame)
+
+	if false {
+		farr := []string{}
+		for i := 0; i < len(frame.Data[0])/4; i++ {
+			var f *float64 = (*float64)(unsafe.Pointer(&frame.Data[0][i*4]))
+			farr = append(farr, fmt.Sprintf("%.8f", *f))
+		}
+		fmt.Println(farr)
+	}
+	//fmt.Println("encode", ff.frame.channels, ff.frame.nb_samples, ff.frame.sample_rate, ff.frame.channel_layout, ff.frame.linesize[0], len(frame.Data))
 
 	cerr := C.avcodec_encode_audio2(ff.codecCtx, &cpkt, ff.frame, &cgotpkt)
 	if cerr < C.int(0) {
@@ -210,9 +299,29 @@ func (self *AudioEncoder) encodeOne(frame av.AudioFrame) (gotpkt bool, pkt av.Pa
 	return
 }
 
+func (self *AudioEncoder) resample(in av.AudioFrame) (out av.AudioFrame, err error) {
+	if self.resampler == nil {
+		self.resampler = &Resampler{
+			OutSampleFormat: self.SampleFormat,
+			OutSampleRate: self.SampleRate,
+			OutChannelLayout: self.ChannelLayout,
+		}
+	}
+	if out, err = self.resampler.Resample(in); err != nil {
+		return
+	}
+	return
+}
+
 func (self *AudioEncoder) Encode(frame av.AudioFrame) (pkts []av.Packet, err error) {
 	var gotpkt bool
 	var pkt av.Packet
+
+	if frame.SampleFormat != self.SampleFormat || frame.ChannelLayout != self.ChannelLayout || frame.SampleRate != self.SampleRate {
+		if frame, err = self.resample(frame); err != nil {
+			return
+		}
+	}
 
 	if self.FrameSampleCount != 0 {
 		if self.framebuf.SampleCount == 0 {
@@ -244,27 +353,49 @@ func (self *AudioEncoder) Encode(frame av.AudioFrame) (pkts []av.Packet, err err
 
 func (self *AudioEncoder) Close() {
 	freeFFCtx(self.ff)
+	if self.resampler != nil {
+		self.resampler.Close()
+		self.resampler = nil
+	}
 }
 
-func audioFrameAssignToAV(f *C.AVFrame, frame *av.AudioFrame) {
-	frame.SampleCount = int(f.nb_samples)
+func audioFrameAssignToAVParams(f *C.AVFrame, frame *av.AudioFrame) {
 	frame.SampleFormat = sampleFormatFF2AV(int32(f.format))
 	frame.ChannelLayout = channelLayoutFF2AV(f.channel_layout)
-	channels := int(f.channels)
-	frame.Data = make([][]byte, channels)
-	for i := 0; i < channels; i++ {
+	frame.SampleRate = int(f.sample_rate)
+}
+
+func audioFrameAssignToAVData(f *C.AVFrame, frame *av.AudioFrame) {
+	frame.SampleCount = int(f.nb_samples)
+	frame.Data = make([][]byte, int(f.channels))
+	for i := 0; i < int(f.channels); i++ {
 		frame.Data[i] = C.GoBytes(unsafe.Pointer(f.data[i]), f.linesize[i])
 	}
 }
 
-func audioFrameAssignToFF(frame av.AudioFrame, f *C.AVFrame) {
-	f.nb_samples = C.int(frame.SampleCount)
+func audioFrameAssignToAV(f *C.AVFrame, frame *av.AudioFrame) {
+	audioFrameAssignToAVParams(f, frame)
+	audioFrameAssignToAVData(f, frame)
+}
+
+func audioFrameAssignToFFParams(frame av.AudioFrame, f *C.AVFrame) {
 	f.format = C.int(sampleFormatAV2FF(frame.SampleFormat))
 	f.channel_layout = channelLayoutAV2FF(frame.ChannelLayout)
+	f.sample_rate = C.int(frame.SampleRate)
+	f.channels = C.int(frame.ChannelLayout.Count())
+}
+
+func audioFrameAssignToFFData(frame av.AudioFrame, f *C.AVFrame) {
+	f.nb_samples = C.int(frame.SampleCount)
 	for i := range frame.Data {
 		f.data[i] = (*C.uint8_t)(unsafe.Pointer(&frame.Data[i][0]))
 		f.linesize[i] = C.int(len(frame.Data[i]))
 	}
+}
+
+func audioFrameAssignToFF(frame av.AudioFrame, f *C.AVFrame) {
+	audioFrameAssignToFFParams(frame, f)
+	audioFrameAssignToFFData(frame, f)
 }
 
 func channelLayoutFF2AV(layout C.uint64_t) (channelLayout av.ChannelLayout) {
@@ -333,6 +464,7 @@ type AudioDecoder struct {
 	ff *ffctx
 	ChannelLayout av.ChannelLayout
 	SampleFormat av.SampleFormat
+	SampleRate int
 	Extradata []byte
 }
 
@@ -346,30 +478,36 @@ func (self *AudioDecoder) Setup() (err error) {
 		ff.codecCtx.extradata_size = C.int(len(self.Extradata))
 	}
 
+	ff.codecCtx.sample_rate = C.int(self.SampleRate)
 	ff.codecCtx.channel_layout = channelLayoutAV2FF(self.ChannelLayout)
+	ff.codecCtx.channels = C.int(self.ChannelLayout.Count())
 	if C.avcodec_open2(ff.codecCtx, ff.codec, nil) != 0 {
 		err = fmt.Errorf("avcodec_open2 failed")
 		return
 	}
 	self.SampleFormat = sampleFormatFF2AV(ff.codecCtx.sample_fmt)
 	self.ChannelLayout = channelLayoutFF2AV(ff.codecCtx.channel_layout)
+	if self.SampleRate == 0 {
+		self.SampleRate = int(ff.codecCtx.sample_rate)
+	}
 
 	return
 }
 
-func (self *AudioDecoder) Decode(data []byte) (gotFrame bool, frame av.AudioFrame, err error) {
+func (self *AudioDecoder) Decode(data []byte) (gotframe bool, frame av.AudioFrame, err error) {
 	ff := &self.ff.ff
 
-	cgotpkt := C.int(0)
-	cerr := C.wrap_avcodec_decode_audio4(ff.codecCtx, ff.frame, unsafe.Pointer(&data[0]), C.int(len(data)), &cgotpkt)
+	cgotframe := C.int(0)
+	cerr := C.wrap_avcodec_decode_audio4(ff.codecCtx, ff.frame, unsafe.Pointer(&data[0]), C.int(len(data)), &cgotframe)
 	if cerr < C.int(0) {
 		err = fmt.Errorf("avcodec_decode_audio4 failed: %d", cerr)
 		return
 	}
 
-	if cgotpkt != C.int(0) {
-		gotFrame = true
+	if cgotframe != C.int(0) {
+		gotframe = true
 		audioFrameAssignToAV(ff.frame, &frame)
+		frame.SampleRate = self.SampleRate
 	}
 
 	return
@@ -411,7 +549,38 @@ func freeFFCtx(self *ffctx) {
 	}
 }
 
-func NewAudioEncoder(name string) (enc *AudioEncoder, err error) {
+func NewAudioEncoderByCodecType(typ int) (enc *AudioEncoder, err error) {
+	var id uint32
+
+	switch typ {
+	case av.AAC:
+		id = C.AV_CODEC_ID_AAC
+
+	default:
+		err = fmt.Errorf("cannot find encoder codecType=%d", typ)
+		return
+	}
+
+	codec := C.avcodec_find_encoder(id)
+	if codec == nil {
+		err = fmt.Errorf("cannot find encoder codecId=%d", id)
+		return
+	}
+
+	if C.avcodec_get_type(id) != C.AVMEDIA_TYPE_AUDIO {
+		err = fmt.Errorf("codecId=%d is not audio", id)
+		return
+	}
+
+	_enc := &AudioEncoder{}
+	if _enc.ff, err = newFFCtxByCodec(codec); err != nil {
+		return
+	}
+	enc = _enc
+	return
+}
+
+func NewAudioEncoderByName(name string) (enc *AudioEncoder, err error) {
 	_enc := &AudioEncoder{}
 
 	codec := C.avcodec_find_encoder_by_name(C.CString(name))
@@ -445,10 +614,11 @@ func NewAudioDecoder(codec av.AudioCodecData) (dec *AudioDecoder, err error) {
 			return
 		}
 
+	case av.PCM_MULAW:
+		id = C.AV_CODEC_ID_PCM_MULAW
+
 	default:
 		if ffcodec, ok := codec.(AudioCodecData); ok {
-			_dec.SampleFormat = ffcodec.sampleFormat
-			_dec.ChannelLayout = ffcodec.channelLayout
 			_dec.Extradata = ffcodec.extradata
 			id = ffcodec.codecId
 		} else {
@@ -471,6 +641,10 @@ func NewAudioDecoder(codec av.AudioCodecData) (dec *AudioDecoder, err error) {
 	if _dec.ff, err = newFFCtxByCodec(c); err != nil {
 		return
 	}
+
+	_dec.SampleFormat = codec.SampleFormat()
+	_dec.SampleRate = codec.SampleRate()
+	_dec.ChannelLayout = codec.ChannelLayout()
 	if err = _dec.Setup(); err != nil {
 		return
 	}
