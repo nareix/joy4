@@ -10,16 +10,19 @@ import (
 	"fmt"
 )
 
-func hashParams(params []interface{}) uint64 {
+func hashParams(params []interface{}) (res uint64, err error) {
 	f := fnv.New64()
 	for _, p := range params {
 		if s, ok := p.(string); ok {
 			io.WriteString(f, s)
 		} else {
-			binary.Write(f, binary.LittleEndian, p)
+			if err = binary.Write(f, binary.LittleEndian, p); err != nil {
+				return
+			}
 		}
 	}
-	return f.Sum64()
+	res = f.Sum64()
+	return
 }
 
 type Publisher struct {
@@ -166,7 +169,11 @@ func (self *Proxy) HandleSubscribe(fn func(*Publisher)) {
 }
 
 func (self *Proxy) Publish(params ...interface{}) (pub *Publisher, err error) {
-	h := hashParams(params)
+	var h uint64
+	if h, err = hashParams(params); err != nil {
+		err = fmt.Errorf("please use string/int in Publish() params")
+		return
+	}
 
 	self.lock.Lock()
 	pub, exists := self.publishers[h]
@@ -188,7 +195,11 @@ func (self *Proxy) Publish(params ...interface{}) (pub *Publisher, err error) {
 }
 
 func (self *Proxy) Subscribe(params ...interface{}) (sub *Subscriber, err error) {
-	h := hashParams(params)
+	var h uint64
+	if h, err = hashParams(params); err != nil {
+		err = fmt.Errorf("please use string/int in Subscribe() params")
+		return
+	}
 	needcb := false
 
 	self.lock.RLock()

@@ -31,6 +31,33 @@ func (self SampleFormat) BytesPerSample() int {
 	}
 }
 
+func (self SampleFormat) String() string {
+	switch self {
+	case U8:
+		return "U8"
+	case S16:
+		return "S16"
+	case S32:
+		return "S32"
+	case FLT:
+		return "FLT"
+	case DBL:
+		return "DBL"
+	case U8P:
+		return "U8P"
+	case S16P:
+		return "S16P"
+	case FLTP:
+		return "FLTP"
+	case DBLP:
+		return "DBLP"
+	case U32:
+		return "U32"
+	default:
+		return "?"
+	}
+}
+
 func (self SampleFormat) IsPlanar() bool {
 	switch self {
 	case S16P,S32P,FLTP,DBLP:
@@ -40,10 +67,82 @@ func (self SampleFormat) IsPlanar() bool {
 	}
 }
 
+type ChannelLayout uint64
+
 const (
-	H264 = 0x264
-	AAC = 0xaac
+	CH_FRONT_CENTER = ChannelLayout(1<<iota)
+	CH_FRONT_LEFT
+	CH_FRONT_RIGHT
+	CH_BACK_CENTER
+	CH_BACK_LEFT
+	CH_BACK_RIGHT
+	CH_SIDE_LEFT
+	CH_SIDE_RIGHT
+	CH_LOW_FREQ
+	CH_NR
+
+	CH_MONO = ChannelLayout(CH_FRONT_CENTER)
+	CH_STEREO = ChannelLayout(CH_FRONT_LEFT|CH_FRONT_RIGHT)
+	CH_2_1 = ChannelLayout(CH_STEREO|CH_BACK_CENTER)
+	CH_2POINT1 = ChannelLayout(CH_STEREO|CH_LOW_FREQ)
+	CH_SURROUND = ChannelLayout(CH_STEREO|CH_FRONT_CENTER)
+	CH_3POINT1 = ChannelLayout(CH_SURROUND|CH_LOW_FREQ)
+	// TODO: add all channel_layout in ffmpeg
 )
+
+func (self ChannelLayout) Count() (n int) {
+	for self != 0 {
+		n++
+		self = (self-1)&self
+	}
+	return
+}
+
+const (
+	H264 = iota+0x264
+	AAC
+	PCM_MULAW
+)
+
+type BasicAudioCodecData struct {
+	CodecType int
+	CodecSampleRate int
+	CodecChannelLayout ChannelLayout
+	CodecSampleFormat SampleFormat
+}
+
+func (self BasicAudioCodecData) Type() int {
+	return self.CodecType
+}
+
+func (self BasicAudioCodecData) IsAudio() bool {
+	return true
+}
+
+func (self BasicAudioCodecData) IsVideo() bool {
+	return false
+}
+
+func (self BasicAudioCodecData) SampleRate() int {
+	return self.CodecSampleRate
+}
+
+func (self BasicAudioCodecData) ChannelLayout() ChannelLayout {
+	return self.CodecChannelLayout
+}
+
+func (self BasicAudioCodecData) SampleFormat() SampleFormat {
+	return self.CodecSampleFormat
+}
+
+func NewPCMMulawCodecData() AudioCodecData {
+	return BasicAudioCodecData{
+		CodecType: PCM_MULAW,
+		CodecSampleFormat: S16,
+		CodecChannelLayout: CH_MONO,
+		CodecSampleRate: 8000,
+	}
+}
 
 type CodecData interface {
 	IsVideo() bool
@@ -61,7 +160,7 @@ type AudioCodecData interface {
 	CodecData
 	SampleFormat() SampleFormat
 	SampleRate() int
-	ChannelCount() int
+	ChannelLayout() ChannelLayout
 }
 
 type H264CodecData interface {
@@ -97,67 +196,57 @@ type Packet struct {
 }
 
 type AudioFrame struct {
+	SampleRate int
 	SampleFormat SampleFormat
-	ChannelCount int
-	Bytes []byte
+	ChannelLayout ChannelLayout
+	SampleCount int
+	Data [][]byte
+}
+
+func (self AudioFrame) HasSameFormat(other AudioFrame) bool {
+	if self.SampleRate != other.SampleRate {
+		return false
+	}
+	if self.ChannelLayout != other.ChannelLayout {
+		return false
+	}
+	if self.SampleFormat != other.SampleFormat {
+		return false
+	}
+	return true
+}
+
+func (self AudioFrame) Slice(start int, end int) (out AudioFrame) {
+	out = self
+	out.SampleCount = end-start
+	size := self.SampleFormat.BytesPerSample()
+	for i := range out.Data {
+		out.Data[i] = out.Data[i][start*size:end*size]
+	}
+	return
+}
+
+func (self AudioFrame) Concat(in AudioFrame) (out AudioFrame) {
+	out = self
+	out.SampleCount += in.SampleCount
+	for i := range out.Data {
+		out.Data[i] = append(out.Data[i], in.Data[i]...)
+	}
+	return
 }
 
 type AudioEncoder interface {
 	CodecData() AudioCodecData
 	Encode(AudioFrame) ([]Packet, error)
-	Flush() ([]Packet, error)
+	//Flush() ([]Packet, error)
 }
 
 type AudioDecoder interface {
 	Decode(Packet) (AudioFrame, error)
-	Flush() (AudioFrame, error)
+	//Flush() (AudioFrame, error)
 }
 
-/*
-在写入数据包的时候必须严格按照 V-A-A-A-V-A-A-A-.... 顺序，所有包的时间都必须正确
-如果有误，跳过错的那一段
-
-cli := rtsp.Open("xxoo")
-cli = &av.TranscodeDemuxer{
-	Demuxer: cli,
-	Transcoders: []Transcoder{ffmpeg.AudioTranscodeTo("aac")},
+type AudioResampler interface {
+	Resample(AudioFrame) (AudioFrame, error)
 }
-
-<script class="miniplayer" controls=true autoplay=true minidash-src="stream1" src="//site/minidash.min.js"></script>
-
-minidash.open('src', function(video) {
-})
-
-minidash.HandleConn(func(conn *minidash.Conn) {
-	conn.RequestSrc
-	muxer, err := conn.WriteHeader(cli.Streams())
-	muxer.WritePacket()
-})
-
-怎样转码
-av.Transconder{
-	TranscodeHeader(codecData) ok, codecData, error
-	TranscodePacket(Packet, flush) []Packet, error
-	FlushPacket() []Packet, error
-}
-
-decoder := ffmpeg.FindAudioDecoder(AudioCodecData)
-decoder := ffmpeg.FindAudioDecoderByName("aac", CodecData)
-
-av.DemuxTranscoder{
-	Demuxer Demuxer
-	Transconders []Transconder
-}
-Streams()
-ReadPacket()
-ClearPacketCache()
-
-怎样混合多个Demuxer
-DemuxerMixer{
-	demuxer
-}
-demuxer.FilterStreams()
-streams := demuxer.Streams()
-streams[0]
-*/
 
