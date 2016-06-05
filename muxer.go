@@ -129,8 +129,8 @@ func (self *Stream) fillTrackAtom() (err error) {
 		}
 		self.sample.SampleDesc.Mp4aDesc = &atom.Mp4aDesc{
 			DataRefIdx:       1,
-			NumberOfChannels: codec.ChannelCount(),
-			SampleSize:       codec.ChannelCount() * 8,
+			NumberOfChannels: codec.ChannelLayout().Count(),
+			SampleSize:       codec.SampleFormat().BytesPerSample(),
 			SampleRate:       atom.IntToFixed(codec.SampleRate()),
 			Conf: &atom.ElemStreamDesc{
 				Data: buf.Bytes(),
