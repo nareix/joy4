@@ -116,7 +116,7 @@ func (self *Demuxer) readTSPacket() (err error) {
 						}
 					}
 					self.pktque = &pktqueue.Queue{}
-					self.pktque.Alloc(len(self.streams))
+					self.pktque.Alloc(self.Streams())
 					self.pktque.Poll = self.poll
 				}
 			}
