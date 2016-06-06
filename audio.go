@@ -211,11 +211,12 @@ func (self *AudioEncoder) Setup() (err error) {
 	ff := &self.ff.ff
 
 	ff.frame = C.av_frame_alloc()
+
 	if self.SampleFormat == av.SampleFormat(0) {
-		self.SampleFormat = av.FLTP
+		self.SampleFormat = sampleFormatFF2AV(*ff.codec.sample_fmts)
 	}
 	if self.BitRate == 0 {
-		self.BitRate = 50000
+		self.BitRate = 80000
 	}
 	if self.SampleRate == 0 {
 		self.SampleRate = 44100
