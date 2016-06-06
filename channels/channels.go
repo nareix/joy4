@@ -1,13 +1,13 @@
-package proxy
+package channels
 
 import (
+	"encoding/binary"
+	"fmt"
 	"github.com/nareix/av"
 	"hash/fnv"
-	"encoding/binary"
-	"sync/atomic"
-	"sync"
 	"io"
-	"fmt"
+	"sync"
+	"sync/atomic"
 )
 
 func hashParams(params []interface{}) (res uint64, err error) {
@@ -26,15 +26,15 @@ func hashParams(params []interface{}) (res uint64, err error) {
 }
 
 type Publisher struct {
-	h uint64
-	Params []interface{}
-	proxy *Proxy
-	streams []av.CodecData
-	closed bool
-	lock *sync.RWMutex
-	cond *sync.Cond
+	h                uint64
+	Params           []interface{}
+	context          *Context
+	streams          []av.CodecData
+	closed           bool
+	lock             *sync.RWMutex
+	cond             *sync.Cond
 	subscribersCount int32
-	pkt struct {
+	pkt              struct {
 		av.Packet
 		i int
 	}
@@ -130,7 +130,7 @@ func (self *Subscriber) ReadPacket() (i int, pkt av.Packet, err error) {
 	ppkt := &pub.pkt
 	if pub.closed {
 		ppkt = nil
-	} else{
+	} else {
 		cond.Wait()
 	}
 	cond.L.Unlock()
@@ -151,24 +151,24 @@ func (self *Subscriber) Close() (err error) {
 	return
 }
 
-type Proxy struct {
-	publishers map[uint64]*Publisher
-	lock *sync.RWMutex
+type Context struct {
+	publishers  map[uint64]*Publisher
+	lock        *sync.RWMutex
 	onSubscribe func(*Publisher)
 }
 
-func New() *Proxy {
-	proxy := &Proxy{}
-	proxy.lock = &sync.RWMutex{}
-	proxy.publishers = make(map[uint64]*Publisher)
-	return proxy
+func New() *Context {
+	context := &Context{}
+	context.lock = &sync.RWMutex{}
+	context.publishers = make(map[uint64]*Publisher)
+	return context
 }
 
-func (self *Proxy) HandleSubscribe(fn func(*Publisher)) {
+func (self *Context) HandleSubscribe(fn func(*Publisher)) {
 	self.onSubscribe = fn
 }
 
-func (self *Proxy) Publish(params ...interface{}) (pub *Publisher, err error) {
+func (self *Context) Publish(params ...interface{}) (pub *Publisher, err error) {
 	var h uint64
 	if h, err = hashParams(params); err != nil {
 		err = fmt.Errorf("please use string/int in Publish() params")
@@ -181,7 +181,7 @@ func (self *Proxy) Publish(params ...interface{}) (pub *Publisher, err error) {
 		pub = newPublisher()
 		pub.Params = params
 		pub.h = h
-		pub.proxy = self
+		pub.context = self
 		self.publishers[h] = pub
 	}
 	self.lock.Unlock()
@@ -194,7 +194,7 @@ func (self *Proxy) Publish(params ...interface{}) (pub *Publisher, err error) {
 	return
 }
 
-func (self *Proxy) Subscribe(params ...interface{}) (sub *Subscriber, err error) {
+func (self *Context) Subscribe(params ...interface{}) (sub *Subscriber, err error) {
 	var h uint64
 	if h, err = hashParams(params); err != nil {
 		err = fmt.Errorf("please use string/int in Subscribe() params")
@@ -208,7 +208,7 @@ func (self *Proxy) Subscribe(params ...interface{}) (sub *Subscriber, err error)
 		pub = newPublisher()
 		pub.Params = params
 		pub.h = h
-		pub.proxy = self
+		pub.context = self
 		self.publishers[h] = pub
 		pub.ondemand = true
 		needcb = true
@@ -233,4 +233,3 @@ func (self *Proxy) Subscribe(params ...interface{}) (sub *Subscriber, err error)
 
 	return
 }
-

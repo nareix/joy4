@@ -1,22 +1,22 @@
-package proxy
+package channels
 
 import (
-	"testing"
 	"fmt"
-	"time"
 	"github.com/nareix/av"
+	"testing"
+	"time"
 )
 
-func TestProxy(t *testing.T) {
-	proxy := New()
-	pub, _ := proxy.Publish("abc")
+func TestChannels(t *testing.T) {
+	context := New()
+	pub, _ := context.Publish("abc")
 	pub.WriteHeader([]av.CodecData{nil, nil})
 
 	done := make(chan int)
 
 	for n := 0; n < 3; n++ {
 		go func(n int) {
-			sub, _ := proxy.Subscribe("abc")
+			sub, _ := context.Subscribe("abc")
 			if sub == nil {
 				done <- n
 				return
@@ -39,7 +39,7 @@ func TestProxy(t *testing.T) {
 		pub.WritePacket(2, av.Packet{})
 		pub.WritePacket(3, av.Packet{})
 		if false {
-			time.Sleep(time.Second/100)
+			time.Sleep(time.Second / 100)
 		}
 		pub.Close()
 		done <- 4
@@ -53,8 +53,8 @@ func TestProxy(t *testing.T) {
 
 	done = make(chan int)
 
-	proxy = New()
-	proxy.HandleSubscribe(func(pub *Publisher) {
+	context = New()
+	context.HandleSubscribe(func(pub *Publisher) {
 		fmt.Println(pub.Params)
 		pub.WriteHeader([]av.CodecData{nil, nil})
 		for {
@@ -67,7 +67,7 @@ func TestProxy(t *testing.T) {
 
 	subs := []*Subscriber{}
 	for i := 0; i < 3; i++ {
-		sub, _ := proxy.Subscribe("xxoo")
+		sub, _ := context.Subscribe("xxoo")
 		subs = append(subs, sub)
 	}
 
@@ -77,4 +77,3 @@ func TestProxy(t *testing.T) {
 
 	<-done
 }
-
