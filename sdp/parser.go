@@ -10,22 +10,23 @@ import (
 
 type Info struct {
 	AVType string
-	Type av.CodecType
+	Type int
 	TimeScale int
 	Control string
 	Rtpmap int
 	Config []byte
 	SpropParameterSets [][]byte
+	PayloadType int
 }
 
 func Decode(content string) (infos []Info) {
 	var info *Info
 
 	for _, line := range strings.Split(content, "\n") {
-		line = strings.Trim(line, "\r")
+		line = strings.TrimSpace(line)
 		typeval := strings.SplitN(line, "=", 2)
 		if len(typeval) == 2 {
-			fields := strings.Split(typeval[1], " ")
+			fields := strings.SplitN(typeval[1], " ", 2)
 
 			switch typeval[0] {
 			case "m":
@@ -34,13 +35,17 @@ func Decode(content string) (infos []Info) {
 					case "audio", "video":
 						infos = append(infos, Info{AVType: fields[0]})
 						info = &infos[len(infos)-1]
+						mfields := strings.Split(fields[1], " ")
+						if len(mfields) >= 3 {
+							info.PayloadType, _ = strconv.Atoi(mfields[2])
+						}
 					}
 				}
 
 			case "a":
 				if info != nil {
 					for _, field := range fields {
-						keyval := strings.Split(field, ":")
+						keyval := strings.SplitN(field, ":", 2)
 						if len(keyval) >= 2 {
 							key := keyval[0]
 							val := keyval[1]
@@ -54,13 +59,12 @@ func Decode(content string) (infos []Info) {
 						keyval = strings.Split(field, "/")
 						if len(keyval) >= 2 {
 							key := keyval[0]
+							info.TimeScale, _ = strconv.Atoi(keyval[1])
 							switch key {
 							case "MPEG4-GENERIC":
 								info.Type = av.AAC
-								info.TimeScale, _ = strconv.Atoi(keyval[1])
 							case "H264":
 								info.Type = av.H264
-								info.TimeScale, _ = strconv.Atoi(keyval[1])
 							}
 						}
 						keyval = strings.Split(field, ";")
@@ -68,7 +72,7 @@ func Decode(content string) (infos []Info) {
 							for _, field := range keyval {
 								keyval := strings.SplitN(field, "=", 2)
 								if len(keyval) == 2 {
-									key := keyval[0]
+									key := strings.TrimSpace(keyval[0])
 									val := keyval[1]
 									switch key {
 									case "config":

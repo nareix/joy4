@@ -21,7 +21,7 @@ m=video 0 RTP/AVP 96
 c=IN IP4 0.0.0.0
 b=AS:300
 a=rtpmap:96 H264/90000
-a=fmtp:96 packetization-mode=1;profile-level-id=640028;sprop-parameter-sets=Z2QAKK2EBUViuKxUdCAqKxXFYqOhAVFYrisVHQgKisVxWKjoQFRWK4rFR0ICorFcVio6ECSFITk8nyfk/k/J8nm5s00IEkKQnJ5Pk/J/J+T5PNzZprQFoe0qQAAAHgAABDgYEABJPAAUmW974XhEI1A=,aO48sA==;config=0000000167640028ad84054562b8ac5474202a2b15c562a3a1015158ae2b151d080a8ac57158a8e84054562b8ac5474202a2b15c562a3a10248521393c9f27e4fe4fc9f279b9b34d081242909c9e4f93f27f27e4f93cdcd9a6b405a1ed2a4000001e00000438181000493c0014996f7be1784423500000000168ee3cb0
+a=fmtp:96 profile-level-id=420029; packetization-mode=1; sprop-parameter-sets=Z00AHpWoKA9k,aO48gA==
 a=x-dimensions: 720, 480
 a=x-framerate: 15
 a=control:track1
@@ -31,6 +31,14 @@ b=AS:256
 a=rtpmap:96 MPEG4-GENERIC/16000/2
 a=fmtp:96 streamtype=5;profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=1408
 a=control:track2
+m=audio 0 RTP/AVP 0
+c=IN IP4 0.0.0.0
+b=AS:50
+a=recvonly
+a=control:rtsp://109.195.127.207:554/mpeg4cif/trackID=2
+a=rtpmap:0 PCMU/8000
+a=Media_header:MEDIAINFO=494D4B48010100000400010010710110401F000000FA000000000000000000000000000000000000;
+a=appversion:1.0
 `)
 	t.Logf("%v", infos)
 }
