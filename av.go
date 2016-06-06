@@ -184,7 +184,6 @@ type Muxer interface {
 
 type Demuxer interface {
 	ReadPacket() (int, Packet, error)
-	Duration() float64
 	Streams() []CodecData
 }
 
@@ -238,11 +237,13 @@ func (self AudioFrame) Concat(in AudioFrame) (out AudioFrame) {
 type AudioEncoder interface {
 	CodecData() AudioCodecData
 	Encode(AudioFrame) ([]Packet, error)
+	Close()
 	//Flush() ([]Packet, error)
 }
 
 type AudioDecoder interface {
-	Decode(Packet) (AudioFrame, error)
+	Decode([]byte) (bool, AudioFrame, error)
+	Close()
 	//Flush() (AudioFrame, error)
 }
 
