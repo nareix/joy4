@@ -6,7 +6,7 @@ import (
 )
 
 type Stream struct {
-	av.StreamCommon
+	av.CodecData
 	Sdp sdp.Info
 
 	// h264
@@ -16,6 +16,7 @@ type Stream struct {
 
 	gotpkt bool
 	pkt av.Packet
+	timestamp uint32
 }
 
 func (self Stream) IsAudio() bool {
