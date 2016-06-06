@@ -3,11 +3,14 @@ package channels
 import (
 	"fmt"
 	"github.com/nareix/av"
-	"testing"
 	"time"
 )
 
-func TestChannels(t *testing.T) {
+func ExampleChannels() {
+	/* Output:
+complete
+[xxoo]
+	*/
 	context := New()
 	pub, _ := context.Publish("abc")
 	pub.WriteHeader([]av.CodecData{nil, nil})
@@ -46,7 +49,7 @@ func TestChannels(t *testing.T) {
 	}()
 
 	for i := 0; i < 4; i++ {
-		fmt.Println(<-done)
+		<-done
 	}
 
 	fmt.Println("complete")
