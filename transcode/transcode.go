@@ -3,7 +3,10 @@ package transcode
 import (
 	"github.com/nareix/av"
 	"github.com/nareix/av/pktreorder"
+	"fmt"
 )
+
+const debug = false
 
 type tstream struct {
 	av.CodecData
@@ -18,6 +21,8 @@ type Transcoder struct {
 }
 
 func (self *Transcoder) Setup(streams []av.CodecData) (err error) {
+	self.streams = []*tstream{}
+
 	for _, stream := range streams {
 		ts := &tstream{CodecData: stream}
 		if stream.IsAudio() {
@@ -44,24 +49,39 @@ func (self *Transcoder) Setup(streams []av.CodecData) (err error) {
 	return
 }
 
-func (self *Transcoder) WritePacket(i int, pkt av.Packet) (err error) {
-	stream := self.streams[i]
-	if stream.aenc != nil && stream.adec != nil {
-		var frame av.AudioFrame
-		var ok bool
-		if ok, frame, err = stream.adec.Decode(pkt.Data); err != nil {
+func (self *Transcoder) decodeAndEncode(stream *tstream, i int, pkt av.Packet) (err error) {
+	var frame av.AudioFrame
+	var ok bool
+	if ok, frame, err = stream.adec.Decode(pkt.Data); err != nil {
+		return
+	}
+	if ok {
+		var pkts []av.Packet
+		if pkts, err = stream.aenc.Encode(frame); err != nil {
 			return
 		}
-		if ok {
-			var pkts []av.Packet
-			if pkts, err = stream.aenc.Encode(frame); err != nil {
-				return
-			}
-			for _, pkt := range pkts {
-				self.queue.WritePacket(i, pkt)
-			}
+		for _, pkt := range pkts {
+			self.queue.WritePacket(i, pkt)
 		}
 	}
+	return
+}
+
+func (self *Transcoder) WritePacket(i int, pkt av.Packet) {
+	if debug {
+		fmt.Println("transcode: Transcoder.WritePacket", i, len(pkt.Data), fmt.Sprintf("%.2f", pkt.Duration))
+		fmt.Println("transcode: Transcoder.CanReadPacket", self.CanReadPacket())
+	}
+
+	stream := self.streams[i]
+	if stream.aenc != nil && stream.adec != nil {
+		if err := self.decodeAndEncode(stream, i, pkt); err != nil {
+			self.queue.EndWritePacket(err)
+		}
+	} else {
+		self.queue.WritePacket(i, pkt)
+	}
+
 	return
 }
 
@@ -71,6 +91,14 @@ func (self *Transcoder) EndWritePacket(err error) {
 
 func (self *Transcoder) CanReadPacket() bool {
 	return self.queue.CanReadPacket()
+}
+
+func (self *Transcoder) CanWritePacket() bool {
+	return self.queue.CanWritePacket()
+}
+
+func (self *Transcoder) Error() error {
+	return self.queue.Error()
 }
 
 func (self *Transcoder) ReadPacket() (i int, pkt av.Packet, err error) {
@@ -160,12 +188,15 @@ func (self *Demuxer) ReadPacket() (i int, pkt av.Packet, err error) {
 	for {
 		if self.Transcoder.CanReadPacket() {
 			return self.Transcoder.ReadPacket()
-		} else {
+		} else if self.Transcoder.CanWritePacket() {
 			if i, pkt, err := self.Demuxer.ReadPacket(); err != nil {
 				self.Transcoder.EndWritePacket(err)
 			} else {
 				self.Transcoder.WritePacket(i, pkt)
 			}
+		} else {
+			err = self.Transcoder.Error()
+			return
 		}
 	}
 }
