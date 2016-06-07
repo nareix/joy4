@@ -16,6 +16,8 @@ import (
 	"github.com/nareix/codec/aacparser"
 )
 
+const debug = false
+
 type ffctx struct {
 	ff C.FFCtx
 }
@@ -370,7 +372,7 @@ func audioFrameAssignToAVData(f *C.AVFrame, frame *av.AudioFrame) {
 	frame.SampleCount = int(f.nb_samples)
 	frame.Data = make([][]byte, int(f.channels))
 	for i := 0; i < int(f.channels); i++ {
-		frame.Data[i] = C.GoBytes(unsafe.Pointer(f.data[i]), f.linesize[i])
+		frame.Data[i] = C.GoBytes(unsafe.Pointer(f.data[i]), f.linesize[0])
 	}
 }
 
@@ -478,6 +480,9 @@ func (self *AudioDecoder) Setup() (err error) {
 		ff.codecCtx.extradata = (*C.uint8_t)(unsafe.Pointer(&self.Extradata[0]))
 		ff.codecCtx.extradata_size = C.int(len(self.Extradata))
 	}
+	if debug {
+		fmt.Println("ffmpeg: Decoder.Setup Extradata.len", len(self.Extradata))
+	}
 
 	ff.codecCtx.sample_rate = C.int(self.SampleRate)
 	ff.codecCtx.channel_layout = channelLayoutAV2FF(self.ChannelLayout)
@@ -500,6 +505,7 @@ func (self *AudioDecoder) Decode(data []byte) (gotframe bool, frame av.AudioFram
 
 	cgotframe := C.int(0)
 	cerr := C.wrap_avcodec_decode_audio4(ff.codecCtx, ff.frame, unsafe.Pointer(&data[0]), C.int(len(data)), &cgotframe)
+
 	if cerr < C.int(0) {
 		err = fmt.Errorf("avcodec_decode_audio4 failed: %d", cerr)
 		return
@@ -509,6 +515,10 @@ func (self *AudioDecoder) Decode(data []byte) (gotframe bool, frame av.AudioFram
 		gotframe = true
 		audioFrameAssignToAV(ff.frame, &frame)
 		frame.SampleRate = self.SampleRate
+
+		if debug {
+			fmt.Println("ffmpeg: Decode", fmt.Sprintf("%x", data[:8]), "len", len(data))
+		}
 	}
 
 	return
