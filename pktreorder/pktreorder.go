@@ -2,8 +2,11 @@ package pktreorder
 
 import (
 	"github.com/nareix/av"
+	"fmt"
 	"io"
 )
+
+const debug = false
 
 type stream struct {
 	isVideo bool
@@ -36,8 +39,10 @@ func (self *Queue) chooseStream() (chosen int) {
 			minpos = stream.pos
 			chosen = i
 		}
+		if debug {
+			fmt.Println("pktreorder: chooseStream", "flush", flush, "i", i, "pkts", len(stream.pkts))
+		}
 	}
-
 	return
 }
 
@@ -72,6 +77,10 @@ func (self *Queue) ReadPacket() (i int, pkt av.Packet, err error) {
 }
 
 func (self *Queue) WritePacket(i int, pkt av.Packet) (err error) {
+	if debug {
+		fmt.Println("pktreorder: WritePacket", "i", i, "Duration", fmt.Sprintf("%.2f", pkt.Duration))
+	}
+
 	stream := self.streams[i]
 	stream.pkts = append(stream.pkts, pkt)
 	self.pktnr++
@@ -89,10 +98,18 @@ func (self *Queue) CanReadPacket() bool {
 	return true
 }
 
+func (self *Queue) CanWritePacket() bool {
+	return self.err == nil
+}
+
 func (self *Queue) EndWritePacket(err error) {
 	if err == nil {
 		err = io.EOF
 	}
 	self.err = err
+}
+
+func (self *Queue) Error() error {
+	return self.err
 }
 
