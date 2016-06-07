@@ -17,6 +17,8 @@ type Info struct {
 	Config []byte
 	SpropParameterSets [][]byte
 	PayloadType int
+	SizeLength int
+	IndexLength int
 }
 
 func Decode(content string) (infos []Info) {
@@ -77,6 +79,10 @@ func Decode(content string) (infos []Info) {
 									switch key {
 									case "config":
 										info.Config, _ = hex.DecodeString(val)
+									case "sizelength":
+										info.SizeLength, _ = strconv.Atoi(val)
+									case "indexlength":
+										info.IndexLength, _ = strconv.Atoi(val)
 									case "sprop-parameter-sets":
 										fields := strings.Split(val, ",")
 										for _, field := range fields {
