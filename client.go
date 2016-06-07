@@ -533,6 +533,11 @@ func (self *Stream) handlePacket(timestamp uint32, packet []byte) (err error) {
 			return
 		}
 
+	case av.AAC:
+		self.gotpkt = true
+		self.pkt.Data = packet[4:]
+		self.timestamp = timestamp
+
 	default:
 		self.gotpkt = true
 		self.pkt.Data = packet
