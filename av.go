@@ -225,6 +225,7 @@ func (self AudioFrame) HasSameFormat(other AudioFrame) bool {
 
 func (self AudioFrame) Slice(start int, end int) (out AudioFrame) {
 	out = self
+	out.Data = append([][]byte(nil), out.Data...)
 	out.SampleCount = end-start
 	size := self.SampleFormat.BytesPerSample()
 	for i := range out.Data {
@@ -235,6 +236,7 @@ func (self AudioFrame) Slice(start int, end int) (out AudioFrame) {
 
 func (self AudioFrame) Concat(in AudioFrame) (out AudioFrame) {
 	out = self
+	out.Data = append([][]byte(nil), out.Data...)
 	out.SampleCount += in.SampleCount
 	for i := range out.Data {
 		out.Data[i] = append(out.Data[i], in.Data[i]...)
