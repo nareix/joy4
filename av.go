@@ -1,5 +1,9 @@
 package av
 
+import (
+	"fmt"
+)
+
 type SampleFormat int
 
 const (
@@ -68,6 +72,10 @@ func (self SampleFormat) IsPlanar() bool {
 }
 
 type ChannelLayout uint64
+
+func (self ChannelLayout) String() string {
+	return fmt.Sprintf("%dch", self.Count())
+}
 
 const (
 	CH_FRONT_CENTER = ChannelLayout(1<<iota)
