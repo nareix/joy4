@@ -56,7 +56,7 @@ const (
 
 type MPEG4AudioConfig struct {
 	SampleRate      int
-	ChannelCount    int
+	ChannelLayout   av.ChannelLayout
 	ObjectType      uint
 	SampleRateIndex uint
 	ChannelConfig   uint
@@ -67,8 +67,27 @@ var sampleRateTable = []int{
 	24000, 22050, 16000, 12000, 11025, 8000, 7350,
 }
 
-var chanConfigTable = []int{
-	0, 1, 2, 3, 4, 5, 6, 8,
+/*
+These are the channel configurations:
+0: Defined in AOT Specifc Config
+1: 1 channel: front-center
+2: 2 channels: front-left, front-right
+3: 3 channels: front-center, front-left, front-right
+4: 4 channels: front-center, front-left, front-right, back-center
+5: 5 channels: front-center, front-left, front-right, back-left, back-right
+6: 6 channels: front-center, front-left, front-right, back-left, back-right, LFE-channel
+7: 8 channels: front-center, front-left, front-right, side-left, side-right, back-left, back-right, LFE-channel
+8-15: Reserved
+*/
+var chanConfigTable = []av.ChannelLayout{
+	0,
+	av.CH_FRONT_CENTER,
+	av.CH_FRONT_LEFT|av.CH_FRONT_RIGHT,
+	av.CH_FRONT_CENTER|av.CH_FRONT_LEFT|av.CH_FRONT_RIGHT,
+	av.CH_FRONT_CENTER|av.CH_FRONT_LEFT|av.CH_FRONT_RIGHT|av.CH_BACK_CENTER,
+	av.CH_FRONT_CENTER|av.CH_FRONT_LEFT|av.CH_FRONT_RIGHT|av.CH_BACK_LEFT|av.CH_BACK_RIGHT,
+	av.CH_FRONT_CENTER|av.CH_FRONT_LEFT|av.CH_FRONT_RIGHT|av.CH_BACK_LEFT|av.CH_BACK_RIGHT|av.CH_LOW_FREQ,
+	av.CH_FRONT_CENTER|av.CH_FRONT_LEFT|av.CH_FRONT_RIGHT|av.CH_SIDE_LEFT|av.CH_SIDE_RIGHT|av.CH_BACK_LEFT|av.CH_BACK_RIGHT|av.CH_LOW_FREQ,
 }
 
 func IsADTSFrame(frames []byte) bool {
@@ -243,7 +262,7 @@ func (self MPEG4AudioConfig) Complete() (config MPEG4AudioConfig) {
 		config.SampleRate = sampleRateTable[config.SampleRateIndex]
 	}
 	if int(config.ChannelConfig) < len(chanConfigTable) {
-		config.ChannelCount = chanConfigTable[config.ChannelConfig]
+		config.ChannelLayout = chanConfigTable[config.ChannelConfig]
 	}
 	return
 }
@@ -293,8 +312,8 @@ func WriteMPEG4AudioConfig(w io.Writer, config MPEG4AudioConfig) (err error) {
 	}
 
 	if config.ChannelConfig == 0 {
-		for i, count := range chanConfigTable {
-			if count == config.ChannelCount {
+		for i, layout := range chanConfigTable {
+			if layout == config.ChannelLayout {
 				config.ChannelConfig = uint(i)
 			}
 		}
@@ -330,8 +349,8 @@ func (self CodecData) MPEG4AudioConfigBytes() []byte {
 	return self.Config
 }
 
-func (self CodecData) ChannelCount() int {
-	return self.ConfigInfo.ChannelCount
+func (self CodecData) ChannelLayout() av.ChannelLayout {
+	return self.ConfigInfo.ChannelLayout
 }
 
 func (self CodecData) SampleRate() int {
