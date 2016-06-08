@@ -562,7 +562,7 @@ func freeFFCtx(self *ffctx) {
 	}
 	if ff.codecCtx != nil {
 		C.avcodec_close(ff.codecCtx)
-		C.av_free(ff.codecCtx)
+		C.av_free(unsafe.Pointer(ff.codecCtx))
 		ff.codecCtx = nil
 	}
 }
