@@ -134,7 +134,7 @@ func (self *Muxer) WritePacket(streamIndex int, pkt av.Packet) (err error) {
 	stream := self.streams[streamIndex]
 
 	if stream.Type() == av.AAC {
-		codec := stream.CodecData.(av.AACCodecData)
+		codec := stream.CodecData.(aacparser.CodecData)
 		data := pkt.Data
 		if !aacparser.IsADTSFrame(data) {
 			data = append(codec.MakeADTSHeader(1024, len(data)), data...)
@@ -157,7 +157,7 @@ func (self *Muxer) WritePacket(streamIndex int, pkt av.Packet) (err error) {
 		stream.time += pkt.Duration
 
 	} else if stream.Type() == av.H264 {
-		codec := stream.CodecData.(av.H264CodecData)
+		codec := stream.CodecData.(h264parser.CodecData)
 		buf := &bytes.Buffer{}
 		pes := PESHeader{
 			StreamId: StreamIdH264,

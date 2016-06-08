@@ -30,7 +30,11 @@ type Demuxer struct {
 	streams []*Stream
 }
 
-func (self *Demuxer) Streams() (streams []av.CodecData) {
+func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
+	if len(self.streams) == 0 {
+		err = fmt.Errorf("ts: no streams")
+		return
+	}
 	for _, stream := range self.streams {
 		streams = append(streams, stream)
 	}
@@ -116,7 +120,12 @@ func (self *Demuxer) readTSPacket() (err error) {
 						}
 					}
 					self.pktque = &pktqueue.Queue{}
-					self.pktque.Alloc(self.Streams())
+
+					var streams []av.CodecData
+					if streams, err = self.Streams(); err != nil {
+						return
+					}
+					self.pktque.Alloc(streams)
 					self.pktque.Poll = self.poll
 				}
 			}
