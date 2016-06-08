@@ -2,11 +2,12 @@ package av
 
 import (
 	"fmt"
+	"github.com/nareix/av"
 )
 
 type PacketWithIdx struct {
 	Idx int
-	Packet
+	av.Packet
 }
 
 type Segment struct {
@@ -24,7 +25,7 @@ func (self Segment) Concat(seg Segment) (out Segment) {
 	return
 }
 
-func WriteSegment(muxer Muxer, seg Segment) (err error) {
+func WriteSegment(muxer av.Muxer, seg Segment) (err error) {
 	for _, pkt := range seg.Pkts {
 		if err = muxer.WritePacket(pkt.Idx, pkt.Packet); err != nil {
 			return
@@ -34,10 +35,10 @@ func WriteSegment(muxer Muxer, seg Segment) (err error) {
 }
 
 type SegmentReader struct {
-	Demuxer Demuxer
-	streams []CodecData
+	Demuxer av.Demuxer
+	streams []av.CodecData
 	vi int
-	lastpkt *Packet
+	lastpkt *av.Packet
 }
 
 func (self *SegmentReader) ClearCache() {
@@ -77,7 +78,7 @@ func (self *SegmentReader) ReadGop() (seg Segment, err error) {
 
 	for {
 		var i int
-		var pkt Packet
+		var pkt av.Packet
 		if i, pkt, err = self.Demuxer.ReadPacket(); err != nil {
 			return
 		}
