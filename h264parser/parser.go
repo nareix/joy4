@@ -575,8 +575,7 @@ func (self CodecData) Height() int {
 	return int(self.SPSInfo.Height)
 }
 
-func NewCodecDataFromAVCDecoderConfRecord(record []byte) (codec av.H264CodecData, err error) {
-	self := CodecData{}
+func NewCodecDataFromAVCDecoderConfRecord(record []byte) (self CodecData, err error) {
 	self.Record = record
 	if self.RecordInfo, err = ParseAVCDecoderConfRecord(record); err != nil {
 		return
@@ -593,11 +592,10 @@ func NewCodecDataFromAVCDecoderConfRecord(record []byte) (codec av.H264CodecData
 		err = fmt.Errorf("parse SPS failed(%s)", err)
 		return
 	}
-	codec = self
 	return
 }
 
-func NewCodecDataFromSPSAndPPS(sps, pps []byte) (codec av.H264CodecData, err error) {
+func NewCodecDataFromSPSAndPPS(sps, pps []byte) (self CodecData, err error) {
 	recordinfo := AVCDecoderConfRecord{}
 	recordinfo.AVCProfileIndication = uint(sps[1])
 	recordinfo.ProfileCompatibility = uint(sps[2])
@@ -609,13 +607,11 @@ func NewCodecDataFromSPSAndPPS(sps, pps []byte) (codec av.H264CodecData, err err
 	if err = WriteAVCDecoderConfRecord(buf, recordinfo); err != nil {
 		return
 	}
-	self := CodecData{}
 	self.RecordInfo = recordinfo
 	self.Record = buf.Bytes()
 	if self.SPSInfo, err = ParseSPS(sps); err != nil {
 		return
 	}
-	codec = self
 	return
 }
 

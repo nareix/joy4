@@ -365,14 +365,12 @@ func (self CodecData) MakeADTSHeader(samples int, payloadLength int) []byte {
 	return MakeADTSHeader(self.ConfigInfo, samples, payloadLength)
 }
 
-func NewCodecDataFromMPEG4AudioConfigBytes(config []byte) (codec av.AACCodecData, err error) {
-	self := CodecData{}
+func NewCodecDataFromMPEG4AudioConfigBytes(config []byte) (self CodecData, err error) {
 	self.Config = config
 	if self.ConfigInfo, err = ParseMPEG4AudioConfig(config); err != nil {
 		err = fmt.Errorf("parse MPEG4AudioConfig failed(%s)", err)
 		return
 	}
-	codec = self
 	return
 }
 
