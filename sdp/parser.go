@@ -2,6 +2,7 @@ package sdp
 
 import (
 	"strings"
+	"fmt"
 	"strconv"
 	"encoding/hex"
 	"encoding/base64"
@@ -61,12 +62,17 @@ func Decode(content string) (infos []Info) {
 						keyval = strings.Split(field, "/")
 						if len(keyval) >= 2 {
 							key := keyval[0]
-							info.TimeScale, _ = strconv.Atoi(keyval[1])
 							switch key {
 							case "MPEG4-GENERIC":
 								info.Type = av.AAC
 							case "H264":
 								info.Type = av.H264
+							}
+							if i, err := strconv.Atoi(keyval[1]); err == nil {
+								info.TimeScale = i
+							}
+							if false {
+								fmt.Println("sdp:", keyval[1], info.TimeScale)
 							}
 						}
 						keyval = strings.Split(field, ";")
