@@ -97,7 +97,7 @@ func (self *Stream) fillTrackAtom() (err error) {
 	self.trackAtom.Media.Header.Duration = int(self.duration)
 
 	if self.Type() == av.H264 {
-		codec := self.CodecData.(av.H264CodecData)
+		codec := self.CodecData.(h264parser.CodecData)
 		width, height := codec.Width(), codec.Height()
 		self.sample.SampleDesc.Avc1Desc = &atom.Avc1Desc{
 			DataRefIdx:           1,
@@ -122,7 +122,7 @@ func (self *Stream) fillTrackAtom() (err error) {
 		self.trackAtom.Header.TrackHeight = atom.IntToFixed(int(height))
 
 	} else if self.Type() == av.AAC {
-		codec := self.CodecData.(av.AACCodecData)
+		codec := self.CodecData.(aacparser.CodecData)
 		buf := &bytes.Buffer{}
 		if err = isom.WriteElemStreamDesc(buf, codec.MPEG4AudioConfigBytes(), uint(self.trackAtom.Header.TrackId)); err != nil {
 			return
