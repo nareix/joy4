@@ -112,46 +112,6 @@ const (
 	PCM_MULAW
 )
 
-type BasicAudioCodecData struct {
-	CodecType int
-	CodecSampleRate int
-	CodecChannelLayout ChannelLayout
-	CodecSampleFormat SampleFormat
-}
-
-func (self BasicAudioCodecData) Type() int {
-	return self.CodecType
-}
-
-func (self BasicAudioCodecData) IsAudio() bool {
-	return true
-}
-
-func (self BasicAudioCodecData) IsVideo() bool {
-	return false
-}
-
-func (self BasicAudioCodecData) SampleRate() int {
-	return self.CodecSampleRate
-}
-
-func (self BasicAudioCodecData) ChannelLayout() ChannelLayout {
-	return self.CodecChannelLayout
-}
-
-func (self BasicAudioCodecData) SampleFormat() SampleFormat {
-	return self.CodecSampleFormat
-}
-
-func NewPCMMulawCodecData() AudioCodecData {
-	return BasicAudioCodecData{
-		CodecType: PCM_MULAW,
-		CodecSampleFormat: S16,
-		CodecChannelLayout: CH_MONO,
-		CodecSampleRate: 8000,
-	}
-}
-
 type CodecData interface {
 	IsVideo() bool
 	IsAudio() bool
@@ -169,19 +129,6 @@ type AudioCodecData interface {
 	SampleFormat() SampleFormat
 	SampleRate() int
 	ChannelLayout() ChannelLayout
-}
-
-type H264CodecData interface {
-	VideoCodecData
-	AVCDecoderConfRecordBytes() []byte
-	SPS() []byte
-	PPS() []byte
-}
-
-type AACCodecData interface {
-	AudioCodecData
-	MPEG4AudioConfigBytes() []byte
-	MakeADTSHeader(samples int, payloadLength int) []byte
 }
 
 type Muxer interface {
