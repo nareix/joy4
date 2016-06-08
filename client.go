@@ -16,6 +16,7 @@ import (
 	"github.com/nareix/av"
 	"github.com/nareix/codec/h264parser"
 	"github.com/nareix/codec/aacparser"
+	"github.com/nareix/codec"
 	"github.com/nareix/rtsp/sdp"
 	"github.com/nareix/av/pktqueue"
 )
@@ -205,7 +206,7 @@ func (self *Client) ReadResponse() (res Response, err error) {
 	}
 
 	if res.StatusCode != 200 && res.StatusCode != 401 {
-		err = fmt.Errorf("StatusCode=%d invalid", res.StatusCode)
+		err = fmt.Errorf("rtsp: StatusCode=%d invalid", res.StatusCode)
 		return
 	}
 
@@ -237,7 +238,7 @@ func (self *Client) ReadResponse() (res Response, err error) {
 
 			if realm != "" && nonce != "" {
 				if self.url.User == nil {
-					err = fmt.Errorf("please provide username and password")
+					err = fmt.Errorf("rtsp: please provide username and password")
 					return
 				}
 				var username string
@@ -245,7 +246,7 @@ func (self *Client) ReadResponse() (res Response, err error) {
 				var ok bool
 				username = self.url.User.Username()
 				if password, ok = self.url.User.Password(); !ok {
-					err = fmt.Errorf("please provide password")
+					err = fmt.Errorf("rtsp: please provide password")
 					return
 				}
 				hs1 := md5hash(username+":"+realm+":"+password)
@@ -320,7 +321,7 @@ func (self *Client) Describe() (streams []av.CodecData, err error) {
 		}
 	}
 	if res.ContentLength == 0 {
-		err = fmt.Errorf("Describe failed")
+		err = fmt.Errorf("rtsp: Describe failed, StatusCode=%d", res.StatusCode)
 		return
 	}
 
@@ -333,6 +334,10 @@ func (self *Client) Describe() (streams []av.CodecData, err error) {
 	self.streams = []*Stream{}
 	for _, info := range sdp.Decode(body) {
 		stream := &Stream{Sdp: info}
+
+		if false {
+			fmt.Println("sdp:", info.TimeScale)
+		}
 
 		if info.PayloadType >= 96 && info.PayloadType <= 127 {
 			switch info.Type {
@@ -350,31 +355,31 @@ func (self *Client) Describe() (streams []av.CodecData, err error) {
 				}
 				if len(sps) > 0 && len(pps) > 0 {
 					if stream.CodecData, err = h264parser.NewCodecDataFromSPSAndPPS(sps, pps); err != nil {
-						err = fmt.Errorf("h264 sps/pps invalid: %s", err)
+						err = fmt.Errorf("rtsp: h264 sps/pps invalid: %s", err)
 						return
 					}
 				} else {
-					err = fmt.Errorf("h264 sdp sprop-parameter-sets invalid: missing sps or pps")
+					err = fmt.Errorf("rtsp: h264 sdp sprop-parameter-sets invalid: missing sps or pps")
 					return
 				}
 
 			case av.AAC:
 				if len(info.Config) == 0 {
-					err = fmt.Errorf("aac sdp config missing")
+					err = fmt.Errorf("rtsp: aac sdp config missing")
 					return
 				}
 				if stream.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(info.Config); err != nil {
-					err = fmt.Errorf("aac sdp config invalid: %s", err)
+					err = fmt.Errorf("rtsp: aac sdp config invalid: %s", err)
 					return
 				}
 			}
 		} else {
 			switch info.PayloadType {
 			case 0:
-				stream.CodecData = av.NewPCMMulawCodecData()
+				stream.CodecData = codec.NewPCMMulawCodecData()
 
 			default:
-				err = fmt.Errorf("PayloadType=%d unsupported", info.PayloadType)
+				err = fmt.Errorf("rtsp: PayloadType=%d unsupported", info.PayloadType)
 				return
 			}
 		}
@@ -464,7 +469,7 @@ func (self *Stream) handlePacket(timestamp uint32, packet []byte) (err error) {
 				return
 			}
 
-		case naluType == 28:
+		case naluType == 28: // FU-A
 			/*
 			0                   1                   2                   3
 			0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -528,8 +533,12 @@ func (self *Stream) handlePacket(timestamp uint32, packet []byte) (err error) {
 				}
 			}
 
+		case naluType == 24:
+			err = fmt.Errorf("rtsp: unsupported H264 STAP-A")
+			return
+
 		default:
-			err = fmt.Errorf("unsupported H264 naluType=%d", naluType)
+			err = fmt.Errorf("rtsp: unsupported H264 naluType=%d", naluType)
 			return
 		}
 
@@ -667,6 +676,9 @@ func (self *Client) poll() (err error) {
 			stream := self.streams[i]
 			if stream.gotpkt {
 				time := float64(stream.timestamp)/float64(stream.Sdp.TimeScale)
+				if false {
+					fmt.Printf("rtsp: #%d %d/%d %d\n", i, stream.timestamp, stream.Sdp.TimeScale, len(stream.pkt.Data))
+				}
 				self.pktque.WriteTimePacket(i, time, stream.pkt)
 				stream.pkt = av.Packet{}
 				stream.gotpkt = false
