@@ -26,7 +26,7 @@ type Muxer struct {
 	mdatWriter *atom.Writer
 }
 
-func (self *Muxer) IsCodecSupported(codec av.CodecData) bool {
+func IsCodecSupported(codec av.CodecData) bool {
 	switch codec.Type() {
 	case av.H264, av.AAC:
 		return true
@@ -36,7 +36,7 @@ func (self *Muxer) IsCodecSupported(codec av.CodecData) bool {
 }
 
 func (self *Muxer) NewStream(codec av.CodecData) (err error) {
-	if !self.IsCodecSupported(codec) {
+	if !IsCodecSupported(codec) {
 		err = fmt.Errorf("codec type=%x is not supported", codec.Type())
 		return
 	}
