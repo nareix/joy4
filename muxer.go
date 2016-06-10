@@ -145,7 +145,7 @@ func (self *Stream) fillTrackAtom() (err error) {
 		self.trackAtom.Media.Info.Sound = &atom.SoundMediaInfo{}
 
 	} else {
-		err = fmt.Errorf("please specify stream type")
+		err = fmt.Errorf("mp4: codec type=%d invalid", self.Type())
 	}
 
 	return
