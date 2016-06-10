@@ -1,4 +1,7 @@
 #!/bin/bash
 
-node --harmony_rest_parameters genStruct.js > struct.go && gofmt -w struct.go && go build .
+node genStruct.js > struct.go && gofmt -w struct.go && go build . || {
+	echo
+	echo "Please use node version > 6.0.0"
+}
 
