@@ -447,6 +447,9 @@ func (self *Client) Describe() (streams []av.CodecData, err error) {
 			case 0:
 				stream.CodecData = codec.NewPCMMulawCodecData()
 
+			case 8:
+				stream.CodecData = codec.NewPCMAlawCodecData()
+
 			default:
 				err = fmt.Errorf("rtsp: PayloadType=%d unsupported", media.PayloadType)
 				return
