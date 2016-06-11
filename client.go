@@ -562,6 +562,10 @@ func (self *Client) parseBlock(blockNo int, packet []byte) (streamIndex int, err
 	}
 
 	streamIndex = blockNo/2
+	if streamIndex >= len(self.streams) {
+		err = fmt.Errorf("rtsp: parseBlock: streamIndex=%d invalid", streamIndex)
+		return
+	}
 	stream := self.streams[streamIndex]
 
 	/*
