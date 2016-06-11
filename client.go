@@ -27,6 +27,12 @@ type Client struct {
 	DebugConn bool
 	Headers []string
 
+	DialTimeout time.Duration
+	RtspTimeout time.Duration
+	RtpFirstReadTimeout time.Duration
+	RtpReadTimeout time.Duration
+	RtpKeepAliveTimeout time.Duration
+
 	setupCalled bool
 	playCalled bool
 
