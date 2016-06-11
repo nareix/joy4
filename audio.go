@@ -635,6 +635,10 @@ func NewAudioDecoder(codec av.AudioCodecData) (dec *AudioDecoder, err error) {
 	case av.PCM_MULAW:
 		id = C.AV_CODEC_ID_PCM_MULAW
 
+
+	case av.PCM_ALAW:
+		id = C.AV_CODEC_ID_PCM_ALAW
+
 	default:
 		if ffcodec, ok := codec.(AudioCodecData); ok {
 			_dec.Extradata = ffcodec.extradata
