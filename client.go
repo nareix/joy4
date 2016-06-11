@@ -200,6 +200,10 @@ func (self *Client) ReadResponse() (res Response, err error) {
 		self.conn.Timeout = self.RtpTimeout
 
 		for {
+			if self.DebugConn {
+				fmt.Println("block: relocate try")
+			}
+
 			for {
 				var b [1]byte
 				if _, err = self.rconn.Read(b[:]); err != nil {
@@ -209,19 +213,19 @@ func (self *Client) ReadResponse() (res Response, err error) {
 					break
 				}
 			}
-			if self.DebugConn {
-				fmt.Println("block: relocate")
-			}
 			if _, err = io.ReadFull(self.rconn, h[1:4]); err != nil {
 				return
 			}
+
 			res.BlockLength = int(h[2])<<8+int(h[3])
 			res.BlockNo = int(h[1])
 			if res.BlockNo/2 < len(self.streams) {
 				break
 			}
 		}
+
 		if self.DebugConn {
+			fmt.Println("block: relocate done")
 			fmt.Println("block: len", res.BlockLength, "no", res.BlockNo)
 		}
 		return
