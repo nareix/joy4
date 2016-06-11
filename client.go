@@ -8,10 +8,12 @@ import (
 	"strings"
 	"strconv"
 	"bufio"
+	"html"
 	"net/textproto"
 	"net/url"
 	"encoding/hex"
 	"encoding/binary"
+	"encoding/base64"
 	"crypto/md5"
 	"github.com/nareix/av"
 	"github.com/nareix/codec/h264parser"
@@ -23,6 +25,7 @@ import (
 
 type Client struct {
 	DebugConn bool
+	Headers []string
 	url *url.URL
 	conn net.Conn
 	rconn io.Reader
@@ -30,7 +33,7 @@ type Client struct {
 	cseq uint
 	streams []*Stream
 	session string
-	authorization string
+	authorization []string
 	body io.Reader
 	pktque *pktqueue.Queue
 }
@@ -54,7 +57,7 @@ type Response struct {
 
 func Connect(uri string) (self *Client, err error) {
 	var URL *url.URL
-	if URL, err = url.Parse(uri); err != nil {
+	if URL, err = url.Parse(html.UnescapeString(uri)); err != nil {
 		return
 	}
 
@@ -97,7 +100,11 @@ func (self *Client) writeLine(line string) (err error) {
 
 func (self *Client) WriteRequest(req Request) (err error) {
 	self.cseq++
+	req.Header = append(req.Header, self.Headers...)
 	req.Header = append(req.Header, fmt.Sprintf("CSeq: %d", self.cseq))
+	for _, s := range self.authorization {
+		req.Header = append(req.Header, "Authorization: "+s)
+	}
 	if err = self.writeLine(fmt.Sprintf("%s %s RTSP/1.0\r\n", req.Method, req.Uri)); err != nil {
 		return
 	}
@@ -256,9 +263,11 @@ func (self *Client) ReadResponse() (res Response, err error) {
 				hs1 := md5hash(username+":"+realm+":"+password)
 				hs2 := md5hash("DESCRIBE:"+self.requestUri)
 				response := md5hash(hs1+":"+nonce+":"+hs2)
-				self.authorization = fmt.Sprintf(
-						`Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s"`,
-						username, realm, nonce, self.requestUri, response)
+				self.authorization = []string{
+					fmt.Sprintf(`Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s"`,
+						username, realm, nonce, self.requestUri, response),
+					fmt.Sprintf(`Basic %s`, base64.StdEncoding.EncodeToString([]byte(username+":"+password))),
+				}
 			}
 		}
 	}
@@ -310,9 +319,6 @@ func (self *Client) Describe() (streams []av.CodecData, err error) {
 		req := Request{
 			Method: "DESCRIBE",
 			Uri: self.requestUri,
-		}
-		if self.authorization != "" {
-			req.Header = append(req.Header, "Authorization: "+self.authorization)
 		}
 		if err = self.WriteRequest(req); err != nil {
 			return
