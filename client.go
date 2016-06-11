@@ -26,6 +26,10 @@ import (
 type Client struct {
 	DebugConn bool
 	Headers []string
+
+	setupCalled bool
+	playCalled bool
+
 	url *url.URL
 	conn net.Conn
 	rconn io.Reader
@@ -283,6 +287,14 @@ func (self *Client) ReadResponse() (res Response, err error) {
 	return
 }
 
+func (self *Client) setupAll() (err error) {
+	idx := []int{}
+	for i := range self.streams {
+		idx = append(idx, i)
+	}
+	return self.Setup(idx)
+}
+
 func (self *Client) Setup(streams []int) (err error) {
 	for _, si := range streams {
 		uri := ""
@@ -304,6 +316,7 @@ func (self *Client) Setup(streams []int) (err error) {
 			return
 		}
 	}
+	self.setupCalled = true
 	return
 }
 
@@ -679,6 +692,7 @@ func (self *Client) Play() (err error) {
 	if err = self.WriteRequest(req); err != nil {
 		return
 	}
+	self.playCalled = true
 	return
 }
 
@@ -710,32 +724,41 @@ func (self *Client) poll() (err error) {
 }
 
 func (self *Client) ReadPacket() (i int, pkt av.Packet, err error) {
+	if !self.setupCalled {
+		if err = self.setupAll(); err != nil {
+			return
+		}
+	}
+	if !self.playCalled {
+		if err = self.Play(); err != nil {
+			return
+		}
+	}
 	return self.pktque.ReadPacket()
 }
 
+func (self *Client) ReadHeader() (err error) {
+	if _, err = self.Describe(); err != nil {
+		return
+	}
+	return
+}
+
 func Open(uri string) (cli *Client, err error) {
-	_cli, err := Connect(uri)
-	if err != nil {
+	var _cli *Client
+	if _cli, err = Connect(uri); err != nil {
 		return
 	}
 
-	streams, err := _cli.Describe()
-	if err != nil {
+	if _, err = _cli.Describe(); err != nil {
 		return
 	}
 
-	setup := []int{}
-	for i := range streams {
-		setup = append(setup, i)
-	}
-
-	err = _cli.Setup(setup)
-	if err != nil {
+	if err = _cli.setupAll(); err != nil {
 		return
 	}
 
-	err = _cli.Play()
-	if err != nil {
+	if err = _cli.Play(); err != nil {
 		return
 	}
 
