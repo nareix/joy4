@@ -44,3 +44,12 @@ func NewPCMMulawCodecData() av.AudioCodecData {
 	}
 }
 
+func NewPCMAlawCodecData() av.AudioCodecData {
+	return AudioCodecData{
+		CodecType: av.PCM_ALAW,
+		CodecSampleFormat: av.S16,
+		CodecChannelLayout: av.CH_MONO,
+		CodecSampleRate: 8000,
+	}
+}
+
