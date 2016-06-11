@@ -110,6 +110,7 @@ const (
 	H264 = iota+0x264
 	AAC
 	PCM_MULAW
+	PCM_ALAW
 )
 
 type CodecData interface {
