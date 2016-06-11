@@ -58,6 +58,10 @@ func Connect(uri string) (self *Client, err error) {
 		return
 	}
 
+	if strings.IndexByte(URL.Host, ':') == -1 {
+		URL.Host = URL.Host + ":554"
+	}
+
 	dailer := net.Dialer{}
 	var conn net.Conn
 	if conn, err = dailer.Dial("tcp", URL.Host); err != nil {
