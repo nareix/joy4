@@ -7,7 +7,7 @@ import (
 
 type Stream struct {
 	av.CodecData
-	Sdp sdp.Info
+	Sdp sdp.Media
 
 	// h264
 	fuBuffer []byte

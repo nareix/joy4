@@ -61,7 +61,7 @@ func Connect(uri string) (self *Client, err error) {
 		return
 	}
 
-	if strings.IndexByte(URL.Host, ':') == -1 {
+	if _, _, err := net.SplitHostPort(URL.Host); err != nil {
 		URL.Host = URL.Host + ":554"
 	}
 
@@ -342,18 +342,24 @@ func (self *Client) Describe() (streams []av.CodecData, err error) {
 	}
 
 	self.streams = []*Stream{}
-	for _, info := range sdp.Decode(body) {
-		stream := &Stream{Sdp: info}
+	sess, medias := sdp.Parse(body)
+
+	if sess.Uri != "" {
+		self.requestUri = sess.Uri
+	}
+
+	for _, media := range medias {
+		stream := &Stream{Sdp: media}
 
 		if false {
-			fmt.Println("sdp:", info.TimeScale)
+			fmt.Println("sdp:", media.TimeScale)
 		}
 
-		if info.PayloadType >= 96 && info.PayloadType <= 127 {
-			switch info.Type {
+		if media.PayloadType >= 96 && media.PayloadType <= 127 {
+			switch media.Type {
 			case av.H264:
 				var sps, pps []byte
-				for _, nalu := range info.SpropParameterSets {
+				for _, nalu := range media.SpropParameterSets {
 					if len(nalu) > 0 {
 						switch nalu[0]&0x1f {
 						case 7:
@@ -374,22 +380,22 @@ func (self *Client) Describe() (streams []av.CodecData, err error) {
 				}
 
 			case av.AAC:
-				if len(info.Config) == 0 {
+				if len(media.Config) == 0 {
 					err = fmt.Errorf("rtsp: aac sdp config missing")
 					return
 				}
-				if stream.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(info.Config); err != nil {
+				if stream.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(media.Config); err != nil {
 					err = fmt.Errorf("rtsp: aac sdp config invalid: %s", err)
 					return
 				}
 			}
 		} else {
-			switch info.PayloadType {
+			switch media.PayloadType {
 			case 0:
 				stream.CodecData = codec.NewPCMMulawCodecData()
 
 			default:
-				err = fmt.Errorf("rtsp: PayloadType=%d unsupported", info.PayloadType)
+				err = fmt.Errorf("rtsp: PayloadType=%d unsupported", media.PayloadType)
 				return
 			}
 		}

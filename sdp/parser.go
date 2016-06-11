@@ -9,7 +9,11 @@ import (
 	"github.com/nareix/av"
 )
 
-type Info struct {
+type Session struct {
+	Uri string
+}
+
+type Media struct {
 	AVType string
 	Type int
 	TimeScale int
@@ -22,8 +26,8 @@ type Info struct {
 	IndexLength int
 }
 
-func Decode(content string) (infos []Info) {
-	var info *Info
+func Parse(content string) (sess Session, medias []Media) {
+	var media *Media
 
 	for _, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
@@ -36,17 +40,20 @@ func Decode(content string) (infos []Info) {
 				if len(fields) > 0 {
 					switch fields[0] {
 					case "audio", "video":
-						infos = append(infos, Info{AVType: fields[0]})
-						info = &infos[len(infos)-1]
+						medias = append(medias, Media{AVType: fields[0]})
+						media = &medias[len(medias)-1]
 						mfields := strings.Split(fields[1], " ")
 						if len(mfields) >= 3 {
-							info.PayloadType, _ = strconv.Atoi(mfields[2])
+							media.PayloadType, _ = strconv.Atoi(mfields[2])
 						}
 					}
 				}
 
+			case "u":
+				sess.Uri = typeval[1]
+
 			case "a":
-				if info != nil {
+				if media != nil {
 					for _, field := range fields {
 						keyval := strings.SplitN(field, ":", 2)
 						if len(keyval) >= 2 {
@@ -54,9 +61,9 @@ func Decode(content string) (infos []Info) {
 							val := keyval[1]
 							switch key {
 							case "control":
-								info.Control = val
+								media.Control = val
 							case "rtpmap":
-								info.Rtpmap, _ = strconv.Atoi(val)
+								media.Rtpmap, _ = strconv.Atoi(val)
 							}
 						}
 						keyval = strings.Split(field, "/")
@@ -64,15 +71,15 @@ func Decode(content string) (infos []Info) {
 							key := keyval[0]
 							switch key {
 							case "MPEG4-GENERIC":
-								info.Type = av.AAC
+								media.Type = av.AAC
 							case "H264":
-								info.Type = av.H264
+								media.Type = av.H264
 							}
 							if i, err := strconv.Atoi(keyval[1]); err == nil {
-								info.TimeScale = i
+								media.TimeScale = i
 							}
 							if false {
-								fmt.Println("sdp:", keyval[1], info.TimeScale)
+								fmt.Println("sdp:", keyval[1], media.TimeScale)
 							}
 						}
 						keyval = strings.Split(field, ";")
@@ -84,16 +91,16 @@ func Decode(content string) (infos []Info) {
 									val := keyval[1]
 									switch key {
 									case "config":
-										info.Config, _ = hex.DecodeString(val)
+										media.Config, _ = hex.DecodeString(val)
 									case "sizelength":
-										info.SizeLength, _ = strconv.Atoi(val)
+										media.SizeLength, _ = strconv.Atoi(val)
 									case "indexlength":
-										info.IndexLength, _ = strconv.Atoi(val)
+										media.IndexLength, _ = strconv.Atoi(val)
 									case "sprop-parameter-sets":
 										fields := strings.Split(val, ",")
 										for _, field := range fields {
 											val, _ := base64.StdEncoding.DecodeString(field)
-											info.SpropParameterSets = append(info.SpropParameterSets, val)
+											media.SpropParameterSets = append(media.SpropParameterSets, val)
 										}
 									}
 								}
