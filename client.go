@@ -1,6 +1,7 @@
 package rtsp
 
 import (
+	"time"
 	"fmt"
 	"net"
 	"bytes"
@@ -27,7 +28,6 @@ type Client struct {
 	DebugConn bool
 	Headers []string
 
-	DialTimeout time.Duration
 	RtspTimeout time.Duration
 	RtpFirstReadTimeout time.Duration
 	RtpReadTimeout time.Duration
@@ -65,7 +65,7 @@ type Response struct {
 	Body []byte
 }
 
-func Connect(uri string) (self *Client, err error) {
+func DialTimeout(uri string, timeout time.Duration) (self *Client, err error) {
 	var URL *url.URL
 	if URL, err = url.Parse(html.UnescapeString(uri)); err != nil {
 		return
@@ -75,7 +75,7 @@ func Connect(uri string) (self *Client, err error) {
 		URL.Host = URL.Host + ":554"
 	}
 
-	dailer := net.Dialer{}
+	dailer := net.Dialer{Timeout: timeout}
 	var conn net.Conn
 	if conn, err = dailer.Dial("tcp", URL.Host); err != nil {
 		return
@@ -91,6 +91,10 @@ func Connect(uri string) (self *Client, err error) {
 		requestUri: u2.String(),
 	}
 	return
+}
+
+func Dial(uri string) (self *Client, err error) {
+	return DialTimeout(uri, 0)
 }
 
 func (self *Client) Streams() (streams []av.CodecData) {
@@ -752,7 +756,7 @@ func (self *Client) ReadHeader() (err error) {
 
 func Open(uri string) (cli *Client, err error) {
 	var _cli *Client
-	if _cli, err = Connect(uri); err != nil {
+	if _cli, err = Dial(uri); err != nil {
 		return
 	}
 
