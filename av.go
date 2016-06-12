@@ -140,7 +140,7 @@ type Muxer interface {
 
 type Demuxer interface {
 	ReadPacket() (int, Packet, error)
-	Streams() []CodecData
+	Streams() ([]CodecData, error)
 }
 
 type Packet struct {

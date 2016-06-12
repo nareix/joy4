@@ -45,7 +45,10 @@ func (self *Transcoder) Setup(streams []av.CodecData) (err error) {
 	}
 
 	self.queue = &pktreorder.Queue{}
-	self.queue.Alloc(self.Streams())
+
+	var newstreams []av.CodecData
+	newstreams, _ = self.Streams()
+	self.queue.Alloc(newstreams)
 	return
 }
 
@@ -105,7 +108,7 @@ func (self *Transcoder) ReadPacket() (i int, pkt av.Packet, err error) {
 	return self.queue.ReadPacket()
 }
 
-func (self *Transcoder) Streams() (streams []av.CodecData) {
+func (self *Transcoder) Streams() (streams []av.CodecData, err error) {
 	for _, stream := range self.streams {
 		streams = append(streams, stream.CodecData)
 	}
@@ -133,7 +136,11 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 	if err = self.Transcoder.Setup(streams); err != nil {
 		return
 	}
-	if err = self.Muxer.WriteHeader(self.Transcoder.Streams()); err != nil {
+	var newstreams []av.CodecData
+	if newstreams, err = self.Transcoder.Streams(); err != nil {
+		return
+	}
+	if err = self.Muxer.WriteHeader(newstreams); err != nil {
 		return
 	}
 	return
@@ -178,7 +185,11 @@ type Demuxer struct {
 }
 
 func (self *Demuxer) Setup() (err error) {
-	if err = self.Transcoder.Setup(self.Demuxer.Streams()); err != nil {
+	var streams []av.CodecData
+	if streams, err = self.Demuxer.Streams(); err != nil {
+		return
+	}
+	if err = self.Transcoder.Setup(streams); err != nil {
 		return
 	}
 	return
@@ -201,7 +212,7 @@ func (self *Demuxer) ReadPacket() (i int, pkt av.Packet, err error) {
 	}
 }
 
-func (self *Demuxer) Streams() []av.CodecData {
+func (self *Demuxer) Streams() ([]av.CodecData, error) {
 	return self.Transcoder.Streams()
 }
 
