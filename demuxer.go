@@ -27,7 +27,11 @@ type Demuxer struct {
 	movieAtom *atom.Movie
 }
 
-func (self *Demuxer) Streams() (streams []av.CodecData) {
+func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
+	if len(self.streams) == 0 {
+		err = fmt.Errorf("mp4: no streams")
+		return
+	}
 	for _, stream := range self.streams {
 		streams = append(streams, stream)
 	}
