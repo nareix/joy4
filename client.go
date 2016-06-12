@@ -251,7 +251,7 @@ func (self *Client) ReadResponse() (res Response, err error) {
 
 	fline := strings.SplitN(line, " ", 3)
 	if len(fline) < 2 {
-		err = fmt.Errorf("malformed RTSP response line")
+		err = fmt.Errorf("rtsp: malformed response line")
 		return
 	}
 
@@ -682,12 +682,12 @@ func (self *Client) parseBlock(blockNo int, packet []byte) (streamIndex int, err
 	*/
 
 	if len(packet) < 8 {
-		err = fmt.Errorf("rtp packet too short")
+		err = fmt.Errorf("rtp: packet too short")
 		return
 	}
 	payloadOffset := 12+int(packet[0]&0xf)*4
 	if payloadOffset+2 > len(packet) {
-		err = fmt.Errorf("rtp packet too short")
+		err = fmt.Errorf("rtp: packet too short")
 		return
 	}
 
