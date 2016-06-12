@@ -578,6 +578,9 @@ func (self *Stream) handlePacket(timestamp uint32, packet []byte) (err error) {
 		*/
 
 		switch {
+		case naluType == 6:
+			// skip naluType == 6
+
 		case naluType >= 1 && naluType <= 23:
 			if err = self.handleH264Payload(naluType, timestamp, packet); err != nil {
 				return
