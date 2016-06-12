@@ -329,8 +329,8 @@ func WriteMPEG4AudioConfig(w io.Writer, config MPEG4AudioConfig) (err error) {
 }
 
 type CodecData struct {
-	Config []byte
-	ConfigInfo MPEG4AudioConfig
+	ConfigBytes []byte
+	Config MPEG4AudioConfig
 }
 
 func (self CodecData) IsVideo() bool {
@@ -346,15 +346,15 @@ func (self CodecData) Type() int {
 }
 
 func (self CodecData) MPEG4AudioConfigBytes() []byte {
-	return self.Config
+	return self.ConfigBytes
 }
 
 func (self CodecData) ChannelLayout() av.ChannelLayout {
-	return self.ConfigInfo.ChannelLayout
+	return self.Config.ChannelLayout
 }
 
 func (self CodecData) SampleRate() int {
-	return self.ConfigInfo.SampleRate
+	return self.Config.SampleRate
 }
 
 func (self CodecData) SampleFormat() av.SampleFormat {
@@ -362,12 +362,12 @@ func (self CodecData) SampleFormat() av.SampleFormat {
 }
 
 func (self CodecData) MakeADTSHeader(samples int, payloadLength int) []byte {
-	return MakeADTSHeader(self.ConfigInfo, samples, payloadLength)
+	return MakeADTSHeader(self.Config, samples, payloadLength)
 }
 
 func NewCodecDataFromMPEG4AudioConfigBytes(config []byte) (self CodecData, err error) {
-	self.Config = config
-	if self.ConfigInfo, err = ParseMPEG4AudioConfig(config); err != nil {
+	self.ConfigBytes = config
+	if self.Config, err = ParseMPEG4AudioConfig(config); err != nil {
 		err = fmt.Errorf("parse MPEG4AudioConfig failed(%s)", err)
 		return
 	}
