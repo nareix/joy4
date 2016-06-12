@@ -1,20 +1,17 @@
 package ffmpeg
 
+/*
+#include "ffmpeg.h"
+int wrap_avcodec_decode_audio4(AVCodecContext *ctx, AVFrame *frame, void *data, int size, int *got) {
+	struct AVPacket pkt = {.data = data, .size = size};
+	return avcodec_decode_audio4(ctx, frame, got, &pkt);
+}
+int wrap_avresample_convert(AVAudioResampleContext *avr, int *out, int outsize, int outcount, int *in, int insize, int incount) {
+	return avresample_convert(avr, (void *)out, outsize, outcount, (void *)in, insize, incount);
+}
+*/
+import "C"
 import (
-	/*
-	#include "ffmpeg.h"
-
-	int wrap_avcodec_decode_audio4(AVCodecContext *ctx, AVFrame *frame, void *data, int size, int *got) {
-		struct AVPacket pkt = {.data = data, .size = size};
-		return avcodec_decode_audio4(ctx, frame, got, &pkt);
-	}
-
-	int wrap_avresample_convert(AVAudioResampleContext *avr, int *out, int outsize, int outcount, int *in, int insize, int incount) {
-		return avresample_convert(avr, (void *)out, outsize, outcount, (void *)in, insize, incount);
-	}
-
-	*/
-	"C"
 	"unsafe"
 	"runtime"
 	"fmt"
@@ -23,10 +20,6 @@ import (
 )
 
 const debug = false
-
-type ffctx struct {
-	ff C.FFCtx
-}
 
 type Resampler struct {
 	inSampleFormat, OutSampleFormat av.SampleFormat
@@ -545,27 +538,6 @@ func HasDecoder(name string) bool {
 
 //func EncodersList() []string
 //func DecodersList() []string
-
-func newFFCtxByCodec(codec *C.AVCodec) (ff *ffctx, err error) {
-	ff = &ffctx{}
-	ff.ff.codec = codec
-	ff.ff.codecCtx = C.avcodec_alloc_context3(codec)
-	runtime.SetFinalizer(ff, freeFFCtx)
-	return
-}
-
-func freeFFCtx(self *ffctx) {
-	ff := &self.ff
-	if ff.frame != nil {
-		C.av_frame_free(&ff.frame)
-		ff.frame = nil
-	}
-	if ff.codecCtx != nil {
-		C.avcodec_close(ff.codecCtx)
-		C.av_free(unsafe.Pointer(ff.codecCtx))
-		ff.codecCtx = nil
-	}
-}
 
 func NewAudioEncoderByCodecType(typ int) (enc *AudioEncoder, err error) {
 	var id uint32
