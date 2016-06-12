@@ -245,7 +245,7 @@ func (self *AudioEncoder) Setup() (err error) {
 		}
 
 	default:
-		self.codecData = AudioCodecData{
+		self.codecData = audioCodecData{
 			channelLayout: self.ChannelLayout,
 			sampleFormat: self.SampleFormat,
 			sampleRate: self.SampleRate,
@@ -552,13 +552,8 @@ func NewAudioEncoderByCodecType(typ int) (enc *AudioEncoder, err error) {
 	}
 
 	codec := C.avcodec_find_encoder(id)
-	if codec == nil {
-		err = fmt.Errorf("ffmpeg: cannot find encoder codecId=%d", id)
-		return
-	}
-
-	if C.avcodec_get_type(id) != C.AVMEDIA_TYPE_AUDIO {
-		err = fmt.Errorf("ffmpeg: codecId=%d is not audio", id)
+	if codec == nil || C.avcodec_get_type(id) != C.AVMEDIA_TYPE_AUDIO {
+		err = fmt.Errorf("ffmpeg: cannot find audio encoder codecId=%d", id)
 		return
 	}
 
@@ -574,12 +569,8 @@ func NewAudioEncoderByName(name string) (enc *AudioEncoder, err error) {
 	_enc := &AudioEncoder{}
 
 	codec := C.avcodec_find_encoder_by_name(C.CString(name))
-	if codec == nil {
-		err = fmt.Errorf("ffmpeg: cannot find encoder=%s", name)
-		return
-	}
-	if C.avcodec_get_type(codec.id) != C.AVMEDIA_TYPE_AUDIO {
-		err = fmt.Errorf("ffmpeg: encoder=%s type is not audio", name)
+	if codec == nil || C.avcodec_get_type(codec.id) != C.AVMEDIA_TYPE_AUDIO {
+		err = fmt.Errorf("ffmpeg: cannot find audio encoder name=%s", name)
 		return
 	}
 
@@ -600,7 +591,7 @@ func NewAudioDecoder(codec av.AudioCodecData) (dec *AudioDecoder, err error) {
 			_dec.Extradata = aaccodec.MPEG4AudioConfigBytes()
 			id = C.AV_CODEC_ID_AAC
 		} else {
-			err = fmt.Errorf("ffmpeg: aac CodecData must be av.AACCodecData")
+			err = fmt.Errorf("ffmpeg: aac CodecData must be aacparser.CodecData")
 			return
 		}
 
@@ -612,7 +603,7 @@ func NewAudioDecoder(codec av.AudioCodecData) (dec *AudioDecoder, err error) {
 		id = C.AV_CODEC_ID_PCM_ALAW
 
 	default:
-		if ffcodec, ok := codec.(AudioCodecData); ok {
+		if ffcodec, ok := codec.(audioCodecData); ok {
 			_dec.Extradata = ffcodec.extradata
 			id = ffcodec.codecId
 		} else {
@@ -622,13 +613,8 @@ func NewAudioDecoder(codec av.AudioCodecData) (dec *AudioDecoder, err error) {
 	}
 
 	c := C.avcodec_find_decoder(id)
-	if c == nil {
-		err = fmt.Errorf("ffmpeg: cannot find decoder id=%d", id)
-		return
-	}
-
-	if C.avcodec_get_type(c.id) != C.AVMEDIA_TYPE_AUDIO {
-		err = fmt.Errorf("ffmpeg: decoder id=%d type is not audio", c.id)
+	if c == nil || C.avcodec_get_type(c.id) != C.AVMEDIA_TYPE_AUDIO {
+		err = fmt.Errorf("ffmpeg: cannot find audio decoder id=%d", id)
 		return
 	}
 
@@ -647,7 +633,7 @@ func NewAudioDecoder(codec av.AudioCodecData) (dec *AudioDecoder, err error) {
 	return
 }
 
-type AudioCodecData struct {
+type audioCodecData struct {
 	codecId uint32
 	sampleFormat av.SampleFormat
 	channelLayout av.ChannelLayout
@@ -655,27 +641,27 @@ type AudioCodecData struct {
 	extradata []byte
 }
 
-func (self AudioCodecData) Type() int {
+func (self audioCodecData) Type() int {
 	return int(self.codecId)
 }
 
-func (self AudioCodecData) IsAudio() bool {
+func (self audioCodecData) IsAudio() bool {
 	return true
 }
 
-func (self AudioCodecData) IsVideo() bool {
+func (self audioCodecData) IsVideo() bool {
 	return false
 }
 
-func (self AudioCodecData) SampleRate() int {
+func (self audioCodecData) SampleRate() int {
 	return self.sampleRate
 }
 
-func (self AudioCodecData) SampleFormat() av.SampleFormat {
+func (self audioCodecData) SampleFormat() av.SampleFormat {
 	return self.sampleFormat
 }
 
-func (self AudioCodecData) ChannelLayout() av.ChannelLayout {
+func (self audioCodecData) ChannelLayout() av.ChannelLayout {
 	return self.channelLayout
 }
 
