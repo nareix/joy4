@@ -142,11 +142,11 @@ func (self *Client) WriteRequest(req Request) (err error) {
 	self.conn.Timeout = self.RtspTimeout
 
 	self.cseq++
-	req.Header = append(req.Header, self.Headers...)
 	req.Header = append(req.Header, fmt.Sprintf("CSeq: %d", self.cseq))
 	for _, s := range self.authorization {
 		req.Header = append(req.Header, "Authorization: "+s)
 	}
+	req.Header = append(req.Header, self.Headers...)
 	if err = self.writeLine(fmt.Sprintf("%s %s RTSP/1.0\r\n", req.Method, req.Uri)); err != nil {
 		return
 	}
@@ -402,6 +402,7 @@ func (self *Client) Describe() (streams []av.CodecData, err error) {
 		req := Request{
 			Method: "DESCRIBE",
 			Uri: self.requestUri,
+			Header: []string{"Accept: application/sdp"},
 		}
 		if err = self.WriteRequest(req); err != nil {
 			return
@@ -425,11 +426,7 @@ func (self *Client) Describe() (streams []av.CodecData, err error) {
 	}
 
 	self.streams = []*Stream{}
-	sess, medias := sdp.Parse(body)
-
-	if sess.Uri != "" {
-		self.requestUri = sess.Uri
-	}
+	_, medias := sdp.Parse(body)
 
 	for _, media := range medias {
 		stream := &Stream{Sdp: media}
