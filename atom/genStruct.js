@@ -12,6 +12,7 @@ var atoms = {
 				['header', '*movieHeader'],
 				['iods', '*iods'],
 				['tracks', '[]*track'],
+				['movieExtend', '*movieExtend'],
 			]],
 		],
 	},
@@ -380,6 +381,28 @@ var atoms = {
 
 	trackFragHeader: {
 		cc4: 'tfhd',
+	},
+
+	movieExtend: {
+		cc4: 'mvex',
+		fields: [
+			['$atoms', [
+				['tracks', '[]*trackExtend'],
+			]],
+		],
+	},
+
+	trackExtend: {
+		cc4: 'trex',
+		fields: [
+			['version', 'int8'],
+			['flags', 'int24'],
+			['trackId', 'int32'],
+			['defaultSampleDescIdx', 'int32'],
+			['defaultSampleDuration', 'int32'],
+			['defaultSampleSize', 'int32'],
+			['defaultSampleFlags', 'int32'],
+		],
 	},
 
 	/*

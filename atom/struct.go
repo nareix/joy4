@@ -6,9 +6,10 @@ import (
 )
 
 type Movie struct {
-	Header *MovieHeader
-	Iods   *Iods
-	Tracks []*Track
+	Header      *MovieHeader
+	Iods        *Iods
+	Tracks      []*Track
+	MovieExtend *MovieExtend
 }
 
 func ReadMovie(r *io.LimitedReader) (res *Movie, err error) {
@@ -40,6 +41,12 @@ func ReadMovie(r *io.LimitedReader) (res *Movie, err error) {
 					return
 				}
 				self.Tracks = append(self.Tracks, item)
+			}
+		case "mvex":
+			{
+				if self.MovieExtend, err = ReadMovieExtend(ar); err != nil {
+					return
+				}
 			}
 
 		}
@@ -74,6 +81,11 @@ func WriteMovie(w io.WriteSeeker, self *Movie) (err error) {
 			}
 		}
 	}
+	if self.MovieExtend != nil {
+		if err = WriteMovieExtend(w, self.MovieExtend); err != nil {
+			return
+		}
+	}
 	if err = aw.Close(); err != nil {
 		return
 	}
@@ -97,6 +109,9 @@ func WalkMovie(w Walker, self *Movie) {
 			w.ArrayLeft(i, len(self.Tracks))
 			break
 		}
+	}
+	if self.MovieExtend != nil {
+		WalkMovieExtend(w, self.MovieExtend)
 	}
 	w.EndStruct()
 	return
@@ -2696,6 +2711,164 @@ func WalkTrackFrag(w Walker, self *TrackFrag) {
 	if self.Run != nil {
 		WalkTrackFragRun(w, self.Run)
 	}
+	w.EndStruct()
+	return
+}
+
+type MovieExtend struct {
+	Tracks []*TrackExtend
+}
+
+func ReadMovieExtend(r *io.LimitedReader) (res *MovieExtend, err error) {
+
+	self := &MovieExtend{}
+	for r.N > 0 {
+		var cc4 string
+		var ar *io.LimitedReader
+		if ar, cc4, err = ReadAtomHeader(r, ""); err != nil {
+			return
+		}
+		switch cc4 {
+		case "trex":
+			{
+				var item *TrackExtend
+				if item, err = ReadTrackExtend(ar); err != nil {
+					return
+				}
+				self.Tracks = append(self.Tracks, item)
+			}
+
+		}
+		if _, err = ReadDummy(ar, int(ar.N)); err != nil {
+			return
+		}
+	}
+	res = self
+	return
+}
+func WriteMovieExtend(w io.WriteSeeker, self *MovieExtend) (err error) {
+
+	var aw *Writer
+	if aw, err = WriteAtomHeader(w, "mvex"); err != nil {
+		return
+	}
+	w = aw
+	if self.Tracks != nil {
+		for _, elem := range self.Tracks {
+			if err = WriteTrackExtend(w, elem); err != nil {
+				return
+			}
+		}
+	}
+	if err = aw.Close(); err != nil {
+		return
+	}
+	return
+}
+func WalkMovieExtend(w Walker, self *MovieExtend) {
+
+	w.StartStruct("MovieExtend")
+	for i, item := range self.Tracks {
+		if w.FilterArrayItem("MovieExtend", "Tracks", i, len(self.Tracks)) {
+			if item != nil {
+				WalkTrackExtend(w, item)
+			}
+		} else {
+			w.ArrayLeft(i, len(self.Tracks))
+			break
+		}
+	}
+	w.EndStruct()
+	return
+}
+
+type TrackExtend struct {
+	Version               int
+	Flags                 int
+	TrackId               int
+	DefaultSampleDescIdx  int
+	DefaultSampleDuration int
+	DefaultSampleSize     int
+	DefaultSampleFlags    int
+}
+
+func ReadTrackExtend(r *io.LimitedReader) (res *TrackExtend, err error) {
+
+	self := &TrackExtend{}
+	if self.Version, err = ReadInt(r, 1); err != nil {
+		return
+	}
+	if self.Flags, err = ReadInt(r, 3); err != nil {
+		return
+	}
+	if self.TrackId, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	if self.DefaultSampleDescIdx, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	if self.DefaultSampleDuration, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	if self.DefaultSampleSize, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	if self.DefaultSampleFlags, err = ReadInt(r, 4); err != nil {
+		return
+	}
+	res = self
+	return
+}
+func WriteTrackExtend(w io.WriteSeeker, self *TrackExtend) (err error) {
+
+	var aw *Writer
+	if aw, err = WriteAtomHeader(w, "trex"); err != nil {
+		return
+	}
+	w = aw
+	if err = WriteInt(w, self.Version, 1); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.Flags, 3); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.TrackId, 4); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.DefaultSampleDescIdx, 4); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.DefaultSampleDuration, 4); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.DefaultSampleSize, 4); err != nil {
+		return
+	}
+	if err = WriteInt(w, self.DefaultSampleFlags, 4); err != nil {
+		return
+	}
+	if err = aw.Close(); err != nil {
+		return
+	}
+	return
+}
+func WalkTrackExtend(w Walker, self *TrackExtend) {
+
+	w.StartStruct("TrackExtend")
+	w.Name("Version")
+	w.Int(self.Version)
+	w.Name("Flags")
+	w.Int(self.Flags)
+	w.Name("TrackId")
+	w.Int(self.TrackId)
+	w.Name("DefaultSampleDescIdx")
+	w.Int(self.DefaultSampleDescIdx)
+	w.Name("DefaultSampleDuration")
+	w.Int(self.DefaultSampleDuration)
+	w.Name("DefaultSampleSize")
+	w.Int(self.DefaultSampleSize)
+	w.Name("DefaultSampleFlags")
+	w.Int(self.DefaultSampleFlags)
 	w.EndStruct()
 	return
 }
