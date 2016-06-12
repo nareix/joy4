@@ -581,15 +581,15 @@ func NewCodecDataFromAVCDecoderConfRecord(record []byte) (self CodecData, err er
 		return
 	}
 	if len(self.RecordInfo.SPS) == 0 {
-		err = fmt.Errorf("no SPS found in AVCDecoderConfRecord")
+		err = fmt.Errorf("h264parser: no SPS found in AVCDecoderConfRecord")
 		return
 	}
 	if len(self.RecordInfo.PPS) == 0 {
-		err = fmt.Errorf("no PPS found in AVCDecoderConfRecord")
+		err = fmt.Errorf("h264parser: no PPS found in AVCDecoderConfRecord")
 		return
 	}
 	if self.SPSInfo, err = ParseSPS(self.RecordInfo.SPS[0]); err != nil {
-		err = fmt.Errorf("parse SPS failed(%s)", err)
+		err = fmt.Errorf("h264parser: parse SPS failed(%s)", err)
 		return
 	}
 	return
@@ -704,7 +704,7 @@ const (
 func ParseSliceHeaderFromNALU(packet []byte) (sliceType SliceType, err error) {
 
 	if len(packet) <= 1 {
-		err = fmt.Errorf("packet too short to parse slice header")
+		err = fmt.Errorf("h264parser: packet too short to parse slice header")
 		return
 	}
 
@@ -715,7 +715,7 @@ func ParseSliceHeaderFromNALU(packet []byte) (sliceType SliceType, err error) {
 		// slice_data_partition_a_layer_rbsp
 
 	default:
-		err = fmt.Errorf("nal_unit_type=%d has no slice header", nal_unit_type)
+		err = fmt.Errorf("h264parser: nal_unit_type=%d has no slice header", nal_unit_type)
 		return
 	}
 
@@ -740,7 +740,7 @@ func ParseSliceHeaderFromNALU(packet []byte) (sliceType SliceType, err error) {
 	case 2,4,7,9:
 		sliceType = I
 	default:
-		err = fmt.Errorf("slice_type=%d invalid", u)
+		err = fmt.Errorf("h264parser: slice_type=%d invalid", u)
 		return
 	}
 
