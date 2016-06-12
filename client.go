@@ -34,6 +34,8 @@ type Client struct {
 	rtpKeepaliveTimer time.Time
 
 	setupCalled bool
+	setupIdx []int
+	setupMap []int
 	playCalled bool
 
 	url *url.URL
@@ -99,9 +101,14 @@ func Dial(uri string) (self *Client, err error) {
 	return DialTimeout(uri, 0)
 }
 
-func (self *Client) Streams() (streams []av.CodecData) {
-	for _, stream := range self.streams {
-		streams = append(streams, stream.CodecData)
+func (self *Client) Streams() (streams []av.CodecData, err error) {
+	if self.setupCalled {
+		for _, i := range self.setupIdx {
+			streams = append(streams, self.streams[i].CodecData)
+		}
+	} else {
+		err = fmt.Errorf("rtsp: no streams")
+		return
 	}
 	return
 }
@@ -335,8 +342,26 @@ func (self *Client) setupAll() (err error) {
 	return self.Setup(idx)
 }
 
-func (self *Client) Setup(streams []int) (err error) {
-	for _, si := range streams {
+func (self *Client) Setup(idx []int) (err error) {
+	if self.setupCalled {
+		err = fmt.Errorf("rtsp: Setup() called twice")
+		return
+	}
+
+	if len(self.streams) == 0 {
+		err = fmt.Errorf("rtsp: no streams, please call Describe() first")
+		return
+	}
+
+	self.setupMap = make([]int, len(self.streams))
+	for i := range self.setupMap {
+		self.setupMap[i] = -1
+	}
+	self.setupIdx = idx
+
+	for i, si := range idx {
+		self.setupMap[si] = i
+
 		uri := ""
 		control := self.streams[si].Sdp.Control
 		if strings.HasPrefix(control, "rtsp://") {
@@ -356,6 +381,7 @@ func (self *Client) Setup(streams []int) (err error) {
 			return
 		}
 	}
+
 	self.setupCalled = true
 	return
 }
@@ -756,7 +782,7 @@ func (self *Client) poll() (err error) {
 				if false {
 					fmt.Printf("rtsp: #%d %d/%d %d\n", i, stream.timestamp, stream.Sdp.TimeScale, len(stream.pkt.Data))
 				}
-				self.pktque.WriteTimePacket(i, time, stream.pkt)
+				self.pktque.WriteTimePacket(self.setupMap[i], time, stream.pkt)
 				stream.pkt = av.Packet{}
 				stream.gotpkt = false
 				return
@@ -784,6 +810,12 @@ func (self *Client) ReadHeader() (err error) {
 	if _, err = self.Describe(); err != nil {
 		return
 	}
+	if err = self.setupAll(); err != nil {
+		return
+	}
+	if err = self.Play(); err != nil {
+		return
+	}
 	return
 }
 
@@ -792,19 +824,9 @@ func Open(uri string) (cli *Client, err error) {
 	if _cli, err = Dial(uri); err != nil {
 		return
 	}
-
-	if _, err = _cli.Describe(); err != nil {
+	if err = _cli.ReadHeader(); err != nil {
 		return
 	}
-
-	if err = _cli.setupAll(); err != nil {
-		return
-	}
-
-	if err = _cli.Play(); err != nil {
-		return
-	}
-
 	cli = _cli
 	return
 }
