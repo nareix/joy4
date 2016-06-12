@@ -123,12 +123,17 @@ func (self *Client) writeLine(line string) (err error) {
 
 func (self *Client) sendRtpKeepalive() (err error) {
 	if self.RtpKeepAliveTimeout > 0 {
-		if !self.rtpKeepaliveTimer.IsZero() && time.Now().Sub(self.rtpKeepaliveTimer) > self.RtpKeepAliveTimeout {
+		if self.rtpKeepaliveTimer.IsZero() {
+			self.rtpKeepaliveTimer = time.Now()
+		} else if time.Now().Sub(self.rtpKeepaliveTimer) > self.RtpKeepAliveTimeout {
+			self.rtpKeepaliveTimer = time.Now()
+			if self.DebugConn {
+				fmt.Println("rtp: keep alive")
+			}
 			if err = self.Options(); err != nil {
 				return
 			}
 		}
-		self.rtpKeepaliveTimer = time.Now()
 	}
 	return
 }
@@ -174,19 +179,18 @@ func (self *Client) ReadResponse() (res Response, err error) {
 				}
 			}
 		} else if res.BlockLength > 0 {
-			if err = self.sendRtpKeepalive(); err != nil {
-				return
-			}
 			self.conn.Timeout = self.RtpTimeout
 			res.Block = make([]byte, res.BlockLength)
 			if _, err = io.ReadFull(self.rconn, res.Block); err != nil {
+				return
+			}
+			if err = self.sendRtpKeepalive(); err != nil {
 				return
 			}
 		}
 	}()
 
 	self.conn.Timeout = self.RtspTimeout
-
 	var h [4]byte
 	if _, err = io.ReadFull(self.rconn, h[:]); err != nil {
 		return
