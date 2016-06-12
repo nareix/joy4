@@ -64,7 +64,7 @@ func (self *Resampler) Resample(in av.AudioFrame) (out av.AudioFrame, err error)
 				nil, C.int(0), C.int(0),
 			))
 			if convertSamples < 0 {
-				err = fmt.Errorf("avresample_convert_frame failed")
+				err = fmt.Errorf("ffmpeg: avresample_convert_frame failed")
 				return
 			}
 			flush.SampleCount = convertSamples
@@ -129,7 +129,7 @@ func (self *Resampler) Resample(in av.AudioFrame) (out av.AudioFrame, err error)
 		(*C.int)(unsafe.Pointer(&inData[0])), C.int(inLinesize), C.int(inSampleCount),
 	))
 	if convertSamples < 0 {
-		err = fmt.Errorf("avresample_convert_frame failed")
+		err = fmt.Errorf("ffmpeg: avresample_convert_frame failed")
 		return
 	}
 	out.SampleCount = convertSamples
@@ -291,7 +291,7 @@ func (self *AudioEncoder) encodeOne(frame av.AudioFrame) (gotpkt bool, pkt av.Pa
 	}
 	cerr := C.avcodec_encode_audio2(ff.codecCtx, &cpkt, ff.frame, &cgotpkt)
 	if cerr < C.int(0) {
-		err = fmt.Errorf("avcodec_encode_audio2 failed: %d", cerr)
+		err = fmt.Errorf("ffmpeg: avcodec_encode_audio2 failed: %d", cerr)
 		return
 	}
 
@@ -514,7 +514,7 @@ func (self *AudioDecoder) Decode(data []byte) (gotframe bool, frame av.AudioFram
 	cerr := C.wrap_avcodec_decode_audio4(ff.codecCtx, ff.frame, unsafe.Pointer(&data[0]), C.int(len(data)), &cgotframe)
 
 	if cerr < C.int(0) {
-		err = fmt.Errorf("avcodec_decode_audio4 failed: %d", cerr)
+		err = fmt.Errorf("ffmpeg: avcodec_decode_audio4 failed: %d", cerr)
 		return
 	}
 
@@ -575,18 +575,18 @@ func NewAudioEncoderByCodecType(typ int) (enc *AudioEncoder, err error) {
 		id = C.AV_CODEC_ID_AAC
 
 	default:
-		err = fmt.Errorf("cannot find encoder codecType=%d", typ)
+		err = fmt.Errorf("ffmpeg: cannot find encoder codecType=%d", typ)
 		return
 	}
 
 	codec := C.avcodec_find_encoder(id)
 	if codec == nil {
-		err = fmt.Errorf("cannot find encoder codecId=%d", id)
+		err = fmt.Errorf("ffmpeg: cannot find encoder codecId=%d", id)
 		return
 	}
 
 	if C.avcodec_get_type(id) != C.AVMEDIA_TYPE_AUDIO {
-		err = fmt.Errorf("codecId=%d is not audio", id)
+		err = fmt.Errorf("ffmpeg: codecId=%d is not audio", id)
 		return
 	}
 
@@ -603,11 +603,11 @@ func NewAudioEncoderByName(name string) (enc *AudioEncoder, err error) {
 
 	codec := C.avcodec_find_encoder_by_name(C.CString(name))
 	if codec == nil {
-		err = fmt.Errorf("cannot find encoder=%s", name)
+		err = fmt.Errorf("ffmpeg: cannot find encoder=%s", name)
 		return
 	}
 	if C.avcodec_get_type(codec.id) != C.AVMEDIA_TYPE_AUDIO {
-		err = fmt.Errorf("encoder=%s type is not audio", name)
+		err = fmt.Errorf("ffmpeg: encoder=%s type is not audio", name)
 		return
 	}
 
@@ -628,7 +628,7 @@ func NewAudioDecoder(codec av.AudioCodecData) (dec *AudioDecoder, err error) {
 			_dec.Extradata = aaccodec.MPEG4AudioConfigBytes()
 			id = C.AV_CODEC_ID_AAC
 		} else {
-			err = fmt.Errorf("aac CodecData must be av.AACCodecData")
+			err = fmt.Errorf("ffmpeg: aac CodecData must be av.AACCodecData")
 			return
 		}
 
@@ -644,19 +644,19 @@ func NewAudioDecoder(codec av.AudioCodecData) (dec *AudioDecoder, err error) {
 			_dec.Extradata = ffcodec.extradata
 			id = ffcodec.codecId
 		} else {
-			err = fmt.Errorf("invalid CodecData for ffmpeg to decode")
+			err = fmt.Errorf("ffmpeg: invalid CodecData for ffmpeg to decode")
 			return
 		}
 	}
 
 	c := C.avcodec_find_decoder(id)
 	if c == nil {
-		err = fmt.Errorf("cannot find decoder id=%d", id)
+		err = fmt.Errorf("ffmpeg: cannot find decoder id=%d", id)
 		return
 	}
 
 	if C.avcodec_get_type(c.id) != C.AVMEDIA_TYPE_AUDIO {
-		err = fmt.Errorf("decoder id=%d type is not audio", c.id)
+		err = fmt.Errorf("ffmpeg: decoder id=%d type is not audio", c.id)
 		return
 	}
 
