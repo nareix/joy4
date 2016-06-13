@@ -24,6 +24,8 @@ import (
 	"github.com/nareix/av/pktqueue"
 )
 
+var ErrCodecDataChange = fmt.Errorf("rtsp: codec data change, please call HandleCodecDataChange()")
+
 type Client struct {
 	DebugConn bool
 	Headers []string
@@ -444,60 +446,10 @@ func (self *Client) Describe() (streams []av.CodecData, err error) {
 	_, medias := sdp.Parse(body)
 
 	for _, media := range medias {
-		stream := &Stream{Sdp: media}
-
-		if false {
-			fmt.Println("sdp:", media.TimeScale)
+		stream := &Stream{Sdp: media, client: self}
+		if err = stream.makeCodecData(); err != nil {
+			return
 		}
-
-		if media.PayloadType >= 96 && media.PayloadType <= 127 {
-			switch media.Type {
-			case av.H264:
-				var sps, pps []byte
-				for _, nalu := range media.SpropParameterSets {
-					if len(nalu) > 0 {
-						switch nalu[0]&0x1f {
-						case 7:
-							sps = nalu
-						case 8:
-							pps = nalu
-						}
-					}
-				}
-				if len(sps) > 0 && len(pps) > 0 {
-					if stream.CodecData, err = h264parser.NewCodecDataFromSPSAndPPS(sps, pps); err != nil {
-						err = fmt.Errorf("rtsp: h264 sps/pps invalid: %s", err)
-						return
-					}
-				} else {
-					err = fmt.Errorf("rtsp: h264 sdp sprop-parameter-sets invalid: missing sps or pps")
-					return
-				}
-
-			case av.AAC:
-				if len(media.Config) == 0 {
-					err = fmt.Errorf("rtsp: aac sdp config missing")
-					return
-				}
-				if stream.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(media.Config); err != nil {
-					err = fmt.Errorf("rtsp: aac sdp config invalid: %s", err)
-					return
-				}
-			}
-		} else {
-			switch media.PayloadType {
-			case 0:
-				stream.CodecData = codec.NewPCMMulawCodecData()
-
-			case 8:
-				stream.CodecData = codec.NewPCMAlawCodecData()
-
-			default:
-				err = fmt.Errorf("rtsp: PayloadType=%d unsupported", media.PayloadType)
-				return
-			}
-		}
-
 		self.streams = append(self.streams, stream)
 	}
 
@@ -525,6 +477,98 @@ func (self *Client) Options() (err error) {
 	return
 }
 
+func (self *Client) HandleCodecDataChange() (_newcli *Client, err error) {
+	newcli := &Client{}
+	*newcli = *self
+
+	newcli.streams = []*Stream{}
+	for _, stream := range self.streams {
+		newstream := &Stream{}
+		*newstream = *stream
+		newstream.client = newcli
+
+		if newstream.isCodecDataChange() {
+			if err = newstream.makeCodecData(); err != nil {
+				return
+			}
+			newstream.clearCodecDataChange()
+		}
+		newcli.streams = append(newcli.streams, newstream)
+	}
+
+	_newcli = newcli
+	return
+}
+
+func (self *Stream) clearCodecDataChange() {
+	self.spsChanged = false
+	self.ppsChanged = false
+}
+
+func (self *Stream) isCodecDataChange() bool {
+	if self.spsChanged && self.ppsChanged {
+		return true
+	}
+	return false
+}
+
+func (self *Stream) makeCodecData() (err error) {
+	media := self.Sdp
+
+	if media.PayloadType >= 96 && media.PayloadType <= 127 {
+		switch media.Type {
+		case av.H264:
+			for _, nalu := range media.SpropParameterSets {
+				if len(nalu) > 0 {
+					switch nalu[0]&0x1f {
+					case 7:
+						if len(self.sps) == 0 {
+							self.sps = nalu
+						}
+					case 8:
+						if len(self.pps) == 0 {
+							self.pps = nalu
+						}
+					}
+				}
+			}
+			if len(self.sps) > 0 && len(self.pps) > 0 {
+				if self.CodecData, err = h264parser.NewCodecDataFromSPSAndPPS(self.sps, self.pps); err != nil {
+					err = fmt.Errorf("rtsp: h264 sps/pps invalid: %s", err)
+					return
+				}
+			} else {
+				err = fmt.Errorf("rtsp: missing h264 sps or pps")
+				return
+			}
+
+		case av.AAC:
+			if len(media.Config) == 0 {
+				err = fmt.Errorf("rtsp: aac sdp config missing")
+				return
+			}
+			if self.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(media.Config); err != nil {
+				err = fmt.Errorf("rtsp: aac sdp config invalid: %s", err)
+				return
+			}
+		}
+	} else {
+		switch media.PayloadType {
+		case 0:
+			self.CodecData = codec.NewPCMMulawCodecData()
+
+		case 8:
+			self.CodecData = codec.NewPCMAlawCodecData()
+
+		default:
+			err = fmt.Errorf("rtsp: PayloadType=%d unsupported", media.PayloadType)
+			return
+		}
+	}
+
+	return
+}
+
 func (self *Stream) handleH264Payload(naluType byte, timestamp uint32, packet []byte) (err error) {
 	/*
 	Table 7-1 – NAL unit type codes
@@ -535,8 +579,31 @@ func (self *Stream) handleH264Payload(naluType byte, timestamp uint32, packet []
 	8    Picture parameter set
 	*/
 	switch naluType {
-	case 7,8:
-		// sps/pps
+	case 6: // SEI ignored
+
+	case 7: // sps
+		if self.client != nil && self.client.DebugConn {
+			fmt.Println("rtsp: got sps")
+		}
+		if bytes.Compare(self.sps, packet) != 0 {
+			self.spsChanged = true
+			self.sps = packet
+			if self.client != nil && self.client.DebugConn {
+				fmt.Println("rtsp: sps changed")
+			}
+		}
+
+	case 8: // pps
+		if self.client != nil && self.client.DebugConn {
+			fmt.Println("rtsp: got pps")
+		}
+		if bytes.Compare(self.pps, packet) != 0 {
+			self.ppsChanged = true
+			self.pps = packet
+			if self.client != nil && self.client.DebugConn {
+				fmt.Println("rtsp: pps changed")
+			}
+		}
 
 	default:
 		if naluType == 5 {
@@ -551,6 +618,11 @@ func (self *Stream) handleH264Payload(naluType byte, timestamp uint32, packet []
 }
 
 func (self *Stream) handlePacket(timestamp uint32, packet []byte) (err error) {
+	if self.isCodecDataChange() {
+		err = ErrCodecDataChange
+		return
+	}
+
 	switch self.Type() {
 	case av.H264:
 		/*
@@ -578,8 +650,6 @@ func (self *Stream) handlePacket(timestamp uint32, packet []byte) (err error) {
 		*/
 
 		switch {
-		case naluType == 6:
-			// skip naluType == 6
 
 		case naluType >= 1 && naluType <= 23:
 			if err = self.handleH264Payload(naluType, timestamp, packet); err != nil {
