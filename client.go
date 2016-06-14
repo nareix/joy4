@@ -839,7 +839,7 @@ func (self *Client) parseBlock(blockNo int, packet []byte) (streamIndex int, err
 	*/
 	//payloadType := packet[1]&0x7f
 
-	if self.DebugRtsp {
+	if self.DebugRtp {
 		//fmt.Println("packet:", stream.Type(), "offset", payloadOffset, "pt", payloadType)
 		if len(packet) > 24 {
 			fmt.Println(hex.Dump(packet[:24]))
@@ -931,8 +931,6 @@ func Open(uri string) (cli *Client, err error) {
 	if err = _cli.ReadHeader(); err != nil {
 		return
 	}
-	_cli.rtpKeepaliveTimer = time.Now()
-	_cli.RtpKeepAliveTimeout = 20 * time.Second
 	cli = _cli
 	return
 }
