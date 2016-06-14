@@ -118,7 +118,7 @@ func (self *Client) Streams() (streams []av.CodecData, err error) {
 	return
 }
 
-func (self *Client) sendRtpKeepalive() (err error) {
+func (self *Client) SendRtpKeepalive() (err error) {
 	if self.RtpKeepAliveTimeout > 0 && self.rtpKeepaliveEnterCnt == 0 {
 		self.rtpKeepaliveEnterCnt++
 		defer func() {
@@ -201,7 +201,7 @@ func (self *Client) ReadResponse() (res Response, err error) {
 			if _, err = io.ReadFull(self.rconn, res.Block); err != nil {
 				return
 			}
-			if err = self.sendRtpKeepalive(); err != nil {
+			if err = self.SendRtpKeepalive(); err != nil {
 				return
 			}
 		}
