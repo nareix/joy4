@@ -27,7 +27,8 @@ import (
 var ErrCodecDataChange = fmt.Errorf("rtsp: codec data change, please call HandleCodecDataChange()")
 
 type Client struct {
-	DebugConn bool
+	DebugRtsp bool
+	DebugRtp bool
 	Headers   []string
 
 	RtspTimeout          time.Duration
@@ -127,7 +128,7 @@ func (self *Client) sendRtpKeepalive() (err error) {
 			self.rtpKeepaliveTimer = time.Now()
 		} else if time.Now().Sub(self.rtpKeepaliveTimer) > self.RtpKeepAliveTimeout {
 			self.rtpKeepaliveTimer = time.Now()
-			if self.DebugConn {
+			if self.DebugRtsp {
 				fmt.Println("rtp: keep alive")
 			}
 			if err = self.Options(); err != nil {
@@ -166,7 +167,7 @@ func (self *Client) WriteRequest(req Request) (err error) {
 
 	bufout := buf.Bytes()
 
-	if self.DebugConn {
+	if self.DebugRtsp {
 		fmt.Print("> ", string(bufout))
 	}
 
@@ -216,7 +217,7 @@ func (self *Client) ReadResponse() (res Response, err error) {
 		// $
 		res.BlockLength = int(h[2])<<8 + int(h[3])
 		res.BlockNo = int(h[1])
-		if self.DebugConn {
+		if self.DebugRtsp {
 			fmt.Println("block: len", res.BlockLength, "no", res.BlockNo)
 		}
 		return
@@ -227,7 +228,7 @@ func (self *Client) ReadResponse() (res Response, err error) {
 		self.conn.Timeout = self.RtpTimeout
 
 		for {
-			if self.DebugConn {
+			if self.DebugRtsp {
 				fmt.Println("block: relocate try")
 			}
 
@@ -251,7 +252,7 @@ func (self *Client) ReadResponse() (res Response, err error) {
 			}
 		}
 
-		if self.DebugConn {
+		if self.DebugRtsp {
 			fmt.Println("block: relocate done")
 			fmt.Println("block: len", res.BlockLength, "no", res.BlockNo)
 		}
@@ -265,7 +266,7 @@ func (self *Client) ReadResponse() (res Response, err error) {
 	if line, err = tp.ReadLine(); err != nil {
 		return
 	}
-	if self.DebugConn {
+	if self.DebugRtsp {
 		fmt.Println("<", line)
 	}
 
@@ -283,7 +284,7 @@ func (self *Client) ReadResponse() (res Response, err error) {
 		return
 	}
 
-	if self.DebugConn {
+	if self.DebugRtsp {
 		for k, s := range header {
 			fmt.Println(k, s)
 		}
@@ -443,7 +444,7 @@ func (self *Client) Describe() (streams []av.CodecData, err error) {
 
 	body := string(res.Body)
 
-	if self.DebugConn {
+	if self.DebugRtsp {
 		fmt.Println("<", body)
 	}
 
@@ -591,25 +592,25 @@ func (self *Stream) handleH264Payload(naluType byte, timestamp uint32, packet []
 	case 6: // SEI ignored
 
 	case 7: // sps
-		if self.client != nil && self.client.DebugConn {
+		if self.client != nil && self.client.DebugRtp {
 			fmt.Println("rtsp: got sps")
 		}
 		if bytes.Compare(self.sps, packet) != 0 {
 			self.spsChanged = true
 			self.sps = packet
-			if self.client != nil && self.client.DebugConn {
+			if self.client != nil && self.client.DebugRtp {
 				fmt.Println("rtsp: sps changed")
 			}
 		}
 
 	case 8: // pps
-		if self.client != nil && self.client.DebugConn {
+		if self.client != nil && self.client.DebugRtp {
 			fmt.Println("rtsp: got pps")
 		}
 		if bytes.Compare(self.pps, packet) != 0 {
 			self.ppsChanged = true
 			self.pps = packet
-			if self.client != nil && self.client.DebugConn {
+			if self.client != nil && self.client.DebugRtp {
 				fmt.Println("rtsp: pps changed")
 			}
 		}
@@ -837,7 +838,7 @@ func (self *Client) parseBlock(blockNo int, packet []byte) (streamIndex int, err
 	*/
 	//payloadType := packet[1]&0x7f
 
-	if self.DebugConn {
+	if self.DebugRtsp {
 		//fmt.Println("packet:", stream.Type(), "offset", payloadOffset, "pt", payloadType)
 		if len(packet) > 24 {
 			fmt.Println(hex.Dump(packet[:24]))
