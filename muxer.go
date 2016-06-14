@@ -79,14 +79,7 @@ func (self *Muxer) WriteTrailer() (err error) {
 	return
 }
 
-func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
-	self.streams = []*Stream{}
-	for _, stream := range streams {
-		if err = self.newStream(stream); err != nil {
-			return
-		}
-	}
-
+func (self *Muxer) WritePATPMT() (err error) {
 	bufPAT := &bytes.Buffer{}
 	bufPMT := &bytes.Buffer{}
 
@@ -125,6 +118,21 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 		return
 	}
 	if err = self.tswPMT.WriteTo(self.W, bufPMT.Bytes()); err != nil {
+		return
+	}
+
+	return
+}
+
+func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
+	self.streams = []*Stream{}
+	for _, stream := range streams {
+		if err = self.newStream(stream); err != nil {
+			return
+		}
+	}
+
+	if err = self.WritePATPMT(); err != nil {
 		return
 	}
 
