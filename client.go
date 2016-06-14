@@ -1,74 +1,74 @@
 package rtsp
 
 import (
-	"time"
-	"fmt"
-	"net"
-	"bytes"
-	"io"
-	"strings"
-	"strconv"
 	"bufio"
+	"bytes"
+	"crypto/md5"
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/hex"
+	"fmt"
+	"github.com/nareix/av"
+	"github.com/nareix/av/pktqueue"
+	"github.com/nareix/codec"
+	"github.com/nareix/codec/aacparser"
+	"github.com/nareix/codec/h264parser"
+	"github.com/nareix/rtsp/sdp"
 	"html"
+	"io"
+	"net"
 	"net/textproto"
 	"net/url"
-	"encoding/hex"
-	"encoding/binary"
-	"encoding/base64"
-	"crypto/md5"
-	"github.com/nareix/av"
-	"github.com/nareix/codec/h264parser"
-	"github.com/nareix/codec/aacparser"
-	"github.com/nareix/codec"
-	"github.com/nareix/rtsp/sdp"
-	"github.com/nareix/av/pktqueue"
+	"strconv"
+	"strings"
+	"time"
 )
 
 var ErrCodecDataChange = fmt.Errorf("rtsp: codec data change, please call HandleCodecDataChange()")
 
 type Client struct {
 	DebugConn bool
-	Headers []string
+	Headers   []string
 
-	RtspTimeout time.Duration
-	RtpTimeout time.Duration
-	RtpKeepAliveTimeout time.Duration
-	rtpKeepaliveTimer time.Time
+	RtspTimeout          time.Duration
+	RtpTimeout           time.Duration
+	RtpKeepAliveTimeout  time.Duration
+	rtpKeepaliveTimer    time.Time
 	rtpKeepaliveEnterCnt int
 
 	setupCalled bool
-	setupIdx []int
-	setupMap []int
-	playCalled bool
+	setupIdx    []int
+	setupMap    []int
+	playCalled  bool
 
 	authHeaders func(method string) []string
 
-	url *url.URL
-	conn *connWithTimeout
-	rconn io.Reader
+	url        *url.URL
+	conn       *connWithTimeout
+	rconn      io.Reader
 	requestUri string
-	cseq uint
-	streams []*Stream
-	session string
-	body io.Reader
-	pktque *pktqueue.Queue
+	cseq       uint
+	streams    []*Stream
+	session    string
+	body       io.Reader
+	pktque     *pktqueue.Queue
 }
 
 type Request struct {
 	Header []string
-	Uri string
+	Uri    string
 	Method string
 }
 
 type Response struct {
 	BlockLength int
-	Block []byte
-	BlockNo int
+	Block       []byte
+	BlockNo     int
 
-	StatusCode int
-	Header textproto.MIMEHeader
+	StatusCode    int
+	Header        textproto.MIMEHeader
 	ContentLength int
-	Body []byte
+	Body          []byte
 }
 
 func DialTimeout(uri string, timeout time.Duration) (self *Client, err error) {
@@ -93,9 +93,9 @@ func DialTimeout(uri string, timeout time.Duration) (self *Client, err error) {
 	connt := &connWithTimeout{Conn: conn}
 
 	self = &Client{
-		conn: connt,
-		rconn: connt,
-		url: URL,
+		conn:       connt,
+		rconn:      connt,
+		url:        URL,
 		requestUri: u2.String(),
 	}
 	return
@@ -214,7 +214,7 @@ func (self *Client) ReadResponse() (res Response, err error) {
 
 	if h[0] == 36 {
 		// $
-		res.BlockLength = int(h[2])<<8+int(h[3])
+		res.BlockLength = int(h[2])<<8 + int(h[3])
 		res.BlockNo = int(h[1])
 		if self.DebugConn {
 			fmt.Println("block: len", res.BlockLength, "no", res.BlockNo)
@@ -244,7 +244,7 @@ func (self *Client) ReadResponse() (res Response, err error) {
 				return
 			}
 
-			res.BlockLength = int(h[2])<<8+int(h[3])
+			res.BlockLength = int(h[2])<<8 + int(h[3])
 			res.BlockNo = int(h[1])
 			if res.BlockNo/2 < len(self.streams) {
 				break
@@ -297,10 +297,10 @@ func (self *Client) ReadResponse() (res Response, err error) {
 
 	if res.StatusCode == 401 {
 		/*
-		RTSP/1.0 401 Unauthorized
-		CSeq: 2
-		Date: Wed, May 04 2016 10:10:51 GMT
-		WWW-Authenticate: Digest realm="LIVE555 Streaming Media", nonce="c633aaf8b83127633cbe98fac1d20d87"
+			RTSP/1.0 401 Unauthorized
+			CSeq: 2
+			Date: Wed, May 04 2016 10:10:51 GMT
+			WWW-Authenticate: Digest realm="LIVE555 Streaming Media", nonce="c633aaf8b83127633cbe98fac1d20d87"
 		*/
 		authval := header.Get("WWW-Authenticate")
 		hdrval := strings.SplitN(authval, " ", 2)
@@ -334,11 +334,11 @@ func (self *Client) ReadResponse() (res Response, err error) {
 					err = fmt.Errorf("rtsp: please provide password")
 					return
 				}
-				hs1 := md5hash(username+":"+realm+":"+password)
+				hs1 := md5hash(username + ":" + realm + ":" + password)
 
 				self.authHeaders = func(method string) []string {
-					hs2 := md5hash(method+":"+self.requestUri)
-					response := md5hash(hs1+":"+nonce+":"+hs2)
+					hs2 := md5hash(method + ":" + self.requestUri)
+					response := md5hash(hs1 + ":" + nonce + ":" + hs2)
 					return []string{
 						fmt.Sprintf(`Authorization: Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s"`,
 							username, realm, nonce, self.requestUri, response),
@@ -393,7 +393,7 @@ func (self *Client) Setup(idx []int) (err error) {
 		if strings.HasPrefix(control, "rtsp://") {
 			uri = control
 		} else {
-			uri = self.requestUri+"/"+control
+			uri = self.requestUri + "/" + control
 		}
 		req := Request{Method: "SETUP", Uri: uri}
 		req.Header = append(req.Header, fmt.Sprintf("Transport: RTP/AVP/TCP;unicast;interleaved=%d-%d", si*2, si*2+1))
@@ -423,7 +423,7 @@ func (self *Client) Describe() (streams []av.CodecData, err error) {
 	for i := 0; i < 2; i++ {
 		req := Request{
 			Method: "DESCRIBE",
-			Uri: self.requestUri,
+			Uri:    self.requestUri,
 			Header: []string{"Accept: application/sdp"},
 		}
 		if err = self.WriteRequest(req); err != nil {
@@ -529,7 +529,7 @@ func (self *Stream) makeCodecData() (err error) {
 		case av.H264:
 			for _, nalu := range media.SpropParameterSets {
 				if len(nalu) > 0 {
-					switch nalu[0]&0x1f {
+					switch nalu[0] & 0x1f {
 					case 7:
 						if len(self.sps) == 0 {
 							self.sps = nalu
@@ -580,12 +580,12 @@ func (self *Stream) makeCodecData() (err error) {
 
 func (self *Stream) handleH264Payload(naluType byte, timestamp uint32, packet []byte) (err error) {
 	/*
-	Table 7-1 – NAL unit type codes
-	1   ￼Coded slice of a non-IDR picture
-	5    Coded slice of an IDR picture
-	6    Supplemental enhancement information (SEI)
-	7    Sequence parameter set
-	8    Picture parameter set
+		Table 7-1 – NAL unit type codes
+		1   ￼Coded slice of a non-IDR picture
+		5    Coded slice of an IDR picture
+		6    Supplemental enhancement information (SEI)
+		7    Sequence parameter set
+		8    Picture parameter set
 	*/
 	switch naluType {
 	case 6: // SEI ignored
@@ -635,27 +635,27 @@ func (self *Stream) handlePacket(timestamp uint32, packet []byte) (err error) {
 	switch self.Type() {
 	case av.H264:
 		/*
-		+---------------+
-		|0|1|2|3|4|5|6|7|
-		+-+-+-+-+-+-+-+-+
-		|F|NRI|  Type   |
-		+---------------+
+			+---------------+
+			|0|1|2|3|4|5|6|7|
+			+-+-+-+-+-+-+-+-+
+			|F|NRI|  Type   |
+			+---------------+
 		*/
-		naluType := packet[0]&0x1f
+		naluType := packet[0] & 0x1f
 
 		/*
-		NAL Unit  Packet    Packet Type Name               Section
-		Type      Type
-		-------------------------------------------------------------
-		0        reserved                                     -
-		1-23     NAL unit  Single NAL unit packet             5.6
-		24       STAP-A    Single-time aggregation packet     5.7.1
-		25       STAP-B    Single-time aggregation packet     5.7.1
-		26       MTAP16    Multi-time aggregation packet      5.7.2
-		27       MTAP24    Multi-time aggregation packet      5.7.2
-		28       FU-A      Fragmentation unit                 5.8
-		29       FU-B      Fragmentation unit                 5.8
-		30-31    reserved                                     -
+			NAL Unit  Packet    Packet Type Name               Section
+			Type      Type
+			-------------------------------------------------------------
+			0        reserved                                     -
+			1-23     NAL unit  Single NAL unit packet             5.6
+			24       STAP-A    Single-time aggregation packet     5.7.1
+			25       STAP-B    Single-time aggregation packet     5.7.1
+			26       MTAP16    Multi-time aggregation packet      5.7.2
+			27       MTAP24    Multi-time aggregation packet      5.7.2
+			28       FU-A      Fragmentation unit                 5.8
+			29       FU-B      Fragmentation unit                 5.8
+			30-31    reserved                                     -
 		*/
 
 		switch {
@@ -667,60 +667,60 @@ func (self *Stream) handlePacket(timestamp uint32, packet []byte) (err error) {
 
 		case naluType == 28: // FU-A
 			/*
-			0                   1                   2                   3
-			0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-			+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-			| FU indicator  |   FU header   |                               |
-			+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               |
-			|                                                               |
-			|                         FU payload                            |
-			|                                                               |
-			|                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-			|                               :...OPTIONAL RTP padding        |
-			+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-			Figure 14.  RTP payload format for FU-A
+				0                   1                   2                   3
+				0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				| FU indicator  |   FU header   |                               |
+				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               |
+				|                                                               |
+				|                         FU payload                            |
+				|                                                               |
+				|                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				|                               :...OPTIONAL RTP padding        |
+				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				Figure 14.  RTP payload format for FU-A
 
-			The FU indicator octet has the following format:
-			+---------------+
-			|0|1|2|3|4|5|6|7|
-			+-+-+-+-+-+-+-+-+
-			|F|NRI|  Type   |
-			+---------------+
+				The FU indicator octet has the following format:
+				+---------------+
+				|0|1|2|3|4|5|6|7|
+				+-+-+-+-+-+-+-+-+
+				|F|NRI|  Type   |
+				+---------------+
 
 
-			The FU header has the following format:
-			+---------------+
-			|0|1|2|3|4|5|6|7|
-			+-+-+-+-+-+-+-+-+
-			|S|E|R|  Type   |
-			+---------------+
+				The FU header has the following format:
+				+---------------+
+				|0|1|2|3|4|5|6|7|
+				+-+-+-+-+-+-+-+-+
+				|S|E|R|  Type   |
+				+---------------+
 
-			S: 1 bit
-			When set to one, the Start bit indicates the start of a fragmented
-			NAL unit.  When the following FU payload is not the start of a
-			fragmented NAL unit payload, the Start bit is set to zero.
+				S: 1 bit
+				When set to one, the Start bit indicates the start of a fragmented
+				NAL unit.  When the following FU payload is not the start of a
+				fragmented NAL unit payload, the Start bit is set to zero.
 
-			E: 1 bit
-			When set to one, the End bit indicates the end of a fragmented NAL
-			unit, i.e., the last byte of the payload is also the last byte of
-			the fragmented NAL unit.  When the following FU payload is not the
-			last fragment of a fragmented NAL unit, the End bit is set to
-			zero.
+				E: 1 bit
+				When set to one, the End bit indicates the end of a fragmented NAL
+				unit, i.e., the last byte of the payload is also the last byte of
+				the fragmented NAL unit.  When the following FU payload is not the
+				last fragment of a fragmented NAL unit, the End bit is set to
+				zero.
 
-			R: 1 bit
-			The Reserved bit MUST be equal to 0 and MUST be ignored by the
-			receiver.
+				R: 1 bit
+				The Reserved bit MUST be equal to 0 and MUST be ignored by the
+				receiver.
 
-			Type: 5 bits
-			The NAL unit payload type as defined in table 7-1 of [1].
+				Type: 5 bits
+				The NAL unit payload type as defined in table 7-1 of [1].
 			*/
 			fuIndicator := packet[0]
 			fuHeader := packet[1]
-			isStart := fuHeader&0x80!=0
-			isEnd := fuHeader&0x40!=0
-			naluType := fuHeader&0x1f
+			isStart := fuHeader&0x80 != 0
+			isEnd := fuHeader&0x40 != 0
+			naluType := fuHeader & 0x1f
 			if isStart {
-				self.fuBuffer = []byte{fuIndicator&0xe0|fuHeader&0x1f}
+				self.fuBuffer = []byte{fuIndicator&0xe0 | fuHeader&0x1f}
 			}
 			self.fuBuffer = append(self.fuBuffer, packet[2:]...)
 			if isEnd {
@@ -753,12 +753,12 @@ func (self *Stream) handlePacket(timestamp uint32, packet []byte) (err error) {
 }
 
 func (self *Client) parseBlock(blockNo int, packet []byte) (streamIndex int, err error) {
-	if blockNo % 2 != 0 {
+	if blockNo%2 != 0 {
 		// rtcp block
 		return
 	}
 
-	streamIndex = blockNo/2
+	streamIndex = blockNo / 2
 	if streamIndex >= len(self.streams) {
 		err = fmt.Errorf("rtsp: parseBlock: streamIndex=%d invalid", streamIndex)
 		return
@@ -766,25 +766,25 @@ func (self *Client) parseBlock(blockNo int, packet []byte) (streamIndex int, err
 	stream := self.streams[streamIndex]
 
 	/*
-	0                   1                   2                   3
-	0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|V=2|P|X|  CC   |M|     PT      |       sequence number         |
-	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|                           timestamp                           |
-	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|           synchronization source (SSRC) identifier            |
-	+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-	|            contributing source (CSRC) identifiers             |
-	|                             ....                              |
-	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		0                   1                   2                   3
+		0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+		+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		|V=2|P|X|  CC   |M|     PT      |       sequence number         |
+		+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		|                           timestamp                           |
+		+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		|           synchronization source (SSRC) identifier            |
+		+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+		|            contributing source (CSRC) identifiers             |
+		|                             ....                              |
+		+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 	*/
 
 	if len(packet) < 8 {
 		err = fmt.Errorf("rtp: packet too short")
 		return
 	}
-	payloadOffset := 12+int(packet[0]&0xf)*4
+	payloadOffset := 12 + int(packet[0]&0xf)*4
 	if payloadOffset+2 > len(packet) {
 		err = fmt.Errorf("rtp: packet too short")
 		return
@@ -794,52 +794,52 @@ func (self *Client) parseBlock(blockNo int, packet []byte) (streamIndex int, err
 	payload := packet[payloadOffset:]
 
 	/*
-	PT 	Encoding Name 	Audio/Video (A/V) 	Clock Rate (Hz) 	Channels 	Reference 
-	0	PCMU	A	8000	1	[RFC3551]
-	1	Reserved				
-	2	Reserved				
-	3	GSM	A	8000	1	[RFC3551]
-	4	G723	A	8000	1	[Vineet_Kumar][RFC3551]
-	5	DVI4	A	8000	1	[RFC3551]
-	6	DVI4	A	16000	1	[RFC3551]
-	7	LPC	A	8000	1	[RFC3551]
-	8	PCMA	A	8000	1	[RFC3551]
-	9	G722	A	8000	1	[RFC3551]
-	10	L16	A	44100	2	[RFC3551]
-	11	L16	A	44100	1	[RFC3551]
-	12	QCELP	A	8000	1	[RFC3551]
-	13	CN	A	8000	1	[RFC3389]
-	14	MPA	A	90000		[RFC3551][RFC2250]
-	15	G728	A	8000	1	[RFC3551]
-	16	DVI4	A	11025	1	[Joseph_Di_Pol]
-	17	DVI4	A	22050	1	[Joseph_Di_Pol]
-	18	G729	A	8000	1	[RFC3551]
-	19	Reserved	A			
-	20	Unassigned	A			
-	21	Unassigned	A			
-	22	Unassigned	A			
-	23	Unassigned	A			
-	24	Unassigned	V			
-	25	CelB	V	90000		[RFC2029]
-	26	JPEG	V	90000		[RFC2435]
-	27	Unassigned	V			
-	28	nv	V	90000		[RFC3551]
-	29	Unassigned	V			
-	30	Unassigned	V			
-	31	H261	V	90000		[RFC4587]
-	32	MPV	V	90000		[RFC2250]
-	33	MP2T	AV	90000		[RFC2250]
-	34	H263	V	90000		[Chunrong_Zhu]
-	35-71	Unassigned	?			
-	72-76	Reserved for RTCP conflict avoidance				[RFC3551]
-	77-95	Unassigned	?			
-	96-127	dynamic	?			[RFC3551]
+		PT 	Encoding Name 	Audio/Video (A/V) 	Clock Rate (Hz) 	Channels 	Reference
+		0	PCMU	A	8000	1	[RFC3551]
+		1	Reserved
+		2	Reserved
+		3	GSM	A	8000	1	[RFC3551]
+		4	G723	A	8000	1	[Vineet_Kumar][RFC3551]
+		5	DVI4	A	8000	1	[RFC3551]
+		6	DVI4	A	16000	1	[RFC3551]
+		7	LPC	A	8000	1	[RFC3551]
+		8	PCMA	A	8000	1	[RFC3551]
+		9	G722	A	8000	1	[RFC3551]
+		10	L16	A	44100	2	[RFC3551]
+		11	L16	A	44100	1	[RFC3551]
+		12	QCELP	A	8000	1	[RFC3551]
+		13	CN	A	8000	1	[RFC3389]
+		14	MPA	A	90000		[RFC3551][RFC2250]
+		15	G728	A	8000	1	[RFC3551]
+		16	DVI4	A	11025	1	[Joseph_Di_Pol]
+		17	DVI4	A	22050	1	[Joseph_Di_Pol]
+		18	G729	A	8000	1	[RFC3551]
+		19	Reserved	A
+		20	Unassigned	A
+		21	Unassigned	A
+		22	Unassigned	A
+		23	Unassigned	A
+		24	Unassigned	V
+		25	CelB	V	90000		[RFC2029]
+		26	JPEG	V	90000		[RFC2435]
+		27	Unassigned	V
+		28	nv	V	90000		[RFC3551]
+		29	Unassigned	V
+		30	Unassigned	V
+		31	H261	V	90000		[RFC4587]
+		32	MPV	V	90000		[RFC2250]
+		33	MP2T	AV	90000		[RFC2250]
+		34	H263	V	90000		[Chunrong_Zhu]
+		35-71	Unassigned	?
+		72-76	Reserved for RTCP conflict avoidance				[RFC3551]
+		77-95	Unassigned	?
+		96-127	dynamic	?			[RFC3551]
 	*/
 	//payloadType := packet[1]&0x7f
 
 	if self.DebugConn {
 		//fmt.Println("packet:", stream.Type(), "offset", payloadOffset, "pt", payloadType)
-		if len(packet)>24 {
+		if len(packet) > 24 {
 			fmt.Println(hex.Dump(packet[:24]))
 		}
 	}
@@ -854,7 +854,7 @@ func (self *Client) parseBlock(blockNo int, packet []byte) (streamIndex int, err
 func (self *Client) Play() (err error) {
 	req := Request{
 		Method: "PLAY",
-		Uri: self.requestUri,
+		Uri:    self.requestUri,
 	}
 	req.Header = append(req.Header, "Session: "+self.session)
 	if err = self.WriteRequest(req); err != nil {
@@ -877,7 +877,7 @@ func (self *Client) poll() (err error) {
 			}
 			stream := self.streams[i]
 			if stream.gotpkt {
-				time := float64(stream.timestamp)/float64(stream.Sdp.TimeScale)
+				time := float64(stream.timestamp) / float64(stream.Sdp.TimeScale)
 				if false {
 					fmt.Printf("rtsp: #%d %d/%d %d\n", i, stream.timestamp, stream.Sdp.TimeScale, len(stream.pkt.Data))
 				}
@@ -927,8 +927,7 @@ func Open(uri string) (cli *Client, err error) {
 		return
 	}
 	_cli.rtpKeepaliveTimer = time.Now()
-	_cli.RtpKeepAliveTimeout = 20*time.Second
+	_cli.RtpKeepAliveTimeout = 20 * time.Second
 	cli = _cli
 	return
 }
-

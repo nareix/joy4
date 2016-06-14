@@ -23,4 +23,3 @@ func (self connWithTimeout) Write(p []byte) (n int, err error) {
 	}
 	return self.Conn.Write(p)
 }
-

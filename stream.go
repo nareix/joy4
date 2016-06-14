@@ -7,18 +7,18 @@ import (
 
 type Stream struct {
 	av.CodecData
-	Sdp sdp.Media
+	Sdp    sdp.Media
 	client *Client
 
 	// h264
-	fuBuffer []byte
-	sps []byte
-	pps []byte
+	fuBuffer   []byte
+	sps        []byte
+	pps        []byte
 	spsChanged bool
 	ppsChanged bool
 
-	gotpkt bool
-	pkt av.Packet
+	gotpkt    bool
+	pkt       av.Packet
 	timestamp uint32
 }
 
@@ -29,4 +29,3 @@ func (self Stream) IsAudio() bool {
 func (self Stream) IsVideo() bool {
 	return self.Sdp.AVType == "video"
 }
-

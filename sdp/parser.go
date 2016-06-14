@@ -1,12 +1,12 @@
 package sdp
 
 import (
-	"strings"
-	"fmt"
-	"strconv"
-	"encoding/hex"
 	"encoding/base64"
+	"encoding/hex"
+	"fmt"
 	"github.com/nareix/av"
+	"strconv"
+	"strings"
 )
 
 type Session struct {
@@ -14,16 +14,16 @@ type Session struct {
 }
 
 type Media struct {
-	AVType string
-	Type int
-	TimeScale int
-	Control string
-	Rtpmap int
-	Config []byte
+	AVType             string
+	Type               int
+	TimeScale          int
+	Control            string
+	Rtpmap             int
+	Config             []byte
 	SpropParameterSets [][]byte
-	PayloadType int
-	SizeLength int
-	IndexLength int
+	PayloadType        int
+	SizeLength         int
+	IndexLength        int
 }
 
 func Parse(content string) (sess Session, medias []Media) {
@@ -114,4 +114,3 @@ func Parse(content string) (sess Session, medias []Media) {
 	}
 	return
 }
-
