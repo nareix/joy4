@@ -465,10 +465,14 @@ func (self *Client) Describe() (streams []av.CodecData, err error) {
 }
 
 func (self *Client) Options() (err error) {
-	if err = self.WriteRequest(Request{
+	req := Request{
 		Method: "OPTIONS",
-		Uri: self.requestUri,
-	}); err != nil {
+		Uri:    self.requestUri,
+	}
+	if self.session != "" {
+		req.Header = append(req.Header, "Session: "+self.session)
+	}
+	if err = self.WriteRequest(req); err != nil {
 		return
 	}
 	if _, err = self.ReadResponse(); err != nil {
