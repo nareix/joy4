@@ -322,29 +322,30 @@ func (self *Client) ReadResponse() (res Response, err error) {
 				}
 			}
 
-			if realm != "" && nonce != "" {
-				if self.url.User == nil {
-					err = fmt.Errorf("rtsp: please provide username and password")
-					return
-				}
+			if realm != "" {
 				var username string
 				var password string
-				var ok bool
-				username = self.url.User.Username()
-				if password, ok = self.url.User.Password(); !ok {
-					err = fmt.Errorf("rtsp: please provide password")
+
+				if self.url.User == nil {
+					err = fmt.Errorf("rtsp: no username")
 					return
 				}
-				hs1 := md5hash(username + ":" + realm + ":" + password)
+				username = self.url.User.Username()
+				password, _ = self.url.User.Password()
 
 				self.authHeaders = func(method string) []string {
-					hs2 := md5hash(method + ":" + self.requestUri)
-					response := md5hash(hs1 + ":" + nonce + ":" + hs2)
-					return []string{
-						fmt.Sprintf(`Authorization: Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s"`,
-							username, realm, nonce, self.requestUri, response),
+					headers := []string{
 						fmt.Sprintf(`Authorization: Basic %s`, base64.StdEncoding.EncodeToString([]byte(username+":"+password))),
 					}
+					if nonce != "" {
+						hs1 := md5hash(username + ":" + realm + ":" + password)
+						hs2 := md5hash(method + ":" + self.requestUri)
+						response := md5hash(hs1 + ":" + nonce + ":" + hs2)
+						headers = append(headers, fmt.Sprintf(
+							`Authorization: Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s"`,
+							username, realm, nonce, self.requestUri, response))
+					}
+					return headers
 				}
 			}
 		}
@@ -907,7 +908,7 @@ func (self *Client) ReadPacket() (i int, pkt av.Packet, err error) {
 }
 
 func (self *Client) ReadHeader() (err error) {
-	if _, err = self.Options(); err != nil {
+	if err = self.Options(); err != nil {
 		return
 	}
 	if _, err = self.Describe(); err != nil {
