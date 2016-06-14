@@ -217,7 +217,7 @@ func (self *Client) ReadResponse() (res Response, err error) {
 		// $
 		res.BlockLength = int(h[2])<<8 + int(h[3])
 		res.BlockNo = int(h[1])
-		if self.DebugRtsp {
+		if self.DebugRtp {
 			fmt.Println("block: len", res.BlockLength, "no", res.BlockNo)
 		}
 		return
@@ -228,7 +228,7 @@ func (self *Client) ReadResponse() (res Response, err error) {
 		self.conn.Timeout = self.RtpTimeout
 
 		for {
-			if self.DebugRtsp {
+			if self.DebugRtp {
 				fmt.Println("block: relocate try")
 			}
 
@@ -252,7 +252,7 @@ func (self *Client) ReadResponse() (res Response, err error) {
 			}
 		}
 
-		if self.DebugRtsp {
+		if self.DebugRtp {
 			fmt.Println("block: relocate done")
 			fmt.Println("block: len", res.BlockLength, "no", res.BlockNo)
 		}
