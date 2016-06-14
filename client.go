@@ -34,6 +34,7 @@ type Client struct {
 	RtpTimeout time.Duration
 	RtpKeepAliveTimeout time.Duration
 	rtpKeepaliveTimer time.Time
+	rtpKeepaliveEnterCnt int
 
 	setupCalled bool
 	setupIdx []int
@@ -117,7 +118,11 @@ func (self *Client) Streams() (streams []av.CodecData, err error) {
 }
 
 func (self *Client) sendRtpKeepalive() (err error) {
-	if self.RtpKeepAliveTimeout > 0 {
+	if self.RtpKeepAliveTimeout > 0 && self.rtpKeepaliveEnterCnt == 0 {
+		self.rtpKeepaliveEnterCnt++
+		defer func() {
+			self.rtpKeepaliveEnterCnt--
+		}()
 		if self.rtpKeepaliveTimer.IsZero() {
 			self.rtpKeepaliveTimer = time.Now()
 		} else if time.Now().Sub(self.rtpKeepaliveTimer) > self.RtpKeepAliveTimeout {
