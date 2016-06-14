@@ -907,6 +907,9 @@ func (self *Client) ReadPacket() (i int, pkt av.Packet, err error) {
 }
 
 func (self *Client) ReadHeader() (err error) {
+	if _, err = self.Options(); err != nil {
+		return
+	}
 	if _, err = self.Describe(); err != nil {
 		return
 	}
