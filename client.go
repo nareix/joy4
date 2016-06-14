@@ -917,6 +917,8 @@ func Open(uri string) (cli *Client, err error) {
 	if err = _cli.ReadHeader(); err != nil {
 		return
 	}
+	_cli.rtpKeepaliveTimer = time.Now()
+	_cli.RtpKeepAliveTimeout = 20*time.Second
 	cli = _cli
 	return
 }
