@@ -887,6 +887,10 @@ func (self *Client) Teardown() (err error) {
 	return
 }
 
+func (self *Client) Close() (err error) {
+	return self.conn.Conn.Close()
+}
+
 func (self *Client) poll() (err error) {
 	for {
 		var res Response
