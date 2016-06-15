@@ -622,7 +622,6 @@ func (self *Stream) handleH264Payload(timestamp uint32, packet []byte) (err erro
 		29       FU-B      Fragmentation unit                 5.8
 		30-31    reserved                                     -
 	*/
-
 	switch {
 	default:
 		if naluType >= 1 && naluType <= 23 {
@@ -873,6 +872,18 @@ func (self *Client) Play() (err error) {
 		return
 	}
 	self.playCalled = true
+	return
+}
+
+func (self *Client) Teardown() (err error) {
+	req := Request{
+		Method: "TEARDOWN",
+		Uri:    self.requestUri,
+	}
+	req.Header = append(req.Header, "Session: "+self.session)
+	if err = self.WriteRequest(req); err != nil {
+		return
+	}
 	return
 }
 
