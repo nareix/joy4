@@ -531,16 +531,7 @@ func (self *Stream) makeCodecData() (err error) {
 		case av.H264:
 			for _, nalu := range media.SpropParameterSets {
 				if len(nalu) > 0 {
-					switch nalu[0] & 0x1f {
-					case 7:
-						if len(self.sps) == 0 {
-							self.sps = nalu
-						}
-					case 8:
-						if len(self.pps) == 0 {
-							self.pps = nalu
-						}
-					}
+					self.handleH264Payload(0, nalu)
 				}
 			}
 
@@ -548,16 +539,7 @@ func (self *Stream) makeCodecData() (err error) {
 				if nalus, ok := h264parser.SplitNALUs(media.Config); ok {
 					for _, nalu := range nalus {
 						if len(nalu) > 0 {
-							switch nalu[0] & 0x1f {
-							case 7:
-								if len(self.sps) == 0 {
-									self.sps = nalu
-								}
-							case 8:
-								if len(self.pps) == 0 {
-									self.pps = nalu
-								}
-							}
+							self.handleH264Payload(0, nalu)
 						}
 					}
 				}
@@ -600,7 +582,30 @@ func (self *Stream) makeCodecData() (err error) {
 	return
 }
 
-func (self *Stream) handleH264Payload(naluType byte, timestamp uint32, packet []byte) (err error) {
+func (self *Stream) handleBuggyCameraHasAnnexbH264Packet(timestamp uint32, packet []byte) (isBuggy bool, err error) {
+	if len(packet) >= 4 && packet[0] == 0 && packet[1] == 0 && packet[2] == 0 && packet[3] == 1 {
+		isBuggy = true
+		if nalus, ok := h264parser.SplitNALUs(packet); ok {
+			for _, nalu := range nalus {
+				if len(nalu) > 0 {
+					if err = self.handleH264Payload(timestamp, nalu); err != nil {
+						return
+					}
+				}
+			}
+		}
+	}
+	return
+}
+
+func (self *Stream) handleH264Payload(timestamp uint32, packet []byte) (err error) {
+	var isBuggy bool
+	if isBuggy, err = self.handleBuggyCameraHasAnnexbH264Packet(timestamp, packet); isBuggy {
+		return
+	}
+
+	naluType := packet[0]&0x1f
+
 	/*
 		Table 7-1 – NAL unit type codes
 		1   ￼Coded slice of a non-IDR picture
@@ -608,15 +613,39 @@ func (self *Stream) handleH264Payload(naluType byte, timestamp uint32, packet []
 		6    Supplemental enhancement information (SEI)
 		7    Sequence parameter set
 		8    Picture parameter set
+		1-23     NAL unit  Single NAL unit packet             5.6
+		24       STAP-A    Single-time aggregation packet     5.7.1
+		25       STAP-B    Single-time aggregation packet     5.7.1
+		26       MTAP16    Multi-time aggregation packet      5.7.2
+		27       MTAP24    Multi-time aggregation packet      5.7.2
+		28       FU-A      Fragmentation unit                 5.8
+		29       FU-B      Fragmentation unit                 5.8
+		30-31    reserved                                     -
 	*/
-	switch naluType {
-	case 6: // SEI ignored
 
-	case 7: // sps
+	switch {
+	default:
+		if naluType >= 1 && naluType <= 23 {
+			if naluType == 5 {
+				self.pkt.IsKeyFrame = true
+			}
+			self.gotpkt = true
+			self.pkt.Data = packet
+			self.timestamp = timestamp
+		} else {
+			err = fmt.Errorf("rtsp: unsupported H264 naluType=%d", naluType)
+			return
+		}
+
+	case naluType == 6: // SEI ignored
+
+	case naluType == 7: // sps
 		if self.client != nil && self.client.DebugRtp {
 			fmt.Println("rtsp: got sps")
 		}
-		if bytes.Compare(self.sps, packet) != 0 {
+		if len(self.sps) == 0 {
+			self.sps = packet
+		} else if bytes.Compare(self.sps, packet) != 0 {
 			self.spsChanged = true
 			self.sps = packet
 			if self.client != nil && self.client.DebugRtp {
@@ -624,11 +653,13 @@ func (self *Stream) handleH264Payload(naluType byte, timestamp uint32, packet []
 			}
 		}
 
-	case 8: // pps
+	case naluType == 8: // pps
 		if self.client != nil && self.client.DebugRtp {
 			fmt.Println("rtsp: got pps")
 		}
-		if bytes.Compare(self.pps, packet) != 0 {
+		if len(self.pps) == 0 {
+			self.pps = packet
+		} else if bytes.Compare(self.pps, packet) != 0 {
 			self.ppsChanged = true
 			self.pps = packet
 			if self.client != nil && self.client.DebugRtp {
@@ -636,13 +667,72 @@ func (self *Stream) handleH264Payload(naluType byte, timestamp uint32, packet []
 			}
 		}
 
-	default:
-		if naluType == 5 {
-			self.pkt.IsKeyFrame = true
+	case naluType == 28: // FU-A
+		/*
+			0                   1                   2                   3
+			0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+			+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			| FU indicator  |   FU header   |                               |
+			+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               |
+			|                                                               |
+			|                         FU payload                            |
+			|                                                               |
+			|                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			|                               :...OPTIONAL RTP padding        |
+			+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			Figure 14.  RTP payload format for FU-A
+
+			The FU indicator octet has the following format:
+			+---------------+
+			|0|1|2|3|4|5|6|7|
+			+-+-+-+-+-+-+-+-+
+			|F|NRI|  Type   |
+			+---------------+
+
+
+			The FU header has the following format:
+			+---------------+
+			|0|1|2|3|4|5|6|7|
+			+-+-+-+-+-+-+-+-+
+			|S|E|R|  Type   |
+			+---------------+
+
+			S: 1 bit
+			When set to one, the Start bit indicates the start of a fragmented
+			NAL unit.  When the following FU payload is not the start of a
+			fragmented NAL unit payload, the Start bit is set to zero.
+
+			E: 1 bit
+			When set to one, the End bit indicates the end of a fragmented NAL
+			unit, i.e., the last byte of the payload is also the last byte of
+			the fragmented NAL unit.  When the following FU payload is not the
+			last fragment of a fragmented NAL unit, the End bit is set to
+			zero.
+
+			R: 1 bit
+			The Reserved bit MUST be equal to 0 and MUST be ignored by the
+			receiver.
+
+			Type: 5 bits
+			The NAL unit payload type as defined in table 7-1 of [1].
+		*/
+		fuIndicator := packet[0]
+		fuHeader := packet[1]
+		isStart := fuHeader&0x80 != 0
+		isEnd := fuHeader&0x40 != 0
+		if isStart {
+			self.fuBuffer = []byte{fuIndicator&0xe0 | fuHeader&0x1f}
 		}
-		self.gotpkt = true
-		self.pkt.Data = packet
-		self.timestamp = timestamp
+		self.fuBuffer = append(self.fuBuffer, packet[2:]...)
+		if isEnd {
+			if err = self.handleH264Payload(timestamp, self.fuBuffer); err != nil {
+				return
+			}
+		}
+
+	case naluType == 24:
+		err = fmt.Errorf("rtsp: unsupported H264 STAP-A")
+		return
 	}
 
 	return
@@ -656,107 +746,10 @@ func (self *Stream) handlePacket(timestamp uint32, packet []byte) (err error) {
 
 	switch self.Type() {
 	case av.H264:
-		/*
-			+---------------+
-			|0|1|2|3|4|5|6|7|
-			+-+-+-+-+-+-+-+-+
-			|F|NRI|  Type   |
-			+---------------+
-		*/
-		naluType := packet[0] & 0x1f
-
-		/*
-			NAL Unit  Packet    Packet Type Name               Section
-			Type      Type
-			-------------------------------------------------------------
-			0        reserved                                     -
-			1-23     NAL unit  Single NAL unit packet             5.6
-			24       STAP-A    Single-time aggregation packet     5.7.1
-			25       STAP-B    Single-time aggregation packet     5.7.1
-			26       MTAP16    Multi-time aggregation packet      5.7.2
-			27       MTAP24    Multi-time aggregation packet      5.7.2
-			28       FU-A      Fragmentation unit                 5.8
-			29       FU-B      Fragmentation unit                 5.8
-			30-31    reserved                                     -
-		*/
-
-		switch {
-
-		case naluType >= 1 && naluType <= 23:
-			if err = self.handleH264Payload(naluType, timestamp, packet); err != nil {
-				return
-			}
-
-		case naluType == 28: // FU-A
-			/*
-				0                   1                   2                   3
-				0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				| FU indicator  |   FU header   |                               |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               |
-				|                                                               |
-				|                         FU payload                            |
-				|                                                               |
-				|                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|                               :...OPTIONAL RTP padding        |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				Figure 14.  RTP payload format for FU-A
-
-				The FU indicator octet has the following format:
-				+---------------+
-				|0|1|2|3|4|5|6|7|
-				+-+-+-+-+-+-+-+-+
-				|F|NRI|  Type   |
-				+---------------+
-
-
-				The FU header has the following format:
-				+---------------+
-				|0|1|2|3|4|5|6|7|
-				+-+-+-+-+-+-+-+-+
-				|S|E|R|  Type   |
-				+---------------+
-
-				S: 1 bit
-				When set to one, the Start bit indicates the start of a fragmented
-				NAL unit.  When the following FU payload is not the start of a
-				fragmented NAL unit payload, the Start bit is set to zero.
-
-				E: 1 bit
-				When set to one, the End bit indicates the end of a fragmented NAL
-				unit, i.e., the last byte of the payload is also the last byte of
-				the fragmented NAL unit.  When the following FU payload is not the
-				last fragment of a fragmented NAL unit, the End bit is set to
-				zero.
-
-				R: 1 bit
-				The Reserved bit MUST be equal to 0 and MUST be ignored by the
-				receiver.
-
-				Type: 5 bits
-				The NAL unit payload type as defined in table 7-1 of [1].
-			*/
-			fuIndicator := packet[0]
-			fuHeader := packet[1]
-			isStart := fuHeader&0x80 != 0
-			isEnd := fuHeader&0x40 != 0
-			naluType := fuHeader & 0x1f
-			if isStart {
-				self.fuBuffer = []byte{fuIndicator&0xe0 | fuHeader&0x1f}
-			}
-			self.fuBuffer = append(self.fuBuffer, packet[2:]...)
-			if isEnd {
-				if err = self.handleH264Payload(naluType, timestamp, self.fuBuffer); err != nil {
-					return
-				}
-			}
-
-		case naluType == 24:
-			err = fmt.Errorf("rtsp: unsupported H264 STAP-A")
-			return
-
-		default:
-			err = fmt.Errorf("rtsp: unsupported H264 naluType=%d", naluType)
+		if self.client != nil && self.client.DebugRtp {
+			fmt.Printf("rtsp: h264 data=%x\n", packet)
+		}
+		if err = self.handleH264Payload(timestamp, packet); err != nil {
 			return
 		}
 
