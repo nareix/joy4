@@ -729,8 +729,40 @@ func (self *Stream) handleH264Payload(timestamp uint32, packet []byte) (err erro
 			}
 		}
 
-	case naluType == 24:
-		err = fmt.Errorf("rtsp: unsupported H264 STAP-A")
+	case naluType == 24: // STAP-A
+		/*
+		0                   1                   2                   3
+		0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+		+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		|                          RTP Header                           |
+		+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		|STAP-A NAL HDR |         NALU 1 Size           | NALU 1 HDR    |
+		+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		|                         NALU 1 Data                           |
+		:                                                               :
+		+               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		|               | NALU 2 Size                   | NALU 2 HDR    |
+		+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		|                         NALU 2 Data                           |
+		:                                                               :
+		|                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		|                               :...OPTIONAL RTP padding        |
+		+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+		Figure 7.  An example of an RTP packet including an STAP-A
+		containing two single-time aggregation units
+		*/
+		packet = packet[1:]
+		for len(packet) >= 2 {
+			size := int(packet[0])<<8|int(packet[1])
+			if size == 0 || size+2 > len(packet) {
+				break
+			}
+			if err = self.handleH264Payload(timestamp, packet[2:size+2]); err != nil {
+				return
+			}
+			packet = packet[size+2:]
+		}
 		return
 	}
 
