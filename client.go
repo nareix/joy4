@@ -746,9 +746,6 @@ func (self *Stream) handlePacket(timestamp uint32, packet []byte) (err error) {
 
 	switch self.Type() {
 	case av.H264:
-		if self.client != nil && self.client.DebugRtp {
-			fmt.Printf("rtsp: h264 data=%x\n", packet)
-		}
 		if err = self.handleH264Payload(timestamp, packet); err != nil {
 			return
 		}
