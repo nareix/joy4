@@ -543,6 +543,26 @@ func (self *Stream) makeCodecData() (err error) {
 					}
 				}
 			}
+
+			if len(self.sps) == 0 || len(self.pps) == 0 {
+				if nalus, ok := h264parser.SplitNALUs(media.Config); ok {
+					for _, nalu := range nalus {
+						if len(nalu) > 0 {
+							switch nalu[0] & 0x1f {
+							case 7:
+								if len(self.sps) == 0 {
+									self.sps = nalu
+								}
+							case 8:
+								if len(self.pps) == 0 {
+									self.pps = nalu
+								}
+							}
+						}
+					}
+				}
+			}
+
 			if len(self.sps) > 0 && len(self.pps) > 0 {
 				if self.CodecData, err = h264parser.NewCodecDataFromSPSAndPPS(self.sps, self.pps); err != nil {
 					err = fmt.Errorf("rtsp: h264 sps/pps invalid: %s", err)
