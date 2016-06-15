@@ -755,7 +755,7 @@ func (self *Stream) handleH264Payload(timestamp uint32, packet []byte) (err erro
 		packet = packet[1:]
 		for len(packet) >= 2 {
 			size := int(packet[0])<<8|int(packet[1])
-			if size == 0 || size+2 > len(packet) {
+			if size+2 > len(packet) {
 				break
 			}
 			if err = self.handleH264Payload(timestamp, packet[2:size+2]); err != nil {
