@@ -16,7 +16,7 @@ type Tag interface {
 	Type() uint8
 	Len() int
 	Marshal(*pio.Writer) error
-	Unmarshal(*pio.LimitedReader) error
+	Unmarshal(*pio.Reader) error
 }
 
 type Scriptdata struct {
@@ -38,7 +38,7 @@ func (self Scriptdata) Len() int {
 	return len(self.Data)
 }
 
-func (self *Scriptdata) Unmarshal(r *pio.LimitedReader) (err error) {
+func (self *Scriptdata) Unmarshal(r *pio.Reader) (err error) {
 	self.Data = make([]byte, r.N)
 	if _, err = io.ReadFull(r, self.Data); err != nil {
 		return
@@ -154,7 +154,7 @@ func (self Audiodata) Marshal(w *pio.Writer) (err error) {
 	return
 }
 
-func (self *Audiodata) Unmarshal(r *pio.LimitedReader) (err error) {
+func (self *Audiodata) Unmarshal(r *pio.Reader) (err error) {
 	var flags uint8
 	if flags, err = r.ReadU8(); err != nil {
 		return
@@ -229,7 +229,7 @@ func (self Videodata) Len() int {
 	return 5 + len(self.Data)
 }
 
-func (self *Videodata) Unmarshal(r *pio.LimitedReader) (err error) {
+func (self *Videodata) Unmarshal(r *pio.Reader) (err error) {
 	var flags uint8
 	if flags, err = r.ReadU8(); err != nil {
 		return
@@ -346,9 +346,11 @@ func ReadTag(r *pio.Reader) (tag Tag, timestamp int32, err error) {
 		return
 	}
 
-	if err = tag.Unmarshal(pio.NewLimitedReader(r, int64(datasize))); err != nil {
+	r.LimitOn(int64(datasize))
+	if err = tag.Unmarshal(r); err != nil {
 		return
 	}
+	r.LimitOff()
 
 	if _, err = r.ReadI32BE(); err != nil {
 		return
