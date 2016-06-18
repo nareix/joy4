@@ -15,7 +15,7 @@ type Session struct {
 
 type Media struct {
 	AVType             string
-	Type               int
+	Type               av.CodecType
 	TimeScale          int
 	Control            string
 	Rtpmap             int

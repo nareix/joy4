@@ -936,11 +936,11 @@ func (self *Client) poll() (err error) {
 			}
 			stream := self.streams[i]
 			if stream.gotpkt {
-				time := float64(stream.timestamp) / float64(stream.Sdp.TimeScale)
+				tm := time.Duration(stream.timestamp)*time.Second / time.Duration(stream.Sdp.TimeScale)
 				if false {
 					fmt.Printf("rtsp: #%d %d/%d %d\n", i, stream.timestamp, stream.Sdp.TimeScale, len(stream.pkt.Data))
 				}
-				self.pktque.WriteTimePacket(self.setupMap[i], time, stream.pkt)
+				self.pktque.WriteTimePacket(self.setupMap[i], tm, stream.pkt)
 				stream.pkt = av.Packet{}
 				stream.gotpkt = false
 				return
