@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"time"
 	"github.com/nareix/av"
 	"github.com/nareix/av/pktqueue"
 	"github.com/nareix/codec/aacparser"
@@ -41,9 +42,9 @@ func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
 	return
 }
 
-func (self *Demuxer) CurrentTime() (time float32) {
+func (self *Demuxer) CurrentTime() (tm time.Duration) {
 	if self.pktque != nil {
-		time = self.pktque.CurrentTime()
+		tm = self.pktque.CurrentTime()
 	}
 	return
 }
@@ -158,11 +159,11 @@ func (self *Stream) payloadEnd() (err error) {
 		IsKeyFrame: self.tshdr.RandomAccessIndicator,
 		Data:       payload,
 	}
-	time := float32(dts) / float32(PTS_HZ)
+	tm := time.Duration(dts)*time.Second / time.Duration(PTS_HZ)
 	if pts != dts {
-		pkt.CompositionTime = float32(pts-dts) / float32(PTS_HZ)
+		pkt.CompositionTime = time.Duration(pts-dts)*time.Second / time.Duration(PTS_HZ)
 	}
-	self.demuxer.pktque.WriteTimePacket(self.idx, time, pkt)
+	self.demuxer.pktque.WriteTimePacket(self.idx, tm, pkt)
 	self.demuxer.gotpkt = true
 
 	if self.CodecData == nil {

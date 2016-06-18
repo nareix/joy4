@@ -1,6 +1,7 @@
 package ts
 
 import (
+	"time"
 	"bytes"
 	"github.com/nareix/av"
 )
@@ -25,13 +26,13 @@ type Stream struct {
 
 	idx  int
 	pkt  av.Packet
-	time float32
+	time time.Duration
 }
 
-func timeToPesTs(time float32) uint64 {
-	return uint64(time*PTS_HZ) + PTS_HZ
+func timeToPesTs(tm time.Duration) uint64 {
+	return uint64(tm*PTS_HZ/time.Second) + PTS_HZ
 }
 
-func timeToPCR(time float32) uint64 {
-	return uint64(time*PCR_HZ) + PCR_HZ
+func timeToPCR(tm time.Duration) uint64 {
+	return uint64(tm*PCR_HZ/time.Second) + PCR_HZ
 }
