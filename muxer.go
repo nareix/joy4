@@ -19,12 +19,12 @@ func Create(W io.Writer, streams []av.CodecData) (muxer *Muxer, err error) {
 }
 
 type Muxer struct {
-	W       io.Writer
-	streams []*Stream
+	W                        io.Writer
+	streams                  []*Stream
 	PaddingToMakeCounterCont bool
 
-	tswPAT       *TSWriter
-	tswPMT       *TSWriter
+	tswPAT *TSWriter
+	tswPMT *TSWriter
 }
 
 func (self *Muxer) isCodecSupported(codec av.CodecData) bool {
@@ -43,7 +43,7 @@ func (self *Muxer) newStream(codec av.CodecData) (err error) {
 	}
 
 	stream := &Stream{
-		muxer: self,
+		muxer:     self,
 		CodecData: codec,
 		tsw: &TSWriter{
 			DiscontinuityIndicator: true,
@@ -57,7 +57,7 @@ func (self *Muxer) newStream(codec av.CodecData) (err error) {
 func (self *Muxer) writePaddingTSPackets(tsw *TSWriter) (err error) {
 	for tsw.ContinuityCounter&0xf != 0x0 {
 		header := TSHeader{
-			PID: tsw.PID,
+			PID:               tsw.PID,
 			ContinuityCounter: tsw.ContinuityCounter,
 		}
 		if _, err = WriteTSHeader(self.W, header, 0); err != nil {

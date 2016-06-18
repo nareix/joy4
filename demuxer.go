@@ -2,8 +2,8 @@ package ts
 
 import (
 	"bytes"
-	"fmt"
 	"encoding/hex"
+	"fmt"
 	"github.com/nareix/av"
 	"github.com/nareix/av/pktqueue"
 	"github.com/nareix/codec/aacparser"
@@ -23,7 +23,7 @@ func Open(R io.Reader) (demuxer *Demuxer, err error) {
 type Demuxer struct {
 	R io.Reader
 
-	gotpkt bool
+	gotpkt  bool
 	pktque  *pktqueue.Queue
 	pat     PAT
 	pmt     *PMT
@@ -41,7 +41,7 @@ func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
 	return
 }
 
-func (self *Demuxer) CurrentTime() (time float64) {
+func (self *Demuxer) CurrentTime() (time float32) {
 	if self.pktque != nil {
 		time = self.pktque.CurrentTime()
 	}
@@ -156,11 +156,11 @@ func (self *Stream) payloadEnd() (err error) {
 
 	pkt := av.Packet{
 		IsKeyFrame: self.tshdr.RandomAccessIndicator,
-		Data: payload,
+		Data:       payload,
 	}
-	time := float64(dts)/float64(PTS_HZ)
+	time := float32(dts) / float32(PTS_HZ)
 	if pts != dts {
-		pkt.CompositionTime = float64(pts-dts)/float64(PTS_HZ)
+		pkt.CompositionTime = float32(pts-dts) / float32(PTS_HZ)
 	}
 	self.demuxer.pktque.WriteTimePacket(self.idx, time, pkt)
 	self.demuxer.gotpkt = true
@@ -188,7 +188,7 @@ func (self *Stream) payloadEnd() (err error) {
 			var sps, pps []byte
 			for _, nalu := range nalus {
 				if len(nalu) > 0 {
-					naltype := nalu[0]&0x1f
+					naltype := nalu[0] & 0x1f
 					if naltype == 7 {
 						sps = nalu
 					} else if naltype == 8 {
@@ -237,4 +237,3 @@ func (self *Stream) handleTSPacket(header TSHeader, tspacket []byte) (err error)
 
 	return
 }
-

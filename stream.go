@@ -8,30 +8,30 @@ import (
 type Stream struct {
 	av.CodecData
 
-	pid           uint
-	buf           bytes.Buffer
-	peshdr        *PESHeader
-	tshdr         TSHeader
+	pid    uint
+	buf    bytes.Buffer
+	peshdr *PESHeader
+	tshdr  TSHeader
 
-	demuxer   *Demuxer
-	muxer       *Muxer
+	demuxer *Demuxer
+	muxer   *Muxer
 
-	streamId  uint
+	streamId   uint
 	streamType uint
 
 	tsw       *TSWriter
 	dataBuf   *iovec
 	cacheSize int
 
-	idx int
-	pkt av.Packet
-	time float64
+	idx  int
+	pkt  av.Packet
+	time float32
 }
 
-func timeToPesTs(time float64) uint64 {
+func timeToPesTs(time float32) uint64 {
 	return uint64(time*PTS_HZ) + PTS_HZ
 }
 
-func timeToPCR(time float64) uint64 {
+func timeToPCR(time float32) uint64 {
 	return uint64(time*PCR_HZ) + PCR_HZ
 }
