@@ -936,9 +936,19 @@ func (self *Client) poll() (err error) {
 			}
 			stream := self.streams[i]
 			if stream.gotpkt {
-				tm := time.Duration(stream.timestamp)*time.Second / time.Duration(stream.Sdp.TimeScale)
+				timeScale := stream.Sdp.TimeScale
+
+				if timeScale == 0 {
+					/*
+					https://tools.ietf.org/html/rfc5391
+					The RTP timestamp clock frequency is the same as the default sampling frequency: 16 kHz.
+					*/
+					timeScale = 16000
+				}
+
+				tm := time.Duration(stream.timestamp)*time.Second / time.Duration(timeScale)
 				if false {
-					fmt.Printf("rtsp: #%d %d/%d %d\n", i, stream.timestamp, stream.Sdp.TimeScale, len(stream.pkt.Data))
+					fmt.Printf("rtsp: #%d %d/%d %d\n", i, stream.timestamp, timeScale, len(stream.pkt.Data))
 				}
 				self.pktque.WriteTimePacket(self.setupMap[i], tm, stream.pkt)
 				stream.pkt = av.Packet{}
