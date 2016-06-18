@@ -93,4 +93,3 @@ func (self Dumper) Bytes(val []byte) {
 func (self Dumper) TimeStamp(val TimeStamp) {
 	self.Println(fmt.Sprintf("%s: %d", self.name, int(val)))
 }
-

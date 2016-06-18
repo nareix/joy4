@@ -184,7 +184,7 @@ func (self *Muxer) WritePacket(streamIndex int, pkt av.Packet) (err error) {
 			}
 			newpkt := pkt
 			newpkt.Data = payload
-			newpkt.Duration = float64(samples)/float64(sampleRate)
+			newpkt.Duration = float32(samples) / float32(sampleRate)
 			if err = stream.writePacket(newpkt); err != nil {
 				return
 			}
@@ -258,21 +258,21 @@ func (self *Muxer) WriteTrailer() (err error) {
 		NextTrackId:     2,
 	}
 
-	maxDur := float64(0)
+	maxDur := float32(0)
 	timeScale := 10000
 	for _, stream := range self.streams {
 		if err = stream.fillTrackAtom(); err != nil {
 			return
 		}
 		dur := stream.tsToTime(stream.duration)
-		stream.trackAtom.Header.Duration = int(float64(timeScale) * dur)
+		stream.trackAtom.Header.Duration = int(float32(timeScale) * dur)
 		if dur > maxDur {
 			maxDur = dur
 		}
 		moov.Tracks = append(moov.Tracks, stream.trackAtom)
 	}
 	moov.Header.TimeScale = timeScale
-	moov.Header.Duration = int(float64(timeScale) * maxDur)
+	moov.Header.Duration = int(float32(timeScale) * maxDur)
 
 	if err = self.mdatWriter.Close(); err != nil {
 		return

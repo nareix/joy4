@@ -42,4 +42,3 @@ func WalkFile(w Walker, r io.Reader) (err error) {
 
 	return
 }
-

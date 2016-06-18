@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/nareix/av"
-	"github.com/nareix/mp4/atom"
-	"github.com/nareix/mp4/isom"
 	"github.com/nareix/codec/aacparser"
 	"github.com/nareix/codec/h264parser"
+	"github.com/nareix/mp4/atom"
+	"github.com/nareix/mp4/isom"
 	"io"
 )
 
@@ -322,7 +322,7 @@ func (self *Demuxer) ReadPacket() (streamIndex int, pkt av.Packet, err error) {
 	return
 }
 
-func (self *Demuxer) CurrentTime() (time float64) {
+func (self *Demuxer) CurrentTime() (time float32) {
 	if len(self.streams) > 0 {
 		stream := self.streams[0]
 		time = stream.tsToTime(stream.dts)
@@ -330,7 +330,7 @@ func (self *Demuxer) CurrentTime() (time float64) {
 	return
 }
 
-func (self *Demuxer) SeekToTime(time float64) (err error) {
+func (self *Demuxer) SeekToTime(time float32) (err error) {
 	for _, stream := range self.streams {
 		if stream.IsVideo() {
 			if err = stream.seekToTime(time); err != nil {
@@ -395,7 +395,7 @@ func (self *Stream) readPacket() (pkt av.Packet, err error) {
 	return
 }
 
-func (self *Stream) seekToTime(time float64) (err error) {
+func (self *Stream) seekToTime(time float32) (err error) {
 	index := self.timeToSampleIndex(time)
 	if err = self.setSampleIndex(index); err != nil {
 		return
@@ -406,7 +406,7 @@ func (self *Stream) seekToTime(time float64) (err error) {
 	return
 }
 
-func (self *Stream) timeToSampleIndex(time float64) int {
+func (self *Stream) timeToSampleIndex(time float32) int {
 	targetTs := self.timeToTs(time)
 	targetIndex := 0
 

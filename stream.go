@@ -14,7 +14,7 @@ type Stream struct {
 	idx       int
 
 	timeScale int64
-	duration int64
+	duration  int64
 
 	muxer *Muxer
 
@@ -39,10 +39,10 @@ type Stream struct {
 	cttsEntry *atom.CompositionOffsetEntry
 }
 
-func (self *Stream) timeToTs(time float64) int64 {
-	return int64(time * float64(self.timeScale))
+func (self *Stream) timeToTs(time float32) int64 {
+	return int64(time * float32(self.timeScale))
 }
 
-func (self *Stream) tsToTime(ts int64) float64 {
-	return float64(ts) / float64(self.timeScale)
+func (self *Stream) tsToTime(ts int64) float32 {
+	return float32(ts) / float32(self.timeScale)
 }
