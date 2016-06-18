@@ -582,7 +582,7 @@ func (self *Stream) makeCodecData() (err error) {
 	return
 }
 
-func (self *Stream) handleBuggyCameraHasAnnexbH264Packet(timestamp uint32, packet []byte) (isBuggy bool, err error) {
+func (self *Stream) handleBuggyAnnexbH264Packet(timestamp uint32, packet []byte) (isBuggy bool, err error) {
 	if len(packet) >= 4 && packet[0] == 0 && packet[1] == 0 && packet[2] == 0 && packet[3] == 1 {
 		isBuggy = true
 		if nalus, ok := h264parser.SplitNALUs(packet); ok {
@@ -600,7 +600,7 @@ func (self *Stream) handleBuggyCameraHasAnnexbH264Packet(timestamp uint32, packe
 
 func (self *Stream) handleH264Payload(timestamp uint32, packet []byte) (err error) {
 	var isBuggy bool
-	if isBuggy, err = self.handleBuggyCameraHasAnnexbH264Packet(timestamp, packet); isBuggy {
+	if isBuggy, err = self.handleBuggyAnnexbH264Packet(timestamp, packet); isBuggy {
 		return
 	}
 
