@@ -3,6 +3,7 @@ package mp4
 import (
 	"bytes"
 	"fmt"
+	"time"
 	"github.com/nareix/av"
 	"github.com/nareix/codec/aacparser"
 	"github.com/nareix/codec/h264parser"
@@ -162,7 +163,7 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 		return
 	}
 	for _, stream := range self.streams {
-		if stream.IsVideo() {
+		if stream.Type().IsVideo() {
 			stream.sample.CompositionOffset = &atom.CompositionOffset{}
 		}
 	}
@@ -184,7 +185,7 @@ func (self *Muxer) WritePacket(streamIndex int, pkt av.Packet) (err error) {
 			}
 			newpkt := pkt
 			newpkt.Data = payload
-			newpkt.Duration = float32(samples) / float32(sampleRate)
+			newpkt.Duration = time.Duration(samples)*time.Second / time.Duration(sampleRate)
 			if err = stream.writePacket(newpkt); err != nil {
 				return
 			}
@@ -258,21 +259,21 @@ func (self *Muxer) WriteTrailer() (err error) {
 		NextTrackId:     2,
 	}
 
-	maxDur := float32(0)
-	timeScale := 10000
+	maxDur := time.Duration(0)
+	timeScale := int64(10000)
 	for _, stream := range self.streams {
 		if err = stream.fillTrackAtom(); err != nil {
 			return
 		}
 		dur := stream.tsToTime(stream.duration)
-		stream.trackAtom.Header.Duration = int(float32(timeScale) * dur)
+		stream.trackAtom.Header.Duration = int(timeToTs(dur, timeScale))
 		if dur > maxDur {
 			maxDur = dur
 		}
 		moov.Tracks = append(moov.Tracks, stream.trackAtom)
 	}
-	moov.Header.TimeScale = timeScale
-	moov.Header.Duration = int(float32(timeScale) * maxDur)
+	moov.Header.TimeScale = int(timeScale)
+	moov.Header.Duration = int(timeToTs(maxDur, timeScale))
 
 	if err = self.mdatWriter.Close(); err != nil {
 		return

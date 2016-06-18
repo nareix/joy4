@@ -3,6 +3,7 @@ package mp4
 import (
 	"github.com/nareix/av"
 	"github.com/nareix/mp4/atom"
+	"time"
 	"io"
 )
 
@@ -39,10 +40,18 @@ type Stream struct {
 	cttsEntry *atom.CompositionOffsetEntry
 }
 
-func (self *Stream) timeToTs(time float32) int64 {
-	return int64(time * float32(self.timeScale))
+func timeToTs(tm time.Duration, timeScale int64) int64 {
+	return int64(tm*time.Duration(timeScale) / time.Second)
 }
 
-func (self *Stream) tsToTime(ts int64) float32 {
-	return float32(ts) / float32(self.timeScale)
+func tsToTime(ts int64, timeScale int64) time.Duration {
+	return time.Duration(ts)*time.Second / time.Duration(timeScale)
+}
+
+func (self *Stream) timeToTs(tm time.Duration) int64 {
+	return int64(tm*time.Duration(self.timeScale) / time.Second)
+}
+
+func (self *Stream) tsToTime(ts int64) time.Duration {
+	return time.Duration(ts)*time.Second / time.Duration(self.timeScale)
 }

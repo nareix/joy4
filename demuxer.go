@@ -2,6 +2,7 @@ package mp4
 
 import (
 	"bytes"
+	"time"
 	"fmt"
 	"github.com/nareix/av"
 	"github.com/nareix/codec/aacparser"
@@ -322,28 +323,28 @@ func (self *Demuxer) ReadPacket() (streamIndex int, pkt av.Packet, err error) {
 	return
 }
 
-func (self *Demuxer) CurrentTime() (time float32) {
+func (self *Demuxer) CurrentTime() (tm time.Duration) {
 	if len(self.streams) > 0 {
 		stream := self.streams[0]
-		time = stream.tsToTime(stream.dts)
+		tm = stream.tsToTime(stream.dts)
 	}
 	return
 }
 
-func (self *Demuxer) SeekToTime(time float32) (err error) {
+func (self *Demuxer) SeekToTime(tm time.Duration) (err error) {
 	for _, stream := range self.streams {
-		if stream.IsVideo() {
-			if err = stream.seekToTime(time); err != nil {
+		if stream.Type().IsVideo() {
+			if err = stream.seekToTime(tm); err != nil {
 				return
 			}
-			time = stream.tsToTime(stream.dts)
+			tm = stream.tsToTime(stream.dts)
 			break
 		}
 	}
 
 	for _, stream := range self.streams {
-		if !stream.IsVideo() {
-			if err = stream.seekToTime(time); err != nil {
+		if !stream.Type().IsVideo() {
+			if err = stream.seekToTime(tm); err != nil {
 				return
 			}
 		}
@@ -395,19 +396,19 @@ func (self *Stream) readPacket() (pkt av.Packet, err error) {
 	return
 }
 
-func (self *Stream) seekToTime(time float32) (err error) {
-	index := self.timeToSampleIndex(time)
+func (self *Stream) seekToTime(tm time.Duration) (err error) {
+	index := self.timeToSampleIndex(tm)
 	if err = self.setSampleIndex(index); err != nil {
 		return
 	}
 	if false {
-		fmt.Printf("stream[%d]: seekToTime index=%v time=%v cur=%v\n", self.idx, index, time, self.tsToTime(self.dts))
+		fmt.Printf("stream[%d]: seekToTime index=%v time=%v cur=%v\n", self.idx, index, tm, self.tsToTime(self.dts))
 	}
 	return
 }
 
-func (self *Stream) timeToSampleIndex(time float32) int {
-	targetTs := self.timeToTs(time)
+func (self *Stream) timeToSampleIndex(tm time.Duration) int {
+	targetTs := self.timeToTs(tm)
 	targetIndex := 0
 
 	startTs := int64(0)
