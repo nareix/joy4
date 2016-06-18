@@ -15,6 +15,7 @@ import (
 	"unsafe"
 	"runtime"
 	"fmt"
+	"time"
 	"github.com/nareix/av"
 	"github.com/nareix/codec/aacparser"
 )
@@ -291,7 +292,7 @@ func (self *AudioEncoder) encodeOne(frame av.AudioFrame) (gotpkt bool, pkt av.Pa
 	if cgotpkt != 0 {
 		gotpkt = true
 		pkt.Data = C.GoBytes(unsafe.Pointer(cpkt.data), cpkt.size)
-		pkt.Duration = float64(frame.SampleCount)/float64(self.SampleRate)
+		pkt.Duration = time.Duration(frame.SampleCount)*time.Second/time.Duration(self.SampleRate)
 		C.av_packet_unref(&cpkt)
 
 		if debug {
@@ -500,12 +501,11 @@ func (self *AudioDecoder) Setup() (err error) {
 	return
 }
 
-func (self *AudioDecoder) Decode(data []byte) (gotframe bool, frame av.AudioFrame, err error) {
+func (self *AudioDecoder) Decode(pkt []byte) (gotframe bool, frame av.AudioFrame, err error) {
 	ff := &self.ff.ff
 
 	cgotframe := C.int(0)
-	cerr := C.wrap_avcodec_decode_audio4(ff.codecCtx, ff.frame, unsafe.Pointer(&data[0]), C.int(len(data)), &cgotframe)
-
+	cerr := C.wrap_avcodec_decode_audio4(ff.codecCtx, ff.frame, unsafe.Pointer(&pkt[0]), C.int(len(pkt)), &cgotframe)
 	if cerr < C.int(0) {
 		err = fmt.Errorf("ffmpeg: avcodec_decode_audio4 failed: %d", cerr)
 		return
@@ -539,7 +539,7 @@ func HasDecoder(name string) bool {
 //func EncodersList() []string
 //func DecodersList() []string
 
-func NewAudioEncoderByCodecType(typ int) (enc *AudioEncoder, err error) {
+func NewAudioEncoderByCodecType(typ av.CodecType) (enc *AudioEncoder, err error) {
 	var id uint32
 
 	switch typ {
@@ -641,16 +641,8 @@ type audioCodecData struct {
 	extradata []byte
 }
 
-func (self audioCodecData) Type() int {
-	return int(self.codecId)
-}
-
-func (self audioCodecData) IsAudio() bool {
-	return true
-}
-
-func (self audioCodecData) IsVideo() bool {
-	return false
+func (self audioCodecData) Type() av.CodecType {
+	return av.MakeAudioCodecType(self.codecId)
 }
 
 func (self audioCodecData) SampleRate() int {
