@@ -23,10 +23,3 @@ type Stream struct {
 	firsttimestamp uint32
 }
 
-func (self Stream) IsAudio() bool {
-	return self.Sdp.AVType == "audio"
-}
-
-func (self Stream) IsVideo() bool {
-	return self.Sdp.AVType == "video"
-}
