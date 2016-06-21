@@ -217,8 +217,9 @@ func (self *Client) ReadResponse() (res Response, err error) {
 		res.BlockLength = int(h[2])<<8 + int(h[3])
 		res.BlockNo = int(h[1])
 		if self.DebugRtp {
-			fmt.Println("block: len", res.BlockLength, "no", res.BlockNo)
+			fmt.Println("rtp: block: len", res.BlockLength, "no", res.BlockNo)
 		}
+		// TODO: if invalid need relocate also
 		return
 	} else if h[0] == 82 && h[1] == 84 && h[2] == 83 && h[3] == 80 {
 		// RTSP 200 OK
@@ -228,7 +229,7 @@ func (self *Client) ReadResponse() (res Response, err error) {
 
 		for {
 			if self.DebugRtp {
-				fmt.Println("block: relocate try")
+				fmt.Println("rtp: block: relocate try")
 			}
 
 			for {
@@ -252,8 +253,8 @@ func (self *Client) ReadResponse() (res Response, err error) {
 		}
 
 		if self.DebugRtp {
-			fmt.Println("block: relocate done")
-			fmt.Println("block: len", res.BlockLength, "no", res.BlockNo)
+			fmt.Println("rtp: block: relocate done")
+			fmt.Println("rtp: block: len", res.BlockLength, "no", res.BlockNo)
 		}
 		return
 	}
@@ -953,6 +954,16 @@ func (self *Client) ReadPacket() (pkt av.Packet, err error) {
 			if stream.gotpkt {
 				timeScale := stream.Sdp.TimeScale
 
+				/*
+				TODO: https://tools.ietf.org/html/rfc3550
+				A receiver can then synchronize presentation of the audio and video packets by relating 
+				  their RTP timestamps using the timestamp pairs in RTCP SR packets.
+				*/
+				if stream.firsttimestamp == 0 {
+					stream.firsttimestamp = stream.timestamp
+				}
+				stream.timestamp -= stream.firsttimestamp
+
 				if timeScale == 0 {
 					/*
 					https://tools.ietf.org/html/rfc5391
@@ -963,11 +974,15 @@ func (self *Client) ReadPacket() (pkt av.Packet, err error) {
 
 				pkt = stream.pkt
 				pkt.Time = time.Duration(stream.timestamp)*time.Second / time.Duration(timeScale)
-				if false {
-					fmt.Printf("rtsp: #%d %d/%d %d\n", i, stream.timestamp, timeScale, len(pkt.Data))
-				}
 				pkt.Idx = int8(self.setupMap[i])
+
+				if self.DebugRtp {
+					fmt.Println("rtp: pktin", pkt.Idx, pkt.Time, len(pkt.Data))
+				}
 				self.corrector.Correct(&pkt)
+				if self.DebugRtp {
+					fmt.Println("rtp: pktout", pkt.Idx, pkt.Time, len(pkt.Data))
+				}
 
 				stream.pkt = av.Packet{}
 				stream.gotpkt = false

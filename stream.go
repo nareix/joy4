@@ -20,6 +20,7 @@ type Stream struct {
 	gotpkt    bool
 	pkt       av.Packet
 	timestamp uint32
+	firsttimestamp uint32
 }
 
 func (self Stream) IsAudio() bool {
