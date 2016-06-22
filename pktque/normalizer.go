@@ -3,61 +3,64 @@ package pktque
 import (
 	"github.com/nareix/av"
 	"time"
+	"fmt"
 )
 
+const debugNormalizer = false
+
 type Normalizer struct {
-	que []*Queue
-	timecr *TimeCorrector
+	ques Queues
 	streams []av.CodecData
-	timediff time.Duration
 }
 
 func (self *Normalizer) Push(pkt av.Packet) {
-	self.timecr.Correct(&pkt)
-	i := int(pkt.Idx)
-	self.que[i].Push(pkt)
-}
-
-func (self *Normalizer) removeBeforeTime(tm time.Duration) {
-	for _, que := range self.que {
-		for que.Count() > 0 {
-			if que.Head().Time < tm {
-				que.Pop()
-			}
-		}
-	}
 }
 
 func (self *Normalizer) Pop() (pkt av.Packet, dur time.Duration, ok bool) {
-	mintm := time.Duration(0)
-	minidx := -1
-	for i, que := range self.que {
-		if que.Count() > 0 {
-			if minidx == -1 || que.Head().Time < mintm {
-				minidx = i
-			}
-		}
-	}
-	if minidx == -1 {
-		return
+	return
+}
+
+func (self *Normalizer) Do(pkt av.Packet) (out []av.Packet) {
+	const MaxDiff = time.Millisecond*800
+	const MaxCacheTime = time.Second*5
+
+	i := int(pkt.Idx)
+	que := &self.ques[i]
+	que.Push(pkt)
+
+	if que.Tail().Time - que.Head().Time > MaxCacheTime {
+		que.Pop()
 	}
 
-	que := self.que[minidx]
-	if que.Count() >= 2 {
-		maxgap, defdur := CorrectTimeParams(self.streams[pkt.Idx])
-		ok = true
-		starttime := que.HeadIdx(0).Time
-		endtime := que.HeadIdx(1).Time
-		dur = endtime - starttime
-		pkt = que.Pop()
-		pkt.Time -= self.timediff
-		if dur > maxgap {
-			dur = defdur
-			endtime -= defdur
-			self.timediff += endtime - starttime
-			self.removeBeforeTime(endtime)
+	for {
+		ok := true
+		diff := time.Duration(0)
+		for i := range self.ques {
+			if que.Count() == 0 {
+				ok = false
+				break
+			}
+			tm := self.ques[i].Tail().Time
+			for j := 0; j < i; j++ {
+				v := tm - self.ques[j].Tail().Time
+				if v < 0 {
+					v = -v
+				}
+				if v > diff {
+					diff = v
+				}
+			}
 		}
-		return
+		if !ok {
+			return
+		}
+		if diff > MaxDiff {
+			ok = false
+		}
+	}
+
+	if debugNormalizer {
+		fmt.Println("normalizer: push", pkt.Idx, pkt.Time)
 	}
 
 	return
@@ -65,11 +68,7 @@ func (self *Normalizer) Pop() (pkt av.Packet, dur time.Duration, ok bool) {
 
 func NewNormalizer(streams []av.CodecData) *Normalizer {
 	self := &Normalizer{}
-	self.que = make([]*Queue, len(streams))
-	for i := range self.que {
-		self.que[i] = &Queue{}
-	}
-	self.timecr = NewTimeCorrector(streams)
+	self.ques = make(Queues, len(streams))
 	self.streams = streams
 	return self
 }
