@@ -3,6 +3,7 @@ package aacparser
 import (
 	"github.com/nareix/bits"
 	"github.com/nareix/av"
+	"time"
 	"fmt"
 	"bytes"
 	"io"
@@ -333,15 +334,7 @@ type CodecData struct {
 	Config MPEG4AudioConfig
 }
 
-func (self CodecData) IsVideo() bool {
-	return false
-}
-
-func (self CodecData) IsAudio() bool {
-	return true
-}
-
-func (self CodecData) Type() int {
+func (self CodecData) Type() av.CodecType {
 	return av.AAC
 }
 
@@ -359,6 +352,11 @@ func (self CodecData) SampleRate() int {
 
 func (self CodecData) SampleFormat() av.SampleFormat {
 	return av.FLTP
+}
+
+func (self CodecData) PacketDuration(data []byte) (dur time.Duration, err error) {
+	dur = time.Duration(1024) * time.Second / time.Duration(self.Config.SampleRate)
+	return
 }
 
 func (self CodecData) MakeADTSHeader(samples int, payloadLength int) []byte {

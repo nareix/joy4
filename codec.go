@@ -2,54 +2,42 @@ package codec
 
 import (
 	"github.com/nareix/av"
+	"time"
 )
 
-type AudioCodecData struct {
-	CodecType int
-	CodecSampleRate int
-	CodecChannelLayout av.ChannelLayout
-	CodecSampleFormat av.SampleFormat
+type PCMUCodecData struct {
+	typ av.CodecType
 }
 
-func (self AudioCodecData) Type() int {
-	return self.CodecType
+func (self PCMUCodecData) Type() av.CodecType {
+	return self.typ
 }
 
-func (self AudioCodecData) IsAudio() bool {
-	return true
+func (self PCMUCodecData) SampleRate() int {
+	return 8000
 }
 
-func (self AudioCodecData) IsVideo() bool {
-	return false
+func (self PCMUCodecData) ChannelLayout() av.ChannelLayout {
+	return av.CH_MONO
 }
 
-func (self AudioCodecData) SampleRate() int {
-	return self.CodecSampleRate
+func (self PCMUCodecData) SampleFormat() av.SampleFormat {
+	return av.S16
 }
 
-func (self AudioCodecData) ChannelLayout() av.ChannelLayout {
-	return self.CodecChannelLayout
-}
-
-func (self AudioCodecData) SampleFormat() av.SampleFormat {
-	return self.CodecSampleFormat
+func (self PCMUCodecData) PacketDuration(data []byte) (time.Duration, error) {
+	return time.Duration(len(data)) * time.Second / time.Duration(8000), nil
 }
 
 func NewPCMMulawCodecData() av.AudioCodecData {
-	return AudioCodecData{
-		CodecType: av.PCM_MULAW,
-		CodecSampleFormat: av.S16,
-		CodecChannelLayout: av.CH_MONO,
-		CodecSampleRate: 8000,
+	return PCMUCodecData{
+		typ: av.PCM_MULAW,
 	}
 }
 
 func NewPCMAlawCodecData() av.AudioCodecData {
-	return AudioCodecData{
-		CodecType: av.PCM_ALAW,
-		CodecSampleFormat: av.S16,
-		CodecChannelLayout: av.CH_MONO,
-		CodecSampleRate: 8000,
+	return PCMUCodecData{
+		typ: av.PCM_ALAW,
 	}
 }
 

@@ -543,12 +543,8 @@ type CodecData struct {
 	SPSInfo SPSInfo
 }
 
-func (self CodecData) Type() int {
+func (self CodecData) Type() av.CodecType {
 	return av.H264
-}
-
-func (self CodecData) IsVideo() bool {
-	return true
 }
 
 func (self CodecData) AVCDecoderConfRecordBytes() []byte {
@@ -561,10 +557,6 @@ func (self CodecData) SPS() []byte {
 
 func (self CodecData) PPS() []byte {
 	return self.RecordInfo.PPS[0]
-}
-
-func (self CodecData) IsAudio() bool {
-	return false
 }
 
 func (self CodecData) Width() int {
