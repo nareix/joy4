@@ -1057,11 +1057,8 @@ func (self *Client) handleBlock(block []byte) (pkt av.Packet, ok bool, err error
 		stream.timestamp -= stream.firsttimestamp
 
 		if timeScale == 0 {
-			/*
-			https://tools.ietf.org/html/rfc5391
-			The RTP timestamp clock frequency is the same as the default sampling frequency: 16 kHz.
-			*/
-			timeScale = 16000
+			// https://tools.ietf.org/html/rfc5391
+			timeScale = 8000
 		}
 
 		ok = true
