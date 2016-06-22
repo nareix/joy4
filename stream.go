@@ -26,7 +26,6 @@ type Stream struct {
 
 	idx  int
 	pkt  av.Packet
-	time time.Duration
 }
 
 func timeToPesTs(tm time.Duration) uint64 {

@@ -135,14 +135,24 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 	if err = self.WritePATPMT(); err != nil {
 		return
 	}
-
 	return
 }
 
-func (self *Muxer) WritePacket(streamIndex int, pkt av.Packet) (err error) {
-	stream := self.streams[streamIndex]
+func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
+	if true {
+		fmt.Println("ts:", "in", pkt.Idx, pkt.Time, "len", len(pkt.Data))
+	}
+	if err = self.writePacket(pkt); err != nil {
+		return
+	}
+	return
+}
 
-	if stream.Type() == av.AAC {
+func (self *Muxer) writePacket(pkt av.Packet) (err error) {
+	stream := self.streams[pkt.Idx]
+
+	switch stream.Type() {
+	case av.AAC:
 		codec := stream.CodecData.(aacparser.CodecData)
 		data := pkt.Data
 		if !aacparser.IsADTSFrame(data) {
@@ -152,26 +162,24 @@ func (self *Muxer) WritePacket(streamIndex int, pkt av.Packet) (err error) {
 		buf := &bytes.Buffer{}
 		pes := PESHeader{
 			StreamId: StreamIdAAC,
-			PTS:      timeToPesTs(stream.time),
+			PTS:      timeToPesTs(pkt.Time),
 		}
 		WritePESHeader(buf, pes, len(data))
 		buf.Write(data)
 
 		stream.tsw.RandomAccessIndicator = true
-		stream.tsw.PCR = timeToPCR(stream.time)
+		stream.tsw.PCR = timeToPCR(pkt.Time)
 		if err = stream.tsw.WriteTo(self.W, buf.Bytes()); err != nil {
 			return
 		}
 
-		stream.time += pkt.Duration
-
-	} else if stream.Type() == av.H264 {
+	case av.H264:
 		codec := stream.CodecData.(h264parser.CodecData)
 		buf := &bytes.Buffer{}
 		pes := PESHeader{
 			StreamId: StreamIdH264,
-			PTS:      timeToPesTs(stream.time + pkt.CompositionTime),
-			DTS:      timeToPesTs(stream.time),
+			PTS:      timeToPesTs(pkt.Time + pkt.CompositionTime),
+			DTS:      timeToPesTs(pkt.Time),
 		}
 		WritePESHeader(buf, pes, 0)
 
@@ -184,16 +192,10 @@ func (self *Muxer) WritePacket(streamIndex int, pkt av.Packet) (err error) {
 		})
 
 		stream.tsw.RandomAccessIndicator = pkt.IsKeyFrame
-		stream.tsw.PCR = timeToPCR(stream.time)
+		stream.tsw.PCR = timeToPCR(pkt.Time)
 		if err = stream.tsw.WriteTo(self.W, buf.Bytes()); err != nil {
 			return
 		}
-
-		stream.time += pkt.Duration
-
-	} else {
-		err = fmt.Errorf("unknown stream type=%d", stream.Type())
-		return
 	}
 
 	return

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 	"github.com/nareix/av"
-	"github.com/nareix/av/pktqueue"
 	"github.com/nareix/codec/aacparser"
 	"github.com/nareix/codec/h264parser"
 	"io"
@@ -25,10 +24,12 @@ type Demuxer struct {
 	R io.Reader
 
 	gotpkt  bool
-	pktque  *pktqueue.Queue
+	pkt av.Packet
+
 	pat     PAT
 	pmt     *PMT
 	streams []*Stream
+	streamsintf []av.CodecData
 }
 
 func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
@@ -37,21 +38,12 @@ func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
 		return
 	}
 	for _, stream := range self.streams {
-		streams = append(streams, stream)
-	}
-	return
-}
-
-func (self *Demuxer) CurrentTime() (tm time.Duration) {
-	if self.pktque != nil {
-		tm = self.pktque.CurrentTime()
+		streams = append(streams, stream.CodecData)
 	}
 	return
 }
 
 func (self *Demuxer) ReadHeader() (err error) {
-	self.streams = []*Stream{}
-
 	for {
 		if self.pmt != nil {
 			n := 0
@@ -68,12 +60,15 @@ func (self *Demuxer) ReadHeader() (err error) {
 			return
 		}
 	}
-
 	return
 }
 
-func (self *Demuxer) ReadPacket() (i int, pkt av.Packet, err error) {
-	return self.pktque.ReadPacket()
+func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
+	if err = self.poll(); err != nil {
+		return
+	}
+	pkt = self.pkt
+	return
 }
 
 func (self *Demuxer) poll() (err error) {
@@ -102,6 +97,8 @@ func (self *Demuxer) readTSPacket() (err error) {
 		}
 	} else {
 		if self.pmt == nil {
+			self.streams = []*Stream{}
+
 			for _, entry := range self.pat.Entries {
 				if entry.ProgramMapPID == header.PID {
 					self.pmt = new(PMT)
@@ -120,15 +117,12 @@ func (self *Demuxer) readTSPacket() (err error) {
 							self.streams = append(self.streams, stream)
 						}
 					}
-					self.pktque = &pktqueue.Queue{}
-
-					var streams []av.CodecData
-					if streams, err = self.Streams(); err != nil {
-						return
-					}
-					self.pktque.Alloc(streams)
-					self.pktque.Poll = self.poll
 				}
+			}
+
+			self.streamsintf = make([]av.CodecData, len(self.streams))
+			for i, stream := range self.streams {
+				self.streamsintf[i] = stream
 			}
 
 		} else {
@@ -155,15 +149,15 @@ func (self *Stream) payloadEnd() (err error) {
 		dts = pts
 	}
 
-	pkt := av.Packet{
+	self.pkt = av.Packet{
+		Idx: int8(self.idx),
 		IsKeyFrame: self.tshdr.RandomAccessIndicator,
+		Time: time.Duration(dts)*time.Second / time.Duration(PTS_HZ),
 		Data:       payload,
 	}
-	tm := time.Duration(dts)*time.Second / time.Duration(PTS_HZ)
 	if pts != dts {
-		pkt.CompositionTime = time.Duration(pts-dts)*time.Second / time.Duration(PTS_HZ)
+		self.pkt.CompositionTime = time.Duration(pts-dts)*time.Second / time.Duration(PTS_HZ)
 	}
-	self.demuxer.pktque.WriteTimePacket(self.idx, tm, pkt)
 	self.demuxer.gotpkt = true
 
 	if self.CodecData == nil {
