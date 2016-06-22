@@ -3,6 +3,7 @@ package rtsp
 import (
 	"github.com/nareix/av"
 	"github.com/nareix/rtsp/sdp"
+	"time"
 )
 
 type Stream struct {
@@ -21,5 +22,7 @@ type Stream struct {
 	pkt       av.Packet
 	timestamp uint32
 	firsttimestamp uint32
+
+	lasttime time.Duration
 }
 
