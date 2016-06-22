@@ -2,6 +2,7 @@ package flvio
 
 import (
 	"math"
+	"fmt"
 	"time"
 	"github.com/nareix/pio"
 )
@@ -9,36 +10,169 @@ import (
 type AMFMap map[string]interface{}
 type AMFArray []interface{}
 
-func readBEFloat64(r *pio.Reader) (f64 float64, err error) {
-	var u64 uint64
-	if u64, err = r.ReadU64BE(); err != nil {
+func readBEFloat64(r *pio.Reader) (f float64, err error) {
+	var u uint64
+	if u, err = r.ReadU64BE(); err != nil {
 		return
 	}
-	f64 = math.Float64frombits(u64)
+	f = math.Float64frombits(u)
+	return
+}
+
+func writeBEFloat64(w *pio.Writer, f float64) (err error) {
+	u := math.Float64bits(f)
+	if err = w.WriteU64BE(u); err != nil {
+		return
+	}
+	return
+}
+
+const (
+	numbermarker = iota
+	booleanmarker
+	stringmarker
+	objectmarker
+	movieclipmarker
+	nullmarker
+	undefinedmarker
+	referencemarker
+	ecmaarraymarker
+	objectendmarker
+	strictarraymarker
+	datemarker
+	longstringmarker
+	unsupportedmarker
+	recordsetmarker
+	xmldocumentmarker
+	typedobjectmarker
+)
+
+func writeAMF0Number(w *pio.Writer, f float64) (err error) {
+	if err = w.WriteU8(numbermarker); err != nil {
+		return
+	}
+	if err = writeBEFloat64(w, f); err != nil {
+		return
+	}
+	return
+}
+
+func WriteAMF0Val(w *pio.Writer, _val interface{}) (err error) {
+	switch val := _val.(type) {
+	case int8:
+		return writeAMF0Number(w, float64(val))
+	case int16:
+		return writeAMF0Number(w, float64(val))
+	case int32:
+		return writeAMF0Number(w, float64(val))
+	case int64:
+		return writeAMF0Number(w, float64(val))
+	case uint8:
+		return writeAMF0Number(w, float64(val))
+	case uint16:
+		return writeAMF0Number(w, float64(val))
+	case uint32:
+		return writeAMF0Number(w, float64(val))
+	case uint64:
+		return writeAMF0Number(w, float64(val))
+	case float32:
+		return writeAMF0Number(w, float64(val))
+	case float64:
+		return writeAMF0Number(w, val)
+
+	case string:
+		u := len(val)
+		if u > 65536 {
+			if err = w.WriteU8(stringmarker); err != nil {
+				return
+			}
+			if err = w.WriteU16BE(uint16(u)); err != nil {
+				return
+			}
+		} else {
+			if err = w.WriteU8(longstringmarker); err != nil {
+				return
+			}
+			if err = w.WriteU32BE(uint32(u)); err != nil {
+				return
+			}
+		}
+		if _, err = w.Write([]byte(val)); err != nil {
+			return
+		}
+
+	case AMFMap:
+		if err = w.WriteU8(objectmarker); err != nil {
+			return
+		}
+		for k, v := range val {
+			if len(k) > 0 {
+				if err = WriteAMF0Val(w, k); err != nil {
+					return
+				}
+				if err = WriteAMF0Val(w, v); err != nil {
+					return
+				}
+			}
+		}
+		if err = w.WriteU16BE(0); err != nil {
+			return
+		}
+
+	case AMFArray:
+		if err = w.WriteU8(strictarraymarker); err != nil {
+			return
+		}
+		if err = w.WriteU32BE(uint32(len(val))); err != nil {
+			return
+		}
+		for _, v := range val {
+			if err = WriteAMF0Val(w, v); err != nil {
+				return
+			}
+		}
+
+	case time.Time:
+		if err = w.WriteU8(datemarker); err != nil {
+			return
+		}
+		u := val.UnixNano()
+		f := float64(u/1000000)
+		if err = writeBEFloat64(w, f); err != nil {
+			return
+		}
+		if err = w.WriteU16BE(0); err != nil {
+			return
+		}
+
+	case bool:
+		if err = w.WriteU8(booleanmarker); err != nil {
+			return
+		}
+		var u uint8
+		if val {
+			u = 1
+		} else {
+			u = 0
+		}
+		if err = w.WriteU8(u); err != nil {
+			return
+		}
+
+	case nil:
+		if err = w.WriteU8(nullmarker); err != nil {
+			return
+		}
+
+	default:
+		err = fmt.Errorf("amf0: write: invalid val=%v", val)
+		return
+	}
+
 	return
 }
 
 func ReadAMF0Val(r *pio.Reader) (val interface{}, err error) {
-	const (
-		numbermarker = iota
-		booleanmarker
-		stringmarker
-		objectmarker
-		movieclipmarker
-		nullmarker
-		undefinedmarker
-		referencemarker
-		ecmaarraymarker
-		objectendmarker
-		strictarraymarker
-		datemarker
-		longstringmarker
-		unsupportedmarker
-		recordsetmarker
-		xmldocumentmarker
-		typedobjectmarker
-	)
-
 	var marker uint8
 	if marker, err = r.ReadU8(); err != nil {
 		return
@@ -156,6 +290,10 @@ func ReadAMF0Val(r *pio.Reader) (val interface{}, err error) {
 			return
 		}
 		val = string(b)
+
+	default:
+		err = fmt.Errorf("amf0: read: invalid marker=%d", marker)
+		return
 	}
 
 	return
