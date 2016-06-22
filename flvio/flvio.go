@@ -140,6 +140,7 @@ func (self Audiodata) Marshal(w *pio.Writer) (err error) {
 	if err = w.WriteU8(flags); err != nil {
 		return
 	}
+
 	if self.SoundFormat == SOUND_AAC {
 		if err = w.WriteU8(self.AACPacketType); err != nil {
 			return

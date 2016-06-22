@@ -22,9 +22,9 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 	hasVideo := false
 	hasAudio := false
 	for _, stream := range streams {
-		if stream.IsVideo() {
+		if stream.Type().IsVideo() {
 			hasVideo = true
-		} else if stream.IsAudio() {
+		} else if stream.Type().IsAudio() {
 			hasAudio = true
 		}
 	}
