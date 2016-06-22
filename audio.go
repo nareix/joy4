@@ -292,11 +292,11 @@ func (self *AudioEncoder) encodeOne(frame av.AudioFrame) (gotpkt bool, pkt av.Pa
 	if cgotpkt != 0 {
 		gotpkt = true
 		pkt.Data = C.GoBytes(unsafe.Pointer(cpkt.data), cpkt.size)
-		pkt.Duration = time.Duration(frame.SampleCount)*time.Second/time.Duration(self.SampleRate)
+		pkt.Time = time.Duration(frame.SampleCount)*time.Second/time.Duration(self.SampleRate)
 		C.av_packet_unref(&cpkt)
 
 		if debug {
-			fmt.Println("ffmpeg: Encode", frame.SampleCount, frame.SampleRate, frame.ChannelLayout, frame.SampleFormat, "pkt", len(pkt.Data), "dur", pkt.Duration)
+			fmt.Println("ffmpeg: Encode", frame.SampleCount, frame.SampleRate, frame.ChannelLayout, frame.SampleFormat, "pkt", len(pkt.Data), "dur", pkt.Time)
 		}
 	}
 
