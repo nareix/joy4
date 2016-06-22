@@ -292,11 +292,10 @@ func (self *AudioEncoder) encodeOne(frame av.AudioFrame) (gotpkt bool, pkt av.Pa
 	if cgotpkt != 0 {
 		gotpkt = true
 		pkt.Data = C.GoBytes(unsafe.Pointer(cpkt.data), cpkt.size)
-		pkt.Time = time.Duration(frame.SampleCount)*time.Second/time.Duration(self.SampleRate)
 		C.av_packet_unref(&cpkt)
 
 		if debug {
-			fmt.Println("ffmpeg: Encode", frame.SampleCount, frame.SampleRate, frame.ChannelLayout, frame.SampleFormat, "pkt", len(pkt.Data), "dur", pkt.Time)
+			fmt.Println("ffmpeg: Encode", frame.SampleCount, frame.SampleRate, frame.ChannelLayout, frame.SampleFormat, "len", len(pkt.Data))
 		}
 	}
 
@@ -655,5 +654,11 @@ func (self audioCodecData) SampleFormat() av.SampleFormat {
 
 func (self audioCodecData) ChannelLayout() av.ChannelLayout {
 	return self.channelLayout
+}
+
+func (self audioCodecData) PacketDuration(data []byte) (dur time.Duration, err error) {
+	// TODO: implement it
+	err = fmt.Errorf("ffmpeg: cannot get packet duration")
+	return
 }
 
