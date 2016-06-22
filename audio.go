@@ -262,7 +262,7 @@ func (self *AudioEncoder) CodecData() (codec av.AudioCodecData) {
 	return self.codecData
 }
 
-func (self *AudioEncoder) encodeOne(frame av.AudioFrame) (gotpkt bool, pkt av.Packet, err error) {
+func (self *AudioEncoder) encodeOne(frame av.AudioFrame) (gotpkt bool, pkt []byte, err error) {
 	ff := &self.ff.ff
 
 	if ff.frame == nil {
@@ -291,11 +291,11 @@ func (self *AudioEncoder) encodeOne(frame av.AudioFrame) (gotpkt bool, pkt av.Pa
 
 	if cgotpkt != 0 {
 		gotpkt = true
-		pkt.Data = C.GoBytes(unsafe.Pointer(cpkt.data), cpkt.size)
+		pkt = C.GoBytes(unsafe.Pointer(cpkt.data), cpkt.size)
 		C.av_packet_unref(&cpkt)
 
 		if debug {
-			fmt.Println("ffmpeg: Encode", frame.SampleCount, frame.SampleRate, frame.ChannelLayout, frame.SampleFormat, "len", len(pkt.Data))
+			fmt.Println("ffmpeg: Encode", frame.SampleCount, frame.SampleRate, frame.ChannelLayout, frame.SampleFormat, "len", len(pkt))
 		}
 	}
 
@@ -316,9 +316,9 @@ func (self *AudioEncoder) resample(in av.AudioFrame) (out av.AudioFrame, err err
 	return
 }
 
-func (self *AudioEncoder) Encode(frame av.AudioFrame) (pkts []av.Packet, err error) {
+func (self *AudioEncoder) Encode(frame av.AudioFrame) (pkts [][]byte, err error) {
 	var gotpkt bool
-	var pkt av.Packet
+	var pkt []byte
 
 	if frame.SampleFormat != self.SampleFormat || frame.ChannelLayout != self.ChannelLayout || frame.SampleRate != self.SampleRate {
 		if frame, err = self.resample(frame); err != nil {
