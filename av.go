@@ -2,12 +2,13 @@ package av
 
 import (
 	"fmt"
+	"time"
 )
 
-type SampleFormat int
+type SampleFormat uint8
 
 const (
-	U8 = SampleFormat(iota+1)
+	U8 = SampleFormat(iota + 1)
 	S16
 	S32
 	FLT
@@ -22,13 +23,13 @@ const (
 
 func (self SampleFormat) BytesPerSample() int {
 	switch self {
-	case U8,U8P:
+	case U8, U8P:
 		return 1
-	case S16,S16P:
+	case S16, S16P:
 		return 2
-	case FLT,FLTP,S32,S32P,U32:
+	case FLT, FLTP, S32, S32P, U32:
 		return 4
-	case DBL,DBLP:
+	case DBL, DBLP:
 		return 8
 	default:
 		return 0
@@ -64,21 +65,21 @@ func (self SampleFormat) String() string {
 
 func (self SampleFormat) IsPlanar() bool {
 	switch self {
-	case S16P,S32P,FLTP,DBLP:
+	case S16P, S32P, FLTP, DBLP:
 		return true
 	default:
 		return false
 	}
 }
 
-type ChannelLayout uint64
+type ChannelLayout uint16
 
 func (self ChannelLayout) String() string {
 	return fmt.Sprintf("%dch", self.Count())
 }
 
 const (
-	CH_FRONT_CENTER = ChannelLayout(1<<iota)
+	CH_FRONT_CENTER = ChannelLayout(1 << iota)
 	CH_FRONT_LEFT
 	CH_FRONT_RIGHT
 	CH_BACK_CENTER
@@ -89,34 +90,72 @@ const (
 	CH_LOW_FREQ
 	CH_NR
 
-	CH_MONO = ChannelLayout(CH_FRONT_CENTER)
-	CH_STEREO = ChannelLayout(CH_FRONT_LEFT|CH_FRONT_RIGHT)
-	CH_2_1 = ChannelLayout(CH_STEREO|CH_BACK_CENTER)
-	CH_2POINT1 = ChannelLayout(CH_STEREO|CH_LOW_FREQ)
-	CH_SURROUND = ChannelLayout(CH_STEREO|CH_FRONT_CENTER)
-	CH_3POINT1 = ChannelLayout(CH_SURROUND|CH_LOW_FREQ)
+	CH_MONO     = ChannelLayout(CH_FRONT_CENTER)
+	CH_STEREO   = ChannelLayout(CH_FRONT_LEFT | CH_FRONT_RIGHT)
+	CH_2_1      = ChannelLayout(CH_STEREO | CH_BACK_CENTER)
+	CH_2POINT1  = ChannelLayout(CH_STEREO | CH_LOW_FREQ)
+	CH_SURROUND = ChannelLayout(CH_STEREO | CH_FRONT_CENTER)
+	CH_3POINT1  = ChannelLayout(CH_SURROUND | CH_LOW_FREQ)
 	// TODO: add all channel_layout in ffmpeg
 )
 
 func (self ChannelLayout) Count() (n int) {
 	for self != 0 {
 		n++
-		self = (self-1)&self
+		self = (self - 1) & self
 	}
 	return
 }
 
-const (
-	H264 = iota+0x264
-	AAC
-	PCM_MULAW
-	PCM_ALAW
+type CodecType uint32
+
+const codecTypeAudioBit = 0x1
+const codecTypeOtherBits = 1
+
+func (self CodecType) String() string {
+	switch self {
+	case H264:
+		return "H264"
+	case AAC:
+		return "AAC"
+	case PCM_MULAW:
+		return "PCM_MULAW"
+	case PCM_ALAW:
+		return "PCM_ALAW"
+	}
+	return ""
+}
+
+func (self CodecType) IsAudio() bool {
+	return self&codecTypeAudioBit != 0
+}
+
+func (self CodecType) IsVideo() bool {
+	return self&codecTypeAudioBit == 0
+}
+
+func MakeAudioCodecType(base uint32) (c CodecType) {
+	c = CodecType(base)<<codecTypeOtherBits | CodecType(codecTypeAudioBit)
+	return
+}
+
+func MakeVideoCodecType(base uint32) (c CodecType) {
+	c = CodecType(base) << codecTypeOtherBits
+	return
+}
+
+const avCodecTypeMagic = 16531653
+
+var (
+	H264 = MakeVideoCodecType(avCodecTypeMagic + 1)
+
+	AAC       = MakeAudioCodecType(avCodecTypeMagic + 1)
+	PCM_MULAW = MakeAudioCodecType(avCodecTypeMagic + 2)
+	PCM_ALAW  = MakeAudioCodecType(avCodecTypeMagic + 3)
 )
 
 type CodecData interface {
-	IsVideo() bool
-	IsAudio() bool
-	Type() int
+	Type() CodecType
 }
 
 type VideoCodecData interface {
@@ -130,32 +169,46 @@ type AudioCodecData interface {
 	SampleFormat() SampleFormat
 	SampleRate() int
 	ChannelLayout() ChannelLayout
+	PacketDuration([]byte) (time.Duration, error)
+}
+
+type PacketWriter interface {
+	WritePacket(Packet) error
+}
+
+type PacketReader interface {
+	ReadPacket() (Packet,error)
 }
 
 type Muxer interface {
+	PacketWriter
 	WriteHeader([]CodecData) error
-	WritePacket(int, Packet) error
 	WriteTrailer() error
 }
 
 type Demuxer interface {
-	ReadPacket() (int, Packet, error)
+	PacketReader
 	Streams() ([]CodecData, error)
 }
 
 type Packet struct {
 	IsKeyFrame      bool
+	Idx             int8
+	CompositionTime time.Duration
+	Time time.Duration
 	Data            []byte
-	Duration        float64
-	CompositionTime float64
 }
 
 type AudioFrame struct {
-	SampleRate int
-	SampleFormat SampleFormat
+	SampleFormat  SampleFormat
 	ChannelLayout ChannelLayout
-	SampleCount int
-	Data [][]byte
+	SampleCount   int
+	SampleRate    int
+	Data          [][]byte
+}
+
+func (self AudioFrame) Duration() time.Duration {
+	return time.Second * time.Duration(self.SampleCount) / time.Duration(self.SampleRate)
 }
 
 func (self AudioFrame) HasSameFormat(other AudioFrame) bool {
@@ -174,10 +227,10 @@ func (self AudioFrame) HasSameFormat(other AudioFrame) bool {
 func (self AudioFrame) Slice(start int, end int) (out AudioFrame) {
 	out = self
 	out.Data = append([][]byte(nil), out.Data...)
-	out.SampleCount = end-start
+	out.SampleCount = end - start
 	size := self.SampleFormat.BytesPerSample()
 	for i := range out.Data {
-		out.Data[i] = out.Data[i][start*size:end*size]
+		out.Data[i] = out.Data[i][start*size : end*size]
 	}
 	return
 }
@@ -194,7 +247,7 @@ func (self AudioFrame) Concat(in AudioFrame) (out AudioFrame) {
 
 type AudioEncoder interface {
 	CodecData() AudioCodecData
-	Encode(AudioFrame) ([]Packet, error)
+	Encode(AudioFrame) ([][]byte, error)
 	Close()
 	//Flush() ([]Packet, error)
 }
@@ -208,4 +261,3 @@ type AudioDecoder interface {
 type AudioResampler interface {
 	Resample(AudioFrame) (AudioFrame, error)
 }
-
