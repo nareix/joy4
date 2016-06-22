@@ -8,8 +8,8 @@ import (
 
 func ExampleChannels() {
 	/* Output:
-complete
-[xxoo]
+	complete
+	[xxoo]
 	*/
 	context := New()
 	pub, _ := context.Publish("abc")
