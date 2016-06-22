@@ -989,7 +989,7 @@ func (self *Stream) handleRtpPacket(packet []byte) (err error) {
 
 	default:
 		self.gotpkt = true
-		self.pkt.Data = packet
+		self.pkt.Data = payload
 		self.timestamp = timestamp
 	}
 
