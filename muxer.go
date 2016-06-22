@@ -27,7 +27,7 @@ type Muxer struct {
 	mdatWriter *atom.Writer
 }
 
-func IsCodecSupported(codec av.CodecData) bool {
+func (self *Muxer) isCodecSupported(codec av.CodecData) bool {
 	switch codec.Type() {
 	case av.H264, av.AAC:
 		return true
@@ -36,8 +36,8 @@ func IsCodecSupported(codec av.CodecData) bool {
 	}
 }
 
-func (self *Muxer) NewStream(codec av.CodecData) (err error) {
-	if !IsCodecSupported(codec) {
+func (self *Muxer) newStream(codec av.CodecData) (err error) {
+	if !self.isCodecSupported(codec) {
 		err = fmt.Errorf("codec type=%x is not supported", codec.Type())
 		return
 	}
@@ -153,8 +153,9 @@ func (self *Stream) fillTrackAtom() (err error) {
 }
 
 func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
+	self.streams = []*Stream{}
 	for _, stream := range streams {
-		if err = self.NewStream(stream); err != nil {
+		if err = self.newStream(stream); err != nil {
 			return
 		}
 	}
@@ -170,34 +171,26 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 	return
 }
 
-func (self *Muxer) WritePacket(streamIndex int, pkt av.Packet) (err error) {
-	stream := self.streams[streamIndex]
-	frame := pkt.Data
-
-	if stream.Type() == av.AAC && aacparser.IsADTSFrame(frame) {
-		sampleRate := stream.CodecData.(av.AudioCodecData).SampleRate()
-		for len(frame) > 0 {
-			var payload []byte
-			var samples int
-			var framelen int
-			if _, payload, samples, framelen, err = aacparser.ReadADTSFrame(frame); err != nil {
-				return
-			}
-			newpkt := pkt
-			newpkt.Data = payload
-			newpkt.Duration = time.Duration(samples)*time.Second / time.Duration(sampleRate)
-			if err = stream.writePacket(newpkt); err != nil {
-				return
-			}
-			frame = frame[framelen:]
-		}
+func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
+	stream := self.streams[pkt.Idx]
+	if err = stream.writePacket(pkt); err != nil {
 		return
 	}
-
-	return stream.writePacket(pkt)
+	return
 }
 
 func (self *Stream) writePacket(pkt av.Packet) (err error) {
+	if self.lasttime == 0 {
+		self.lasttime = pkt.Time
+		return
+	}
+	rawdur := pkt.Time - self.lasttime
+	if rawdur < 0 {
+		err = fmt.Errorf("mp4: stream#%d time=%v < lasttime=%v", pkt.Idx, pkt.Time, self.lasttime)
+		return
+	}
+	self.lasttime = pkt.Time
+
 	var filePos int64
 	var sampleSize int
 
@@ -225,7 +218,7 @@ func (self *Stream) writePacket(pkt av.Packet) (err error) {
 		self.sample.SyncSample.Entries = append(self.sample.SyncSample.Entries, self.sampleIndex+1)
 	}
 
-	duration := int(self.timeToTs(pkt.Duration))
+	duration := int(self.timeToTs(rawdur))
 	if self.sttsEntry == nil || duration != self.sttsEntry.Duration {
 		self.sample.TimeToSample.Entries = append(self.sample.TimeToSample.Entries, atom.TimeToSampleEntry{Duration: duration})
 		self.sttsEntry = &self.sample.TimeToSample.Entries[len(self.sample.TimeToSample.Entries)-1]

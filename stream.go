@@ -14,6 +14,8 @@ type Stream struct {
 	r         io.ReadSeeker
 	idx       int
 
+	lasttime time.Duration
+
 	timeScale int64
 	duration  int64
 

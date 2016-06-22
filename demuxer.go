@@ -34,7 +34,7 @@ func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
 		return
 	}
 	for _, stream := range self.streams {
-		streams = append(streams, stream)
+		streams = append(streams, stream.CodecData)
 	}
 	return
 }
@@ -308,18 +308,24 @@ func (self *Stream) sampleCount() int {
 	}
 }
 
-func (self *Demuxer) ReadPacket() (streamIndex int, pkt av.Packet, err error) {
+func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
 	var chosen *Stream
+	var chosenidx int
 	for i, stream := range self.streams {
 		if chosen == nil || stream.tsToTime(stream.dts) < chosen.tsToTime(chosen.dts) {
 			chosen = stream
-			streamIndex = i
+			chosenidx = i
 		}
 	}
 	if false {
 		fmt.Printf("ReadPacket: chosen index=%v time=%v\n", chosen.idx, chosen.tsToTime(chosen.dts))
 	}
-	pkt, err = chosen.readPacket()
+	tm := chosen.tsToTime(chosen.dts)
+	if pkt, err = chosen.readPacket(); err != nil {
+		return
+	}
+	pkt.Time = tm
+	pkt.Idx = int8(chosenidx)
 	return
 }
 
@@ -390,8 +396,7 @@ func (self *Stream) readPacket() (pkt av.Packet, err error) {
 		pkt.CompositionTime = self.tsToTime(cts)
 	}
 
-	duration := self.incSampleIndex()
-	pkt.Duration = self.tsToTime(duration)
+	self.incSampleIndex()
 
 	return
 }
