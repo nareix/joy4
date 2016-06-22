@@ -12,6 +12,7 @@ type Stream struct {
 	client *Client
 
 	// h264
+	fuStarted  bool
 	fuBuffer   []byte
 	sps        []byte
 	pps        []byte

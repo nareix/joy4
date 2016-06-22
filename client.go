@@ -205,7 +205,7 @@ func (self *Client) parseHeaders(b []byte) (statusCode int, headers textproto.MI
 		}
 	}
 
-	if headers, err = r.ReadMIMEHeader(); err != nil {
+	if headers, _ = r.ReadMIMEHeader(); err != nil {
 		return
 	}
 
@@ -834,12 +834,16 @@ func (self *Stream) handleH264Payload(timestamp uint32, packet []byte) (err erro
 		isStart := fuHeader&0x80 != 0
 		isEnd := fuHeader&0x40 != 0
 		if isStart {
+			self.fuStarted = true
 			self.fuBuffer = []byte{fuIndicator&0xe0 | fuHeader&0x1f}
 		}
-		self.fuBuffer = append(self.fuBuffer, packet[2:]...)
-		if isEnd {
-			if err = self.handleH264Payload(timestamp, self.fuBuffer); err != nil {
-				return
+		if self.fuStarted {
+			self.fuBuffer = append(self.fuBuffer, packet[2:]...)
+			if isEnd {
+				self.fuStarted = false
+				if err = self.handleH264Payload(timestamp, self.fuBuffer); err != nil {
+					return
+				}
 			}
 		}
 
@@ -1070,9 +1074,6 @@ func (self *Client) handleBlock(block []byte) (pkt av.Packet, ok bool, err error
 		}
 		stream.lasttime = pkt.Time
 
-		if self.DebugRtp {
-			fmt.Println("rtp: pktin", pkt.Idx, pkt.Time, len(pkt.Data))
-		}
 		if self.DebugRtp {
 			fmt.Println("rtp: pktout", pkt.Idx, pkt.Time, len(pkt.Data))
 		}
