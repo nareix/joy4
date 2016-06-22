@@ -975,6 +975,10 @@ func (self *Stream) handleRtpPacket(packet []byte) (err error) {
 		}
 
 	case av.AAC:
+		if len(payload) < 4 {
+			err = fmt.Errorf("rtp: aac packet too short")
+			return
+		}
 		self.gotpkt = true
 		self.pkt.Data = payload[4:] // TODO: remove this hack
 		self.timestamp = timestamp
@@ -1038,7 +1042,8 @@ func (self *Client) handleBlock(block []byte) (pkt av.Packet, ok bool, err error
 		timeScale := stream.Sdp.TimeScale
 
 		/*
-		TODO: https://tools.ietf.org/html/rfc3550
+		TODO: sync AV by rtcp NTP timestamp
+		https://tools.ietf.org/html/rfc3550
 		A receiver can then synchronize presentation of the audio and video packets by relating 
 		their RTP timestamps using the timestamp pairs in RTCP SR packets.
 		*/
