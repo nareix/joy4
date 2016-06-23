@@ -86,7 +86,7 @@ func WriteAMF0Val(w *pio.Writer, _val interface{}) (err error) {
 
 	case string:
 		u := len(val)
-		if u > 65536 {
+		if u <= 65536 {
 			if err = w.WriteU8(stringmarker); err != nil {
 				return
 			}
@@ -122,7 +122,7 @@ func WriteAMF0Val(w *pio.Writer, _val interface{}) (err error) {
 				}
 			}
 		}
-		if err = w.WriteU16BE(0); err != nil {
+		if err = w.WriteU24BE(0x000009); err != nil {
 			return
 		}
 
@@ -230,6 +230,9 @@ func ReadAMF0Val(r *pio.Reader) (val interface{}, err error) {
 			}
 			obj[okey] = oval
 		}
+		if _, err = r.ReadU8(); err != nil {
+			return
+		}
 		val = obj
 
 	case nullmarker:
@@ -256,6 +259,9 @@ func ReadAMF0Val(r *pio.Reader) (val interface{}, err error) {
 				return
 			}
 			obj[okey] = oval
+		}
+		if _, err = r.ReadU8(); err != nil {
+			return
 		}
 		val = obj
 
