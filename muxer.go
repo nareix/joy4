@@ -38,7 +38,7 @@ func (self *Muxer) isCodecSupported(codec av.CodecData) bool {
 
 func (self *Muxer) newStream(codec av.CodecData) (err error) {
 	if !self.isCodecSupported(codec) {
-		err = fmt.Errorf("codec type=%x is not supported", codec.Type())
+		err = fmt.Errorf("mp4: codec type=%v is not supported", codec.Type())
 		return
 	}
 
