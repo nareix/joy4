@@ -20,21 +20,26 @@ type tlSeg struct {
 
 type Timeline struct {
 	segs []tlSeg
-	lasttm time.Duration
+	headtm time.Duration
 }
 
 func (self *Timeline) Push(tm time.Duration, dur time.Duration) {
+	if len(self.segs) > 0 {
+		tail := self.segs[len(self.segs)-1]
+		diff := tm-(tail.tm+tail.dur)
+		if diff < 0 {
+			tm -= diff
+		}
+	}
 	self.segs = append(self.segs, tlSeg{tm, dur})
 }
 
 func (self *Timeline) Pop(dur time.Duration) (tm time.Duration) {
 	if len(self.segs) == 0 {
-		return self.lasttm
+		return self.headtm
 	}
 
 	tm = self.segs[0].tm
-	self.lasttm = tm+dur
-
 	for dur > 0 && len(self.segs) > 0 {
 		seg := &self.segs[0]
 		sub := dur
@@ -44,6 +49,7 @@ func (self *Timeline) Pop(dur time.Duration) (tm time.Duration) {
 		seg.dur -= sub
 		dur -= sub
 		seg.tm += sub
+		self.headtm += sub
 		if seg.dur == 0 {
 			copy(self.segs[0:], self.segs[1:])
 			self.segs = self.segs[:len(self.segs)-1]
