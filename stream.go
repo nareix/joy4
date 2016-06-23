@@ -11,6 +11,8 @@ type Stream struct {
 	Sdp    sdp.Media
 	client *Client
 
+	timeScale int
+
 	// h264
 	fuStarted  bool
 	fuBuffer   []byte
