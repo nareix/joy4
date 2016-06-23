@@ -67,6 +67,8 @@ func WriteAMF0Val(w *pio.Writer, _val interface{}) (err error) {
 		return writeAMF0Number(w, float64(val))
 	case int64:
 		return writeAMF0Number(w, float64(val))
+	case int:
+		return writeAMF0Number(w, float64(val))
 	case uint8:
 		return writeAMF0Number(w, float64(val))
 	case uint16:
@@ -74,6 +76,8 @@ func WriteAMF0Val(w *pio.Writer, _val interface{}) (err error) {
 	case uint32:
 		return writeAMF0Number(w, float64(val))
 	case uint64:
+		return writeAMF0Number(w, float64(val))
+	case uint:
 		return writeAMF0Number(w, float64(val))
 	case float32:
 		return writeAMF0Number(w, float64(val))
@@ -107,7 +111,10 @@ func WriteAMF0Val(w *pio.Writer, _val interface{}) (err error) {
 		}
 		for k, v := range val {
 			if len(k) > 0 {
-				if err = WriteAMF0Val(w, k); err != nil {
+				if err = w.WriteU16BE(uint16(len(k))); err != nil {
+					return
+				}
+				if _, err = w.Write([]byte(k)); err != nil {
 					return
 				}
 				if err = WriteAMF0Val(w, v); err != nil {
