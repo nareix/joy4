@@ -61,7 +61,7 @@ const (
 	SOUND_STEREO = 1
 
 	AAC_SEQHDR = 0
-	AAC_RAW    = 0
+	AAC_RAW    = 1
 )
 
 type Audiodata struct {
@@ -187,7 +187,7 @@ const (
 	FRAME_KEY   = 1
 	FRAME_INTER = 2
 
-	CODEC_AAC = 7
+	VIDEO_H264 = 7
 )
 
 type Videodata struct {
@@ -236,7 +236,7 @@ func (self *Videodata) Unmarshal(r *pio.Reader) (err error) {
 		return
 	}
 	self.FrameType = flags >> 4
-	self.CodecID = flags & 0xff
+	self.CodecID = flags & 0xf
 	if self.AVCPacketType, err = r.ReadU8(); err != nil {
 		return
 	}
@@ -273,7 +273,16 @@ func (self Videodata) Marshal(w *pio.Writer) (err error) {
 	return
 }
 
-func ReadFileHeader(r *pio.Reader) (err error) {
+const (
+	// TypeFlagsReserved UB[5]
+	// TypeFlagsAudio    UB[1] Audio tags are present
+	// TypeFlagsReserved UB[1] Must be 0
+	// TypeFlagsVideo    UB[1] Video tags are present
+	FILE_HAS_VIDEO = 0x4
+	FILE_HAS_AUDIO = 0x1
+)
+
+func ReadFileHeader(r *pio.Reader) (flags uint8, err error) {
 	var cc3 uint32
 	if cc3, err = r.ReadU24BE(); err != nil {
 		return
@@ -288,8 +297,7 @@ func ReadFileHeader(r *pio.Reader) (err error) {
 		return
 	}
 
-	// flags
-	if _, err = r.ReadI8(); err != nil {
+	if flags, err = r.ReadU8(); err != nil {
 		return
 	}
 
@@ -386,23 +394,12 @@ func WriteTag(w *pio.Writer, tag Tag, timestamp int32) (err error) {
 	return
 }
 
-func WriteFileHeader(w *pio.Writer, hasVideo bool, hasAudio bool) (err error) {
+func WriteFileHeader(w *pio.Writer, flags uint8) (err error) {
 	// 'FLV', version 1
 	if err = w.WriteI32BE(0x464c5601); err != nil {
 		return
 	}
 
-	// TypeFlagsReserved UB[5]
-	// TypeFlagsAudio    UB[1] Audio tags are present
-	// TypeFlagsReserved UB[1] Must be 0
-	// TypeFlagsVideo    UB[1] Video tags are present
-	var flags uint8
-	if hasAudio {
-		flags |= 1 << 2
-	}
-	if hasVideo {
-		flags |= 1
-	}
 	if err = w.WriteU8(flags); err != nil {
 		return
 	}
