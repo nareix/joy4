@@ -28,6 +28,27 @@ func writeBEFloat64(w *pio.Writer, f float64) (err error) {
 }
 
 const (
+	amf3undefinedmarker = iota
+	amf3nullmarker
+	amf3falsemarker
+	amf3truemarker
+	amf3integermarker
+	amf3doublemarker
+	amf3stringmarker
+	amf3xmldocmarker
+	amf3datemarker
+	amf3arraymarker
+	amf3objectmarker
+	amf3xmlmarker
+	amf3bytearraymarker
+	amf3vectorintmarker
+	amf3vectoruintmarker
+	amf3vectordoublemarker
+	amf3vectorobjectmarker
+	amf3dictionarymarker
+)
+
+const (
 	numbermarker = iota
 	booleanmarker
 	stringmarker
@@ -45,6 +66,7 @@ const (
 	recordsetmarker
 	xmldocumentmarker
 	typedobjectmarker
+	avmplusobjectmarker
 )
 
 func writeAMF0Number(w *pio.Writer, f float64) (err error) {
@@ -305,7 +327,7 @@ func ReadAMF0Val(r *pio.Reader) (val interface{}, err error) {
 		val = string(b)
 
 	default:
-		err = fmt.Errorf("amf0: read: invalid marker=%d", marker)
+		err = fmt.Errorf("amf0: read: unspported marker=%d", marker)
 		return
 	}
 
