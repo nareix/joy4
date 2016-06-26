@@ -3,6 +3,7 @@ package flvio
 import (
 	"fmt"
 	"github.com/nareix/pio"
+	"github.com/nareix/av"
 	"io"
 )
 
@@ -63,6 +64,28 @@ const (
 	AAC_SEQHDR = 0
 	AAC_RAW    = 1
 )
+
+func MakeAACAudiodata(codec av.AudioCodecData, data []byte) Audiodata {
+	tag := Audiodata{
+		SoundFormat: SOUND_AAC,
+		SoundRate: SOUND_44Khz,
+		AACPacketType: AAC_RAW,
+		Data: data,
+	}
+	switch codec.SampleFormat().BytesPerSample() {
+	case 1:
+		tag.SoundSize = SOUND_8BIT
+	default:
+		tag.SoundSize = SOUND_16BIT
+	}
+	switch codec.ChannelLayout().Count() {
+	case 1:
+		tag.SoundType = SOUND_MONO
+	case 2:
+		tag.SoundType = SOUND_STEREO
+	}
+	return tag
+}
 
 type Audiodata struct {
 	/*

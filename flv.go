@@ -14,12 +14,21 @@ import (
 
 type Muxer struct {
 	pw *pio.Writer
+	streams []av.CodecData
 }
 
 func NewMuxer(w io.Writer) *Muxer {
 	self := &Muxer{}
 	self.pw = pio.NewWriter(w)
 	return self
+}
+
+func Create(w io.Writer, streams []av.CodecData) (muxer *Muxer, err error) {
+	muxer = NewMuxer(w)
+	if err = muxer.WriteHeader(streams); err != nil {
+		return
+	}
+	return
 }
 
 func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
@@ -33,6 +42,67 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 	}
 
 	if err = flvio.WriteFileHeader(self.pw, flags); err != nil {
+		return
+	}
+
+	for _, stream := range streams {
+		var _tag flvio.Tag
+
+		switch stream.Type() {
+		case av.H264:
+			h264 := stream.(h264parser.CodecData)
+			tag := &flvio.Videodata{
+				AVCPacketType: flvio.AVC_SEQHDR,
+				CodecID: flvio.VIDEO_H264,
+				Data: h264.AVCDecoderConfRecordBytes(),
+			}
+			_tag = tag
+
+		case av.AAC:
+			aac := stream.(aacparser.CodecData)
+			tag := flvio.MakeAACAudiodata(aac, aac.MPEG4AudioConfigBytes())
+			tag.AACPacketType = flvio.AAC_SEQHDR
+			_tag = &tag
+
+		default:
+			err = fmt.Errorf("flv: unspported codecType=%v", stream.Type())
+			return
+		}
+
+		if err = flvio.WriteTag(self.pw, _tag, 0); err != nil {
+			return
+		}
+	}
+
+	self.streams = streams
+	return
+}
+
+func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
+	stream := self.streams[pkt.Idx]
+	var _tag flvio.Tag
+
+	switch stream.Type() {
+	case av.H264:
+		tag := &flvio.Videodata{
+			AVCPacketType: flvio.AVC_NALU,
+			CodecID: flvio.VIDEO_H264,
+			Data: pkt.Data,
+			CompositionTime: timeToTs(pkt.CompositionTime),
+		}
+		if pkt.IsKeyFrame {
+			tag.FrameType = flvio.FRAME_KEY
+		} else {
+			tag.FrameType = flvio.FRAME_INTER
+		}
+		_tag = tag
+
+	case av.AAC:
+		tag := flvio.MakeAACAudiodata(stream.(av.AudioCodecData), pkt.Data)
+		_tag = &tag
+	}
+
+	if err = flvio.WriteTag(self.pw, _tag, timeToTs(pkt.Time)); err != nil {
 		return
 	}
 
@@ -136,6 +206,10 @@ func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
 
 func tsToTime(ts int32) time.Duration {
 	return time.Millisecond*time.Duration(ts)
+}
+
+func timeToTs(tm time.Duration) int32 {
+	return int32(tm / time.Millisecond)
 }
 
 func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
