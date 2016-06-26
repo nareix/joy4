@@ -740,25 +740,9 @@ func (self *Conn) makeH264Videodata(pkttype uint8, iskeyframe bool, data []byte)
 }
 
 func (self *Conn) makeAACAudiodata(stream av.AudioCodecData, pkttype uint8, data []byte) flvio.Audiodata {
-	audiodata := flvio.Audiodata{
-		SoundFormat: flvio.SOUND_AAC,
-		SoundRate: flvio.SOUND_44Khz,
-		AACPacketType: pkttype,
-		Data: data,
-	}
-	switch stream.SampleFormat().BytesPerSample() {
-	case 1:
-		audiodata.SoundSize = flvio.SOUND_8BIT
-	default:
-		audiodata.SoundSize = flvio.SOUND_16BIT
-	}
-	switch stream.ChannelLayout().Count() {
-	case 1:
-		audiodata.SoundType = flvio.SOUND_MONO
-	case 2:
-		audiodata.SoundType = flvio.SOUND_STEREO
-	}
-	return audiodata
+	tag := flvio.MakeAACAudiodata(stream, data)
+	tag.AACPacketType = pkttype
+	return tag
 }
 
 func (self *Conn) writeSetChunkSize(size uint32) (err error) {
