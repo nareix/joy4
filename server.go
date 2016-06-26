@@ -108,7 +108,9 @@ type Conn struct {
 	Host string
 	Path string
 	Debug bool
+
 	streams []av.CodecData
+	videostreamidx, audiostreamidx int
 
 	br *pio.Reader
 	bw *pio.Writer
@@ -138,6 +140,7 @@ type Conn struct {
 	gotmsg bool
 	msgdata []byte
 	msgtypeid uint8
+	datamsgvals []interface{}
 
 	eventtype uint16
 }
@@ -363,6 +366,34 @@ func (self *Conn) checkCreateStreamResult() (ok bool, avmsgsid uint32) {
 	return
 }
 
+func (self *Conn) parseMetaData(metadata flvio.AMFMap) (atype, vtype av.CodecType, err error) {
+	if v, ok := metadata["videocodecid"].(float64); ok {
+		codecid := int(v)
+		switch codecid {
+		case flvio.VIDEO_H264:
+			vtype = av.H264
+
+		default:
+			err = fmt.Errorf("rtmp: videocodecid=%d unspported", codecid)
+			return
+		}
+	}
+
+	if v, ok := metadata["audiocodecid"].(float64); ok {
+		codecid := int(v)
+		switch codecid {
+		case flvio.SOUND_AAC:
+			atype = av.AAC
+
+		default:
+			err = fmt.Errorf("rtmp: audiocodecid=%d unspported", codecid)
+			return
+		}
+	}
+
+	return
+}
+
 func (self *Conn) connectPlay() (err error) {
 	var connectpath, playpath string
 	pathsegs := strings.Split(self.Path, "/")
@@ -441,8 +472,103 @@ func (self *Conn) connectPlay() (err error) {
 		}
 	}
 
-	fmt.Println("rtmp: play", playpath)
+	// > play('app')
+	fmt.Printf("rtmp: > play('%s')\n", playpath)
+	w = self.writeCommandMsgStart()
+	flvio.WriteAMF0Val(w, "play")
+	flvio.WriteAMF0Val(w, 0)
+	flvio.WriteAMF0Val(w, nil)
+	flvio.WriteAMF0Val(w, playpath)
+	self.writeCommandMsgEnd(8, self.avmsgsid)
 
+	var atype, vtype av.CodecType
+	for {
+		if err = self.pollMsg(); err != nil {
+			return
+		}
+		if self.msgtypeid == msgtypeidDataMsgAMF0 {
+			if len(self.datamsgvals) >= 2 {
+				name, _ := self.datamsgvals[0].(string)
+				data, _ := self.datamsgvals[1].(flvio.AMFMap)
+				if name == "onMetaData" {
+					if atype, vtype, err = self.parseMetaData(data); err != nil {
+						return
+					}
+					fmt.Printf("rtmp: < onMetaData()\n")
+					break
+				}
+			}
+		}
+	}
+	nrstreams := 0
+	if atype != 0 {
+		nrstreams++
+	}
+	if vtype != 0 {
+		nrstreams++
+	}
+
+	for i := 0; ; i++ {
+		if err = self.pollMsg(); err != nil {
+			return
+		}
+
+		switch {
+		case self.msgtypeid == msgtypeidVideoMsg && vtype != 0:
+			tag := &flvio.Videodata{}
+			r := pio.NewReaderBytes(self.msgdata)
+			r.LimitOn(int64(len(self.msgdata)))
+			if err = tag.Unmarshal(r); err != nil {
+				return
+			}
+			switch vtype {
+			case av.H264:
+				if tag.AVCPacketType == flvio.AVC_SEQHDR {
+					var codec h264parser.CodecData
+					if codec, err = h264parser.NewCodecDataFromAVCDecoderConfRecord(tag.Data); err != nil {
+						err = fmt.Errorf("rtmp: h264 codec data invalid")
+						return
+					}
+					self.videostreamidx = len(self.streams)
+					self.streams = append(self.streams, codec)
+				}
+			}
+
+		case self.msgtypeid == msgtypeidAudioMsg && atype != 0:
+			tag := &flvio.Audiodata{}
+			r := pio.NewReaderBytes(self.msgdata)
+			r.LimitOn(int64(len(self.msgdata)))
+			if err = tag.Unmarshal(r); err != nil {
+				return
+			}
+			switch atype {
+			case av.AAC:
+				if tag.AACPacketType == flvio.AAC_SEQHDR {
+					var codec aacparser.CodecData
+					if codec, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(tag.Data); err != nil {
+						err = fmt.Errorf("rtmp: aac codec data invalid")
+						return
+					}
+					self.audiostreamidx = len(self.streams)
+					self.streams = append(self.streams, codec)
+				}
+			}
+		}
+
+		if nrstreams == len(self.streams) {
+			break
+		}
+
+		if i > 100 {
+			err = fmt.Errorf("rtmp: probe failed")
+			return
+		}
+	}
+
+	return
+}
+
+func (self *Conn) ReadPacket() (pkt av.Packet, err error) {
 	return
 }
 
@@ -982,7 +1108,6 @@ func (self *Conn) handleCommandMsgAMF0(r *pio.Reader) (err error) {
 }
 
 func (self *Conn) handleMsg(msgsid uint32, msgtypeid uint8, msgdata []byte) (err error) {
-	self.msgdata = msgdata
 	self.msgtypeid = msgtypeid
 
 	switch msgtypeid {
@@ -1002,10 +1127,29 @@ func (self *Conn) handleMsg(msgsid uint32, msgtypeid uint8, msgdata []byte) (err
 	case msgtypeidUserControl:
 		if len(msgdata) >= 2 {
 			self.eventtype = pio.GetU16BE(msgdata)
+			self.msgdata = msgdata
 		} else {
 			err = fmt.Errorf("rtmp: short packet of UserControl")
 			return
 		}
+
+	case msgtypeidDataMsgAMF0:
+		r := pio.NewReaderBytes(msgdata)
+		self.datamsgvals = []interface{}{}
+		for {
+			if val, err := flvio.ReadAMF0Val(r); err != nil {
+				break
+			} else {
+				self.datamsgvals = append(self.datamsgvals, val)
+			}
+		}
+
+	case msgtypeidVideoMsg, msgtypeidAudioMsg:
+		self.msgdata = msgdata
+
+	case msgtypeidSetChunkSize:
+		self.readMaxChunkSize = int(pio.GetU32BE(msgdata))
+		return
 	}
 
 	self.gotmsg = true
