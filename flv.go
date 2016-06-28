@@ -120,6 +120,7 @@ type Demuxer struct {
 	videostreamidx int
 	audiostreamidx int
 	pr *pio.Reader
+	probepkts []flvio.Tag
 }
 
 func Open(r io.Reader) (demuxer *Demuxer, err error) {
@@ -153,7 +154,8 @@ func (self *Demuxer) ReadHeader() (err error) {
 		case *flvio.Videodata:
 			switch tag.CodecID {
 			case flvio.VIDEO_H264:
-				if tag.AVCPacketType == flvio.AVC_SEQHDR {
+				switch tag.AVCPacketType {
+				case flvio.AVC_SEQHDR:
 					var codec h264parser.CodecData
 					if codec, err = h264parser.NewCodecDataFromAVCDecoderConfRecord(tag.Data); err != nil {
 						err = fmt.Errorf("flv: h264 seqhdr invalid")
@@ -162,6 +164,9 @@ func (self *Demuxer) ReadHeader() (err error) {
 					self.videostreamidx = len(self.streams)
 					self.streams = append(self.streams, &flvStream{CodecData: codec})
 					got |= flvio.FILE_HAS_VIDEO
+
+				case flvio.AVC_NALU:
+					self.probepkts = append(self.probepkts, tag)
 				}
 
 			default:
@@ -172,7 +177,8 @@ func (self *Demuxer) ReadHeader() (err error) {
 		case *flvio.Audiodata:
 			switch tag.SoundFormat {
 			case flvio.SOUND_AAC:
-				if tag.AACPacketType == flvio.AAC_SEQHDR {
+				switch tag.AACPacketType {
+				case flvio.AAC_SEQHDR:
 					var codec aacparser.CodecData
 					if codec, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(tag.Data); err != nil {
 						err = fmt.Errorf("flv: aac seqhdr invalid")
@@ -181,6 +187,9 @@ func (self *Demuxer) ReadHeader() (err error) {
 					self.audiostreamidx = len(self.streams)
 					self.streams = append(self.streams, &flvStream{CodecData: codec})
 					got |= flvio.FILE_HAS_AUDIO
+
+				case flvio.AAC_RAW:
+					self.probepkts = append(self.probepkts, tag)
 				}
 
 			default:
@@ -218,8 +227,13 @@ func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
 
 	loop: for {
 		var _tag flvio.Tag
-		if _tag, timestamp, err = flvio.ReadTag(self.pr); err != nil {
-			return
+		if len(self.probepkts) > 0 {
+			_tag = self.probepkts[0]
+			self.probepkts = self.probepkts[1:]
+		} else {
+			if _tag, timestamp, err = flvio.ReadTag(self.pr); err != nil {
+				return
+			}
 		}
 
 		switch tag := _tag.(type) {
@@ -228,7 +242,7 @@ func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
 				stream = self.streams[self.videostreamidx]
 				pkt.Idx = int8(self.videostreamidx)
 				pkt.CompositionTime = tsToTime(tag.CompositionTime)
-				pkt.IsKeyFrame = true
+				pkt.IsKeyFrame = tag.FrameType == flvio.FRAME_KEY
 				pkt.Data = tag.Data
 				break loop
 			}
