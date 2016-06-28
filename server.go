@@ -567,7 +567,9 @@ func (self *Conn) connectPlay() (err error) {
 		"videoCodecs": 252,
 		"videoFunction": 1,
 	})
-	self.writeCommandMsgEnd(3, 0)
+	if err = self.writeCommandMsgEnd(3, 0); err != nil {
+		return
+	}
 
 	for {
 		if err = self.pollMsg(); err != nil {
@@ -589,7 +591,9 @@ func (self *Conn) connectPlay() (err error) {
 			}
 		} else {
 			if self.msgtypeid == msgtypeidWindowAckSize {
-				self.writeWindowAckSize(2500000)
+				if err = self.writeWindowAckSize(2500000); err != nil {
+					return
+				}
 			}
 		}
 	}
@@ -602,10 +606,14 @@ func (self *Conn) connectPlay() (err error) {
 	flvio.WriteAMF0Val(w, "createStream")
 	flvio.WriteAMF0Val(w, 2)
 	flvio.WriteAMF0Val(w, nil)
-	self.writeCommandMsgEnd(3, 0)
+	if err = self.writeCommandMsgEnd(3, 0); err != nil {
+		return
+	}
 
 	// > SetBufferLength 0,100ms
-	self.writeSetBufferLength(0, 100)
+	if err = self.writeSetBufferLength(0, 100); err != nil {
+		return
+	}
 
 	for {
 		if err = self.pollMsg(); err != nil {
@@ -633,7 +641,9 @@ func (self *Conn) connectPlay() (err error) {
 	flvio.WriteAMF0Val(w, 0)
 	flvio.WriteAMF0Val(w, nil)
 	flvio.WriteAMF0Val(w, playpath)
-	self.writeCommandMsgEnd(8, self.avmsgsid)
+	if err = self.writeCommandMsgEnd(8, self.avmsgsid); err != nil {
+		return
+	}
 
 	self.reading = true
 	self.playing = true
@@ -722,14 +732,18 @@ func (self *Conn) WritePacket(pkt av.Packet) (err error) {
 		audiodata := self.makeAACAudiodata(stream.(av.AudioCodecData), flvio.AAC_RAW, pkt.Data)
 		w := self.writeAudioDataStart()
 		audiodata.Marshal(w)
-		self.writeAudioDataEnd(ts)
+		if err = self.writeAudioDataEnd(ts); err != nil {
+			return
+		}
 
 	case av.H264:
 		videodata := self.makeH264Videodata(flvio.AVC_NALU, pkt.IsKeyFrame, pkt.Data)
 		videodata.CompositionTime = int32(timeToTs(pkt.CompositionTime))
 		w := self.writeVideoDataStart()
 		videodata.Marshal(w)
-		self.writeVideoDataEnd(ts)
+		if err = self.writeVideoDataEnd(ts); err != nil {
+			return
+		}
 	}
 
 	return
@@ -771,6 +785,8 @@ func (self *Conn) WriteHeader(streams []av.CodecData) (err error) {
 			}
 
 			metadata["audiodatarate"] = 156
+			metadata["audiosamplerate"] = 3
+			metadata["audiosamplesize"] = 1
 		}
 	}
 
