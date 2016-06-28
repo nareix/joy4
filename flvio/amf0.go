@@ -9,6 +9,7 @@ import (
 
 type AMFMap map[string]interface{}
 type AMFArray []interface{}
+type AMFECMAArray map[string]interface{}
 
 func readBEFloat64(r *pio.Reader) (f float64, err error) {
 	var u uint64
@@ -124,6 +125,28 @@ func WriteAMF0Val(w *pio.Writer, _val interface{}) (err error) {
 			}
 		}
 		if _, err = w.Write([]byte(val)); err != nil {
+			return
+		}
+
+	case AMFECMAArray:
+		if err = w.WriteU8(ecmaarraymarker); err != nil {
+			return
+		}
+		if err = w.WriteU32BE(uint32(len(val))); err != nil {
+			return
+		}
+		for k, v := range val {
+			if err = w.WriteU16BE(uint16(len(k))); err != nil {
+				return
+			}
+			if _, err = w.Write([]byte(k)); err != nil {
+				return
+			}
+			if err = WriteAMF0Val(w, v); err != nil {
+				return
+			}
+		}
+		if err = w.WriteU24BE(0x000009); err != nil {
 			return
 		}
 
@@ -282,7 +305,7 @@ func ReadAMF0Val(r *pio.Reader) (val interface{}, err error) {
 			}
 			obj[okey] = oval
 		}
-		if _, err = r.ReadU8(); err != nil {
+		if _, err = r.Discard(3); err != nil {
 			return
 		}
 		val = obj

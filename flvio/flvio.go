@@ -48,7 +48,14 @@ func (self *Scriptdata) Unmarshal(r *pio.Reader) (err error) {
 }
 
 const (
+	SOUND_MP3 = 2
+	SOUND_NELLYMOSER_16KHZ_MONO = 4
+	SOUND_NELLYMOSER_8KHZ_MONO = 5
+	SOUND_NELLYMOSER = 6
+	SOUND_ALAW = 7
+	SOUND_MULAW = 8
 	SOUND_AAC = 10
+	SOUND_SPEEX = 11
 
 	SOUND_5_5Khz = 0
 	SOUND_11Khz  = 1
@@ -97,7 +104,9 @@ type Audiodata struct {
 		4 = Nellymoser 16-kHz mono
 		5 = Nellymoser 8-kHz mono
 		6 = Nellymoser
-		7 = G.711 A-law logarithmic PCM 8 = G.711 mu-law logarithmic PCM 9 = reserved
+		7 = G.711 A-law logarithmic PCM
+		8 = G.711 mu-law logarithmic PCM
+		9 = reserved
 		10 = AAC
 		11 = Speex
 		14 = MP3 8-Khz
@@ -172,7 +181,7 @@ func (self Audiodata) Marshal(w *pio.Writer) (err error) {
 			return
 		}
 	} else {
-		err = fmt.Errorf("flv: Audiodata.Marshal: unsupported SoundFormat=%d", self.SoundFormat)
+		err = fmt.Errorf("flvio: Audiodata.Marshal: unsupported SoundFormat=%d", self.SoundFormat)
 		return
 	}
 	return
@@ -187,7 +196,9 @@ func (self *Audiodata) Unmarshal(r *pio.Reader) (err error) {
 	self.SoundRate = (flags >> 2) & 0x3
 	self.SoundSize = (flags >> 1) & 0x1
 	self.SoundType = flags & 0x1
-	if self.SoundFormat == SOUND_AAC {
+
+	switch self.SoundFormat {
+	case SOUND_AAC:
 		if self.AACPacketType, err = r.ReadU8(); err != nil {
 			return
 		}
@@ -195,10 +206,14 @@ func (self *Audiodata) Unmarshal(r *pio.Reader) (err error) {
 		if _, err = io.ReadFull(r, self.Data); err != nil {
 			return
 		}
-	} else {
-		err = fmt.Errorf("flv: Audiodata.Unmarshal: unsupported SoundFormat=%d", self.SoundFormat)
-		return
+
+	default:
+		self.Data = make([]byte, r.N)
+		if _, err = io.ReadFull(r, self.Data); err != nil {
+			return
+		}
 	}
+
 	return
 }
 
@@ -311,7 +326,7 @@ func ReadFileHeader(r *pio.Reader) (flags uint8, err error) {
 		return
 	}
 	if cc3 != 0x464c56 { // 'FLV'
-		err = fmt.Errorf("flv: file header cc3 invalid")
+		err = fmt.Errorf("flvio: file header cc3 invalid")
 		return
 	}
 
@@ -355,7 +370,7 @@ func ReadTag(r *pio.Reader) (tag Tag, timestamp int32, err error) {
 		tag = &Scriptdata{}
 
 	default:
-		err = fmt.Errorf("flv: ReadTag tagtype=%d invalid", tagtype)
+		err = fmt.Errorf("flvio: ReadTag tagtype=%d invalid", tagtype)
 		return
 	}
 
