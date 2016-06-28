@@ -14,12 +14,15 @@ import (
 	"github.com/nareix/pio"
 	"github.com/nareix/flv/flvio"
 	"github.com/nareix/av"
+	"github.com/nareix/codec"
 	"github.com/nareix/codec/h264parser"
 	"github.com/nareix/codec/aacparser"
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/rand"
 )
+
+var MaxProbePacketCount = 6
 
 func ParseURL(uri string) (host string, path string) {
 	var u *url.URL
@@ -32,6 +35,20 @@ func ParseURL(uri string) (host string, path string) {
 	}
 	path = u.Path
 	return
+}
+
+func Open(uri string) (conn *Conn, err error) {
+	if conn, err = Dial(uri); err != nil {
+		return
+	}
+	if err = conn.ReadHeader(); err != nil {
+		return
+	}
+	return
+}
+
+func Dial(uri string) (conn *Conn, err error) {
+	return DialTimeout(uri, 0)
 }
 
 func DialTimeout(uri string, timeout time.Duration) (conn *Conn, err error) {
@@ -72,13 +89,6 @@ func (self *Server) handleConn(conn *Conn) (err error) {
 		if self.HandlePublish != nil {
 			self.HandlePublish(conn)
 		}
-
-		for {
-			conn.pollMsg()
-			if conn.msgtypeid == msgtypeidAudioMsg || conn.msgtypeid == msgtypeidVideoMsg {
-				break
-			}
-		}
 	}
 
 	if err = conn.Close(); err != nil {
@@ -117,7 +127,12 @@ func (self *Server) ListenAndServe() (err error) {
 		conn := NewConn(netconn)
 		conn.Debug = self.DebugConn
 		conn.isserver = true
-		go self.handleConn(conn)
+		go func() {
+			err = self.handleConn(conn)
+			if self.Debug {
+				fmt.Println("rtmp: server: client closed err:", err)
+			}
+		}()
 	}
 }
 
@@ -129,6 +144,8 @@ type Conn struct {
 	streams []av.CodecData
 	videostreamidx, audiostreamidx int
 
+	probepkts []flvio.Tag
+
 	br *pio.Reader
 	bw *pio.Writer
 	bufr *bufio.Reader
@@ -138,12 +155,13 @@ type Conn struct {
 
 	writeMaxChunkSize int
 	readMaxChunkSize int
-
-	csmap map[uint32]*chunkStream
+	readcsmap map[uint32]*chunkStream
+	writecsmap map[uint32]*chunkStream
 
 	isserver bool
 	publishing, playing bool
 	reading, writing bool
+
 	avmsgsid uint32
 
 	gotcommand bool
@@ -166,7 +184,8 @@ type Conn struct {
 func NewConn(netconn net.Conn) *Conn {
 	conn := &Conn{}
 	conn.netconn = netconn
-	conn.csmap = make(map[uint32]*chunkStream)
+	conn.readcsmap = make(map[uint32]*chunkStream)
+	conn.writecsmap = make(map[uint32]*chunkStream)
 	conn.readMaxChunkSize = 128
 	conn.writeMaxChunkSize = 128
 	conn.bufr = bufio.NewReaderSize(netconn, 2048)
@@ -241,6 +260,28 @@ func (self *Conn) pollMsg() (err error) {
 			return
 		}
 	}
+}
+
+func splitPath(s string) (app, play string) {
+	pathsegs := strings.Split(s, "/")
+	if len(pathsegs) > 1 {
+		app = pathsegs[1]
+	}
+	if len(pathsegs) > 2 {
+		play = pathsegs[2]
+	}
+	return
+}
+
+func formatPath(app, play string) string {
+	ps := strings.Split(app+"/"+play, "/")
+	out := []string{""}
+	for _, s := range ps {
+		if len(s) > 0 {
+			out = append(out, s)
+		}
+	}
+	return strings.Join(out, "/")
 }
 
 func (self *Conn) determineType() (err error) {
@@ -331,7 +372,7 @@ func (self *Conn) determineType() (err error) {
 				})
 				self.writeCommandMsgEnd(5, self.avmsgsid)
 
-				self.Path = fmt.Sprintf("/%s/%s", connectpath, publishpath)
+				self.Path = formatPath(connectpath, publishpath)
 				self.publishing = true
 				self.reading = true
 				return
@@ -370,7 +411,7 @@ func (self *Conn) determineType() (err error) {
 				flvio.WriteAMF0Val(w, true)
 				self.writeDataMsgEnd(5, self.avmsgsid)
 
-				self.Path = fmt.Sprintf("/%s/%s", connectpath, playpath)
+				self.Path = formatPath(connectpath, playpath)
 				self.playing = true
 				self.writing = true
 				return
@@ -417,43 +458,97 @@ func (self *Conn) checkCreateStreamResult() (ok bool, avmsgsid uint32) {
 	return
 }
 
-func (self *Conn) parseMetaData(metadata flvio.AMFMap) (atype, vtype av.CodecType, err error) {
-	if v, ok := metadata["videocodecid"].(float64); ok {
-		codecid := int(v)
-		switch codecid {
-		case flvio.VIDEO_H264:
-			vtype = av.H264
-
-		default:
-			err = fmt.Errorf("rtmp: videocodecid=%d unspported", codecid)
+func (self *Conn) probe() (err error) {
+	for i := 0; i < MaxProbePacketCount; {
+		if err = self.pollMsg(); err != nil {
 			return
+		}
+
+		switch self.msgtypeid {
+		case msgtypeidVideoMsg:
+			i++
+			tag := self.videodata
+			switch tag.CodecID {
+			case flvio.VIDEO_H264:
+				if tag.AVCPacketType == flvio.AVC_SEQHDR {
+					var h264 h264parser.CodecData
+					if h264, err = h264parser.NewCodecDataFromAVCDecoderConfRecord(tag.Data); err != nil {
+						err = fmt.Errorf("rtmp: h264 codec data invalid")
+						return
+					}
+					self.videostreamidx = len(self.streams)
+					self.streams = append(self.streams, h264)
+				} else {
+					self.probepkts = append(self.probepkts, tag)
+				}
+
+			default:
+				err = fmt.Errorf("rtmp: video CodecID=%d not supported", tag.CodecID)
+				return
+			}
+
+		case msgtypeidAudioMsg:
+			i++
+			tag := self.audiodata
+			switch tag.SoundFormat {
+			case flvio.SOUND_AAC:
+				if tag.AACPacketType == flvio.AAC_SEQHDR {
+					var aac aacparser.CodecData
+					if aac, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(tag.Data); err != nil {
+						err = fmt.Errorf("rtmp: aac codec data invalid")
+						return
+					}
+					self.audiostreamidx = len(self.streams)
+					self.streams = append(self.streams, aac)
+				} else {
+					self.probepkts = append(self.probepkts, tag)
+				}
+
+			case flvio.SOUND_NELLYMOSER, flvio.SOUND_NELLYMOSER_16KHZ_MONO, flvio.SOUND_NELLYMOSER_8KHZ_MONO:
+				stream := codec.NewNellyMoserCodecData()
+				self.audiostreamidx = len(self.streams)
+				self.streams = append(self.streams, stream)
+				self.probepkts = append(self.probepkts, tag)
+
+			case flvio.SOUND_ALAW:
+				stream := codec.NewPCMAlawCodecData()
+				self.audiostreamidx = len(self.streams)
+				self.streams = append(self.streams, stream)
+				self.probepkts = append(self.probepkts, tag)
+
+			case flvio.SOUND_MULAW:
+				stream := codec.NewPCMMulawCodecData()
+				self.audiostreamidx = len(self.streams)
+				self.streams = append(self.streams, stream)
+				self.probepkts = append(self.probepkts, tag)
+
+			case flvio.SOUND_SPEEX:
+				stream := codec.NewSpeexCodecData()
+				self.audiostreamidx = len(self.streams)
+				self.streams = append(self.streams, stream)
+				self.probepkts = append(self.probepkts, tag)
+
+			default:
+				err = fmt.Errorf("rtmp: audio SoundFormat=%d not supported", tag.SoundFormat)
+				return
+			}
+		}
+
+		if len(self.streams) == 2 {
+			break
 		}
 	}
 
-	if v, ok := metadata["audiocodecid"].(float64); ok {
-		codecid := int(v)
-		switch codecid {
-		case flvio.SOUND_AAC:
-			atype = av.AAC
-
-		default:
-			err = fmt.Errorf("rtmp: audiocodecid=%d unspported", codecid)
-			return
-		}
+	if len(self.streams) == 0 {
+		err = fmt.Errorf("rtmp: probe failed")
+		return
 	}
 
 	return
 }
 
 func (self *Conn) connectPlay() (err error) {
-	var connectpath, playpath string
-	pathsegs := strings.Split(self.Path, "/")
-	if len(pathsegs) > 1 {
-		connectpath = pathsegs[1]
-	}
-	if len(pathsegs) > 2 {
-		playpath = pathsegs[2]
-	}
+	connectpath, playpath := splitPath(self.Path)
 
 	// > connect("app")
 	if self.Debug {
@@ -509,8 +604,8 @@ func (self *Conn) connectPlay() (err error) {
 	flvio.WriteAMF0Val(w, nil)
 	self.writeCommandMsgEnd(3, 0)
 
-	// > SetBufferLength 0,0ms
-	self.writeSetBufferLength(0, 0)
+	// > SetBufferLength 0,100ms
+	self.writeSetBufferLength(0, 100)
 
 	for {
 		if err = self.pollMsg(); err != nil {
@@ -540,110 +635,42 @@ func (self *Conn) connectPlay() (err error) {
 	flvio.WriteAMF0Val(w, playpath)
 	self.writeCommandMsgEnd(8, self.avmsgsid)
 
-	var atype, vtype av.CodecType
-	for {
-		if err = self.pollMsg(); err != nil {
-			return
-		}
-		if self.msgtypeid == msgtypeidDataMsgAMF0 {
-			if len(self.datamsgvals) >= 2 {
-				name, _ := self.datamsgvals[0].(string)
-				data, _ := self.datamsgvals[1].(flvio.AMFMap)
-				if name == "onMetaData" {
-					if atype, vtype, err = self.parseMetaData(data); err != nil {
-						return
-					}
-					if self.Debug {
-						fmt.Printf("rtmp: < onMetaData()\n")
-					}
-					break
-				}
-			}
-		}
-	}
-	nrstreams := 0
-	if atype != 0 {
-		nrstreams++
-	}
-	if vtype != 0 {
-		nrstreams++
-	}
-
-	for i := 0; ; i++ {
-		if err = self.pollMsg(); err != nil {
-			return
-		}
-
-		switch {
-		case self.msgtypeid == msgtypeidVideoMsg && vtype != 0:
-			tag := self.videodata
-			switch vtype {
-			case av.H264:
-				if tag.AVCPacketType == flvio.AVC_SEQHDR {
-					var codec h264parser.CodecData
-					if codec, err = h264parser.NewCodecDataFromAVCDecoderConfRecord(tag.Data); err != nil {
-						err = fmt.Errorf("rtmp: h264 codec data invalid")
-						return
-					}
-					self.videostreamidx = len(self.streams)
-					self.streams = append(self.streams, codec)
-				}
-			}
-
-		case self.msgtypeid == msgtypeidAudioMsg && atype != 0:
-			tag := self.audiodata
-			switch atype {
-			case av.AAC:
-				if tag.AACPacketType == flvio.AAC_SEQHDR {
-					var codec aacparser.CodecData
-					if codec, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(tag.Data); err != nil {
-						err = fmt.Errorf("rtmp: aac codec data invalid")
-						return
-					}
-					self.audiostreamidx = len(self.streams)
-					self.streams = append(self.streams, codec)
-				}
-			}
-		}
-
-		if nrstreams == len(self.streams) {
-			break
-		}
-
-		if i > 100 {
-			err = fmt.Errorf("rtmp: probe failed")
-			return
-		}
-	}
-
+	self.reading = true
+	self.playing = true
 	return
 }
 
 func (self *Conn) ReadPacket() (pkt av.Packet, err error) {
 	poll: for {
-		if err = self.pollMsg(); err != nil {
-			return
+		var _tag flvio.Tag
+
+		if len(self.probepkts) > 0 {
+			_tag = self.probepkts[0]
+			self.probepkts = self.probepkts[1:]
+		} else {
+			if err = self.pollMsg(); err != nil {
+				return
+			}
+			switch self.msgtypeid {
+			case msgtypeidVideoMsg:
+				_tag = self.videodata
+			case msgtypeidAudioMsg:
+				_tag = self.audiodata
+			}
 		}
-		switch self.msgtypeid {
-		case msgtypeidVideoMsg:
-			tag := self.videodata
+
+		switch tag := _tag.(type) {
+		case *flvio.Videodata:
 			pkt.CompositionTime = tsToTime(uint32(tag.CompositionTime))
 			pkt.Data = tag.Data
 			pkt.IsKeyFrame = tag.FrameType == flvio.FRAME_KEY
 			pkt.Idx = int8(self.videostreamidx)
 			break poll
 
-		case msgtypeidAudioMsg:
-			tag := self.audiodata
+		case *flvio.Audiodata:
 			pkt.Data = tag.Data
 			pkt.Idx = int8(self.audiostreamidx)
 			break poll
-
-		case msgtypeidUserControl:
-
-		default:
-			err = fmt.Errorf("debug %d %v", self.msgtypeid, self.msgdata)
-			return
 		}
 	}
 
@@ -657,6 +684,13 @@ func (self *Conn) ReadHeader() (err error) {
 			return
 		}
 		if err = self.connectPlay(); err != nil {
+			return
+		}
+		if err = self.probe(); err != nil {
+			return
+		}
+	} else if self.publishing && self.reading {
+		if err = self.probe(); err != nil {
 			return
 		}
 	}
@@ -702,9 +736,8 @@ func (self *Conn) WritePacket(pkt av.Packet) (err error) {
 }
 
 func (self *Conn) WriteHeader(streams []av.CodecData) (err error) {
-	metadata := flvio.AMFMap{}
+	metadata := flvio.AMFECMAArray{}
 
-	metadata["server"] = "joy4 streaming server (github.com/nareix/joy4)"
 	metadata["duration"] = 0
 
 	for _, _stream := range streams {
@@ -724,7 +757,7 @@ func (self *Conn) WriteHeader(streams []av.CodecData) (err error) {
 			metadata["width"] = stream.Width()
 			metadata["height"] = stream.Height()
 			metadata["framerate"] = 24 // TODO: make it correct
-			metadata["videodatarate"] = 0
+			metadata["videodatarate"] = 1538
 
 		case typ.IsAudio():
 			stream := _stream.(av.AudioCodecData)
@@ -737,7 +770,7 @@ func (self *Conn) WriteHeader(streams []av.CodecData) (err error) {
 				return
 			}
 
-			metadata["audiodatarate"] = 0
+			metadata["audiodatarate"] = 156
 		}
 	}
 
@@ -884,7 +917,7 @@ func (self *Conn) writeStreamBegin(msgsid uint32) (err error) {
 }
 
 func (self *Conn) writeSetBufferLength(msgsid uint32, timestamp uint32) (err error) {
-	w := self.writeUserControlMsgStart(eventtypeStreamBegin)
+	w := self.writeUserControlMsgStart(eventtypeSetBufferLength)
 	w.WriteU32BE(msgsid)
 	w.WriteU32BE(timestamp)
 	return self.writeUserControlMsgEnd()
@@ -892,34 +925,95 @@ func (self *Conn) writeSetBufferLength(msgsid uint32, timestamp uint32) (err err
 
 func (self *Conn) writeChunks(csid uint32, timestamp uint32, msgtypeid uint8, msgsid uint32, msgdatav [][]byte) (err error) {
 	msgdatalen := pio.VecLen(msgdatav)
+	msghdrtype := 0
+	var tsdelta uint32
 
-	// [Type 0][Type 3][Type 3]....
+	cs := self.writecsmap[csid]
+	if cs == nil {
+		cs = &chunkStream{}
+		self.writecsmap[csid] = cs
+	} else {
+		if msgsid == cs.msgsid {
+			if uint32(msgdatalen) == cs.msgdatalen && msgtypeid == cs.msgtypeid {
+				if timestamp == cs.timenow {
+					msghdrtype = 3
+				} else {
+					msghdrtype = 2
+				}
+			} else {
+				msghdrtype = 1
+			}
+		}
+		tsdelta = timestamp - cs.timenow
+	}
+	cs.timenow = timestamp
+	cs.msgdatalen = uint32(msgdatalen)
+	cs.msgtypeid = msgtypeid
+	cs.msgsid = msgsid
 
-	//  0                   1                   2                   3
-	//  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-	// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	// |                   timestamp                   |message length |
-	// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	// |     message length (cont)     |message type id| msg stream id |
-	// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	// |           message stream id (cont)            |
-	// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	//
-	//       Figure 9 Chunk Message Header – Type 0
-	if err = self.bw.WriteU8(byte(csid)&0x3f); err != nil {
+	if err = self.bw.WriteU8(byte(csid)&0x3f|byte(msghdrtype)<<6); err != nil {
 		return
 	}
-	if err = self.bw.WriteU24BE(timestamp); err != nil {
-		return
-	}
-	if err = self.bw.WriteU24BE(uint32(msgdatalen)); err != nil {
-		return
-	}
-	if err = self.bw.WriteU8(msgtypeid); err != nil {
-		return
-	}
-	if err = self.bw.WriteU32LE(msgsid); err != nil {
-		return
+
+	switch msghdrtype {
+	case 0:
+		//  0                   1                   2                   3
+		//  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+		// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		// |                   timestamp                   |message length |
+		// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		// |     message length (cont)     |message type id| msg stream id |
+		// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		// |           message stream id (cont)            |
+		// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		//
+		//       Figure 9 Chunk Message Header – Type 0
+		if err = self.bw.WriteU24BE(timestamp); err != nil {
+			return
+		}
+		if err = self.bw.WriteU24BE(uint32(msgdatalen)); err != nil {
+			return
+		}
+		if err = self.bw.WriteU8(msgtypeid); err != nil {
+			return
+		}
+		if err = self.bw.WriteU32LE(msgsid); err != nil {
+			return
+		}
+
+	case 1:
+		//  0                   1                   2                   3
+		//  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+		// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		// |                timestamp delta                |message length |
+		// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		// |     message length (cont)     |message type id|
+		// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		//
+		//       Figure 10 Chunk Message Header – Type 1
+		if err = self.bw.WriteU24BE(tsdelta); err != nil {
+			return
+		}
+		if err = self.bw.WriteU24BE(uint32(msgdatalen)); err != nil {
+			return
+		}
+		if err = self.bw.WriteU8(msgtypeid); err != nil {
+			return
+		}
+
+	case 2:
+		//  0                   1                   2
+		//  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3
+		// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		// |                timestamp delta                |
+		// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		//
+		//       Figure 11 Chunk Message Header – Type 2
+		if err = self.bw.WriteU24BE(tsdelta); err != nil {
+			return
+		}
+
+	case 3:
 	}
 
 	msgdataoff := 0
@@ -989,10 +1083,10 @@ func (self *Conn) readChunk() (err error) {
 		csid = uint32(i)+64
 	}
 
-	cs := self.csmap[csid]
+	cs := self.readcsmap[csid]
 	if cs == nil {
 		cs = &chunkStream{}
-		self.csmap[csid] = cs
+		self.readcsmap[csid] = cs
 	}
 
 	var timestamp uint32
@@ -1335,8 +1429,9 @@ func (self *Conn) handshakeClient() (err error) {
 
 	if S1[4] >= 3 {
 		// TODO
-		err = fmt.Errorf("rtmp: newstyle handshake unspported")
-		return
+		C2 = S1
+		//err = fmt.Errorf("rtmp: newstyle handshake unspported")
+		//return
 	} else {
 		C2 = S1
 	}
@@ -1374,6 +1469,11 @@ func (self *Conn) handshakeServer() (err error) {
 	if C0[0] != 3 {
 		err = fmt.Errorf("rtmp: handshake version=%d invalid", C0[0])
 		return
+	}
+
+	if false {
+		epoch := pio.GetU32BE(C1[0:4])
+		fmt.Println("rtmp: handshake client epoch", epoch)
 	}
 
 	S0[0] = 3
