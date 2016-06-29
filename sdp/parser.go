@@ -69,7 +69,7 @@ func Parse(content string) (sess Session, medias []Media) {
 						keyval = strings.Split(field, "/")
 						if len(keyval) >= 2 {
 							key := keyval[0]
-							switch key {
+							switch strings.ToUpper(key) {
 							case "MPEG4-GENERIC":
 								media.Type = av.AAC
 							case "H264":
