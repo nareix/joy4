@@ -41,3 +41,11 @@ func NewPCMAlawCodecData() av.AudioCodecData {
 	}
 }
 
+func NewNellyMoserCodecData() av.AudioCodecData {
+	return PCMUCodecData{typ: av.NELLYMOSER}
+}
+
+func NewSpeexCodecData() av.AudioCodecData {
+	return PCMUCodecData{typ: av.SPEEX}
+}
+
