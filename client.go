@@ -105,13 +105,44 @@ func Dial(uri string) (self *Client, err error) {
 	return DialTimeout(uri, 0)
 }
 
+func (self *Client) Probe() (err error) {
+	for {
+		ok := true
+		for _, si:= range self.setupIdx {
+			stream := self.streams[si]
+			if stream.CodecData == nil {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			break
+		}
+
+		if _, err = self.ReadPacket(); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
 func (self *Client) Streams() (streams []av.CodecData, err error) {
-	if self.setupCalled {
-		streams = self.streamsintf
-	} else {
-		err = fmt.Errorf("rtsp: no streams")
+	if !self.setupCalled {
+		err = fmt.Errorf("rtsp: no setup")
 		return
 	}
+	_streams := []av.CodecData{}
+	for _, si := range self.setupIdx {
+		stream := self.streams[si]
+		if stream.CodecData != nil {
+			_streams = append(_streams, stream.CodecData)
+		} else {
+			err = fmt.Errorf("rtsp: codec data not ready, Probe() first")
+			return
+		}
+	}
+	streams = _streams
 	return
 }
 
@@ -202,7 +233,7 @@ func (self *Client) parseBlockHeader(h []byte) (length int, no int, valid bool) 
 			timestamp -= stream.firsttimestamp
 			if timestamp < stream.timestamp {
 				return
-			} else if timestamp - stream.timestamp > uint32(stream.timeScale*60*60) {
+			} else if timestamp - stream.timestamp > uint32(stream.timeScale()*60*60) {
 				return
 			}
 		}
@@ -229,7 +260,6 @@ func (self *Client) parseHeaders(b []byte) (statusCode int, headers textproto.MI
 	}
 
 	headers, _ = r.ReadMIMEHeader()
-
 	return
 }
 
@@ -493,7 +523,7 @@ func (self *Client) ReadResponse() (res Response, err error) {
 	return
 }
 
-func (self *Client) setupAll() (err error) {
+func (self *Client) SetupAll() (err error) {
 	idx := []int{}
 	for i := range self.streams {
 		idx = append(idx, i)
@@ -540,7 +570,6 @@ func (self *Client) Setup(idx []int) (err error) {
 			return
 		}
 	}
-	self.initstructs()
 
 	self.setupCalled = true
 	return
@@ -551,14 +580,7 @@ func md5hash(s string) string {
 	return hex.EncodeToString(h[:])
 }
 
-func (self *Client) initstructs() {
-	self.streamsintf = make([]av.CodecData, len(self.setupIdx))
-	for i := range self.setupIdx {
-		self.streamsintf[i] = self.streams[self.setupIdx[i]].CodecData
-	}
-}
-
-func (self *Client) Describe() (streams []av.CodecData, err error) {
+func (self *Client) Describe() (streams []sdp.Media, err error) {
 	var res Response
 
 	for i := 0; i < 2; i++ {
@@ -593,13 +615,9 @@ func (self *Client) Describe() (streams []av.CodecData, err error) {
 	self.streams = []*Stream{}
 	for _, media := range medias {
 		stream := &Stream{Sdp: media, client: self}
-		if err = stream.makeCodecData(); err != nil {
-			return
-		}
+		stream.makeCodecData()
 		self.streams = append(self.streams, stream)
-	}
-	for _, stream := range self.streams {
-		streams = append(streams, stream)
+		streams = append(streams, media)
 	}
 
 	return
@@ -640,7 +658,6 @@ func (self *Client) HandleCodecDataChange() (_newcli *Client, err error) {
 		}
 		newcli.streams = append(newcli.streams, newstream)
 	}
-	newcli.initstructs()
 
 	_newcli = newcli
 	return
@@ -656,6 +673,15 @@ func (self *Stream) isCodecDataChange() bool {
 		return true
 	}
 	return false
+}
+
+func (self *Stream) timeScale() int {
+	t := self.Sdp.TimeScale
+	if t == 0 {
+		// https://tools.ietf.org/html/rfc5391
+		t = 8000
+	}
+	return t
 }
 
 func (self *Stream) makeCodecData() (err error) {
@@ -712,12 +738,6 @@ func (self *Stream) makeCodecData() (err error) {
 			err = fmt.Errorf("rtsp: PayloadType=%d unsupported", media.PayloadType)
 			return
 		}
-	}
-
-	self.timeScale = media.TimeScale
-	if self.timeScale == 0 {
-		// https://tools.ietf.org/html/rfc5391
-		self.timeScale = 8000
 	}
 
 	return
@@ -790,6 +810,7 @@ func (self *Stream) handleH264Payload(timestamp uint32, packet []byte) (err erro
 		}
 		if len(self.sps) == 0 {
 			self.sps = packet
+			self.makeCodecData()
 		} else if bytes.Compare(self.sps, packet) != 0 {
 			self.spsChanged = true
 			self.sps = packet
@@ -804,6 +825,7 @@ func (self *Stream) handleH264Payload(timestamp uint32, packet []byte) (err erro
 		}
 		if len(self.pps) == 0 {
 			self.pps = packet
+			self.makeCodecData()
 		} else if bytes.Compare(self.pps, packet) != 0 {
 			self.ppsChanged = true
 			self.pps = packet
@@ -1004,7 +1026,7 @@ func (self *Stream) handleRtpPacket(packet []byte) (err error) {
 	*/
 	//payloadType := packet[1]&0x7f
 
-	switch self.Type() {
+	switch self.Sdp.Type {
 	case av.H264:
 		if err = self.handleH264Payload(timestamp, payload); err != nil {
 			return
@@ -1093,7 +1115,7 @@ func (self *Client) handleBlock(block []byte) (pkt av.Packet, ok bool, err error
 
 		ok = true
 		pkt = stream.pkt
-		pkt.Time = time.Duration(stream.timestamp)*time.Second / time.Duration(stream.timeScale)
+		pkt.Time = time.Duration(stream.timestamp)*time.Second / time.Duration(stream.timeScale())
 		pkt.Idx = int8(self.setupMap[i])
 
 		if pkt.Time < stream.lasttime || pkt.Time - stream.lasttime > time.Minute*30 {
@@ -1115,7 +1137,7 @@ func (self *Client) handleBlock(block []byte) (pkt av.Packet, ok bool, err error
 
 func (self *Client) ReadPacket() (pkt av.Packet, err error) {
 	if !self.setupCalled {
-		if err = self.setupAll(); err != nil {
+		if err = self.SetupAll(); err != nil {
 			return
 		}
 	}
@@ -1159,10 +1181,13 @@ func (self *Client) ReadHeader() (err error) {
 	if _, err = self.Describe(); err != nil {
 		return
 	}
-	if err = self.setupAll(); err != nil {
+	if err = self.SetupAll(); err != nil {
 		return
 	}
 	if err = self.Play(); err != nil {
+		return
+	}
+	if err = self.Probe(); err != nil {
 		return
 	}
 	return
