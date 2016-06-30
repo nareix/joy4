@@ -102,7 +102,6 @@ func (self *Handlers) OpenDemuxer(uri string) (demuxer av.DemuxCloser, err error
 		for _, handler := range self.handlers {
 			if handler.Ext == ext {
 				if handler.ReaderDemuxer != nil {
-					fmt.Println("openext", ext, handler.ReaderDemuxer)
 					if r, err = self.openUrl(u, uri); err != nil {
 						return
 					}
