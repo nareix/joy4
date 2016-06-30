@@ -192,9 +192,19 @@ type Muxer interface {
 	WriteTrailer() error
 }
 
+type MuxCloser interface {
+	Muxer
+	Close() error
+}
+
 type Demuxer interface {
 	PacketReader
 	Streams() ([]CodecData, error)
+}
+
+type DemuxCloser interface {
+	Demuxer
+	Close() error
 }
 
 type Packet struct {
