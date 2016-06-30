@@ -14,8 +14,8 @@ import (
 type Demuxer struct {
 	R io.Reader
 
-	gotpkt  bool
-	pkt av.Packet
+	pktidx int
+	pkts []av.Packet
 
 	pat     PAT
 	pmt     *PMT
@@ -62,20 +62,31 @@ func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
 	if err = self.probe(); err != nil {
 		return
 	}
-	if err = self.poll(); err != nil {
-		return
+
+	for self.pktidx == len(self.pkts) {
+		if err = self.poll(); err != nil {
+			return
+		}
 	}
-	pkt = self.pkt
+	if self.pktidx < len(self.pkts) {
+		pkt = self.pkts[self.pktidx]
+		self.pktidx++
+	}
+
 	return
 }
 
 func (self *Demuxer) poll() (err error) {
-	for !self.gotpkt {
+	self.pktidx = 0
+	self.pkts = self.pkts[0:0]
+	for {
 		if err = self.readTSPacket(); err != nil {
 			return
 		}
+		if len(self.pkts) > 0 {
+			break
+		}
 	}
-	self.gotpkt = false
 	return
 }
 
@@ -143,18 +154,6 @@ func (self *Stream) payloadEnd() (err error) {
 		dts = pts
 	}
 
-	pkt := &self.demuxer.pkt
-	*pkt = av.Packet{
-		Idx: int8(self.idx),
-		IsKeyFrame: self.tshdr.RandomAccessIndicator,
-		Time: time.Duration(dts)*time.Second / time.Duration(PTS_HZ),
-		Data:       payload,
-	}
-	if pts != dts {
-		pkt.CompositionTime = time.Duration(pts-dts)*time.Second / time.Duration(PTS_HZ)
-	}
-	self.demuxer.gotpkt = true
-
 	if self.CodecData == nil {
 		switch self.streamType {
 		case ElementaryStreamTypeAdtsAAC:
@@ -195,6 +194,18 @@ func (self *Stream) payloadEnd() (err error) {
 			}
 		}
 	}
+
+	demuxer := self.demuxer
+	pkt := &av.Packet{
+		Idx: int8(self.idx),
+		IsKeyFrame: self.tshdr.RandomAccessIndicator,
+		Time: time.Duration(dts)*time.Second / time.Duration(PTS_HZ),
+		Data:       payload,
+	}
+	if pts != dts {
+		pkt.CompositionTime = time.Duration(pts-dts)*time.Second / time.Duration(PTS_HZ)
+	}
+	demuxer.pkts = append(demuxer.pkts, *pkt)
 
 	return
 }
