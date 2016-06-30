@@ -38,16 +38,6 @@ func ParseURL(uri string) (host string, path string) {
 	return
 }
 
-func Open(uri string) (conn *Conn, err error) {
-	if conn, err = Dial(uri); err != nil {
-		return
-	}
-	if err = conn.ReadHeader(); err != nil {
-		return
-	}
-	return
-}
-
 func Dial(uri string) (conn *Conn, err error) {
 	return DialTimeout(uri, 0)
 }
@@ -75,10 +65,7 @@ type Server struct {
 }
 
 func (self *Server) handleConn(conn *Conn) (err error) {
-	if err = conn.handshakeServer(); err != nil {
-		return
-	}
-	if err = conn.determineType(); err != nil {
+	if err = conn.prepare(stageCommandDone, 0); err != nil {
 		return
 	}
 
@@ -152,6 +139,17 @@ func newStream(codec av.CodecData) *stream {
 	}
 }
 
+const (
+	stageHandshakeDone = iota+1
+	stageCommandDone
+	stageCodecDataDone
+)
+
+const (
+	prepareReading = iota+1
+	prepareWriting
+)
+
 type Conn struct {
 	Host string
 	Path string
@@ -177,6 +175,7 @@ type Conn struct {
 	isserver bool
 	publishing, playing bool
 	reading, writing bool
+	stage int
 
 	avmsgsid uint32
 
@@ -301,7 +300,7 @@ func formatPath(app, play string) string {
 	return strings.Join(out, "/")
 }
 
-func (self *Conn) determineType() (err error) {
+func (self *Conn) recvConnect() (err error) {
 	var connectpath string
 
 	// < connect("app")
@@ -398,6 +397,7 @@ func (self *Conn) determineType() (err error) {
 				self.Path = formatPath(connectpath, publishpath)
 				self.publishing = true
 				self.reading = true
+				self.stage++
 				return
 
 			// < play("path")
@@ -443,6 +443,7 @@ func (self *Conn) determineType() (err error) {
 				self.Path = formatPath(connectpath, playpath)
 				self.playing = true
 				self.writing = true
+				self.stage++
 				return
 			}
 
@@ -573,6 +574,7 @@ func (self *Conn) probe() (err error) {
 		return
 	}
 
+	self.stage++
 	return
 }
 
@@ -676,10 +678,15 @@ func (self *Conn) connectPlay() (err error) {
 
 	self.reading = true
 	self.playing = true
+	self.stage++
 	return
 }
 
 func (self *Conn) ReadPacket() (pkt av.Packet, err error) {
+	if err = self.prepare(stageCodecDataDone, prepareReading); err != nil {
+		return
+	}
+
 	poll: for {
 		var _tag flvio.Tag
 
@@ -717,26 +724,54 @@ func (self *Conn) ReadPacket() (pkt av.Packet, err error) {
 	return
 }
 
-func (self *Conn) ReadHeader() (err error) {
-	if !self.reading && !self.writing {
-		if err = self.handshakeClient(); err != nil {
-			return
-		}
-		if err = self.connectPlay(); err != nil {
-			return
-		}
-		if err = self.probe(); err != nil {
-			return
-		}
-	} else if self.publishing && self.reading {
-		if err = self.probe(); err != nil {
-			return
+func (self *Conn) prepare(stage int, flags int) (err error) {
+	for self.stage < stage {
+		switch self.stage {
+		case 0:
+			if self.isserver {
+				if err = self.handshakeServer(); err != nil {
+					return
+				}
+			} else {
+				if err = self.handshakeClient(); err != nil {
+					return
+				}
+			}
+
+		case stageHandshakeDone:
+			if self.isserver {
+				if err = self.recvConnect(); err != nil {
+					return
+				}
+			} else {
+				if flags == prepareReading {
+					if err = self.connectPlay(); err != nil {
+						return
+					}
+				} else {
+					err = fmt.Errorf("rtmp: connect publish unsupported")
+					return
+				}
+			}
+
+		case stageCommandDone:
+			if flags == prepareReading {
+				if err = self.probe(); err != nil {
+					return
+				}
+			} else {
+				err = fmt.Errorf("rtmp: call WriteHeader() before WritePacket()")
+				return
+			}
 		}
 	}
 	return
 }
 
 func (self *Conn) Streams() (streams []av.CodecData, err error) {
+	if err = self.prepare(stageCodecDataDone, prepareReading); err != nil {
+		return
+	}
 	for _, stream := range self.streams {
 		streams = append(streams, stream.codec)
 	}
@@ -752,6 +787,10 @@ func tsToTime(ts uint32) time.Duration {
 }
 
 func (self *Conn) WritePacket(pkt av.Packet) (err error) {
+	if err = self.prepare(stageCodecDataDone, prepareWriting); err != nil {
+		return
+	}
+
 	stream := self.streams[pkt.Idx]
 	ts := timeToTs(pkt.Time)
 
@@ -783,6 +822,10 @@ func (self *Conn) WritePacket(pkt av.Packet) (err error) {
 }
 
 func (self *Conn) WriteHeader(streams []av.CodecData) (err error) {
+	if err = self.prepare(stageCommandDone, prepareWriting); err != nil {
+		return
+	}
+
 	metadata := flvio.AMFMap{}
 
 	for _, _stream := range streams {
@@ -853,6 +896,7 @@ func (self *Conn) WriteHeader(streams []av.CodecData) (err error) {
 		}
 	}
 
+	self.stage++
 	return
 }
 
@@ -1517,6 +1561,7 @@ func (self *Conn) handshakeClient() (err error) {
 		return
 	}
 
+	self.stage++
 	return
 }
 
@@ -1576,6 +1621,7 @@ func (self *Conn) handshakeServer() (err error) {
 		return
 	}
 
+	self.stage++
 	return
 }
 
