@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/nareix/av"
+	"github.com/nareix/av/avutil"
 	"github.com/nareix/codec"
 	"github.com/nareix/codec/aacparser"
 	"github.com/nareix/codec/h264parser"
@@ -1204,3 +1205,15 @@ func Open(uri string) (cli *Client, err error) {
 	cli = _cli
 	return
 }
+
+func Handler(h *avutil.RegisterHandler) {
+	h.UrlDemuxer = func(uri string) (ok bool, demuxer av.DemuxCloser, err error) {
+		if !strings.HasPrefix(uri, "rtsp://") {
+			return
+		}
+		ok = true
+		demuxer, err = Dial(uri)
+		return
+	}
+}
+
