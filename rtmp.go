@@ -14,6 +14,7 @@ import (
 	"github.com/nareix/pio"
 	"github.com/nareix/flv/flvio"
 	"github.com/nareix/av"
+	"github.com/nareix/av/avutil"
 	"github.com/nareix/codec"
 	"github.com/nareix/codec/h264parser"
 	"github.com/nareix/codec/aacparser"
@@ -1576,5 +1577,16 @@ func (self *Conn) handshakeServer() (err error) {
 	}
 
 	return
+}
+
+func Handler(h *avutil.RegisterHandler) {
+	h.UrlDemuxer = func(uri string) (ok bool, demuxer av.DemuxCloser, err error) {
+		if !strings.HasPrefix(uri, "rtmp://") {
+			return
+		}
+		ok = true
+		demuxer, err = Dial(uri)
+		return
+	}
 }
 
