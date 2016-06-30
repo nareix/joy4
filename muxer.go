@@ -9,15 +9,6 @@ import (
 	"io"
 )
 
-func Create(W io.Writer, streams []av.CodecData) (muxer *Muxer, err error) {
-	_muxer := &Muxer{W: W}
-	if err = _muxer.WriteHeader(streams); err != nil {
-		return
-	}
-	muxer = _muxer
-	return
-}
-
 type Muxer struct {
 	W                        io.Writer
 	streams                  []*Stream
@@ -139,7 +130,7 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 }
 
 func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
-	if true {
+	if false {
 		fmt.Println("ts:", "in", pkt.Idx, pkt.Time, "len", len(pkt.Data))
 	}
 	if err = self.writePacket(pkt); err != nil {
