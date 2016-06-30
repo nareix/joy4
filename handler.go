@@ -7,7 +7,7 @@ import (
 )
 
 func Handler(h *avutil.RegisterHandler) {
-	h.Ext = ".ts"
+	h.Ext = ".mp4"
 	h.ReaderDemuxer = func(r io.Reader) av.Demuxer {
 		return &Demuxer{R: r.(io.ReadSeeker)}
 	}
