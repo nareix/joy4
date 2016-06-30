@@ -14,7 +14,6 @@ import (
 	"github.com/nareix/codec/aacparser"
 	"github.com/nareix/codec/h264parser"
 	"github.com/nareix/rtsp/sdp"
-	"html"
 	"io"
 	"net"
 	"net/textproto"
@@ -25,6 +24,13 @@ import (
 )
 
 var ErrCodecDataChange = fmt.Errorf("rtsp: codec data change, please call HandleCodecDataChange()")
+
+const (
+	stageDescribeDone = iota+1
+	stageSetupDone
+	stageWaitCodecData
+	stageCodecDataDone
+)
 
 type Client struct {
 	DebugRtsp bool
@@ -39,10 +45,10 @@ type Client struct {
 	rtpKeepaliveTimer    time.Time
 	rtpKeepaliveEnterCnt int
 
-	setupCalled bool
+	stage int
+
 	setupIdx    []int
 	setupMap    []int
-	playCalled  bool
 
 	authHeaders func(method string) []string
 
@@ -74,7 +80,7 @@ type Response struct {
 
 func DialTimeout(uri string, timeout time.Duration) (self *Client, err error) {
 	var URL *url.URL
-	if URL, err = url.Parse(html.UnescapeString(uri)); err != nil {
+	if URL, err = url.Parse(uri); err != nil {
 		return
 	}
 
@@ -106,44 +112,64 @@ func Dial(uri string) (self *Client, err error) {
 	return DialTimeout(uri, 0)
 }
 
-func (self *Client) Probe() (err error) {
-	for {
-		ok := true
-		for _, si:= range self.setupIdx {
-			stream := self.streams[si]
-			if stream.CodecData == nil {
-				ok = false
-				break
-			}
+func (self *Client) allCodecDataReady() bool {
+	for _, si:= range self.setupIdx {
+		stream := self.streams[si]
+		if stream.CodecData == nil {
+			return false
 		}
-		if ok {
+	}
+	return true
+}
+
+func (self *Client) probe() (err error) {
+	for {
+		if self.allCodecDataReady() {
 			break
 		}
-
-		if _, err = self.ReadPacket(); err != nil {
+		if _, err = self.readPacket(); err != nil {
 			return
 		}
 	}
+	self.stage = stageCodecDataDone
+	return
+}
 
+func (self *Client) prepare(stage int) (err error) {
+	for self.stage < stage {
+		switch self.stage {
+		case 0:
+			if _, err = self.Describe(); err != nil {
+				return
+			}
+
+		case stageDescribeDone:
+			if err = self.SetupAll(); err != nil {
+				return
+			}
+
+		case stageSetupDone:
+			if err = self.Play(); err != nil {
+				return
+			}
+
+		case stageWaitCodecData:
+			if err = self.probe(); err != nil {
+				return
+			}
+		}
+	}
 	return
 }
 
 func (self *Client) Streams() (streams []av.CodecData, err error) {
-	if !self.setupCalled {
-		err = fmt.Errorf("rtsp: no setup")
+	if err = self.prepare(stageCodecDataDone); err != nil {
 		return
 	}
-	_streams := []av.CodecData{}
 	for _, si := range self.setupIdx {
 		stream := self.streams[si]
-		if stream.CodecData != nil {
-			_streams = append(_streams, stream.CodecData)
-		} else {
-			err = fmt.Errorf("rtsp: codec data not ready, Probe() first")
-			return
-		}
+		streams = append(streams, stream.CodecData)
 	}
-	streams = _streams
 	return
 }
 
@@ -533,13 +559,7 @@ func (self *Client) SetupAll() (err error) {
 }
 
 func (self *Client) Setup(idx []int) (err error) {
-	if self.setupCalled {
-		err = fmt.Errorf("rtsp: Setup() called twice")
-		return
-	}
-
-	if len(self.streams) == 0 {
-		err = fmt.Errorf("rtsp: no streams, please call Describe() first")
+	if err = self.prepare(stageDescribeDone); err != nil {
 		return
 	}
 
@@ -572,7 +592,9 @@ func (self *Client) Setup(idx []int) (err error) {
 		}
 	}
 
-	self.setupCalled = true
+	if self.stage == stageDescribeDone {
+		self.stage = stageSetupDone
+	}
 	return
 }
 
@@ -621,6 +643,9 @@ func (self *Client) Describe() (streams []sdp.Media, err error) {
 		streams = append(streams, media)
 	}
 
+	if self.stage == 0 {
+		self.stage = stageDescribeDone
+	}
 	return
 }
 
@@ -1060,7 +1085,12 @@ func (self *Client) Play() (err error) {
 	if err = self.WriteRequest(req); err != nil {
 		return
 	}
-	self.playCalled = true
+
+	if self.allCodecDataReady() {
+		self.stage = stageCodecDataDone
+	} else {
+		self.stage = stageWaitCodecData
+	}
 	return
 }
 
@@ -1136,18 +1166,7 @@ func (self *Client) handleBlock(block []byte) (pkt av.Packet, ok bool, err error
 	return
 }
 
-func (self *Client) ReadPacket() (pkt av.Packet, err error) {
-	if !self.setupCalled {
-		if err = self.SetupAll(); err != nil {
-			return
-		}
-	}
-	if !self.playCalled {
-		if err = self.Play(); err != nil {
-			return
-		}
-	}
-
+func (self *Client) readPacket() (pkt av.Packet, err error) {
 	if err = self.SendRtpKeepalive(); err != nil {
 		return
 	}
@@ -1175,35 +1194,11 @@ func (self *Client) ReadPacket() (pkt av.Packet, err error) {
 	return
 }
 
-func (self *Client) ReadHeader() (err error) {
-	if err = self.Options(); err != nil {
+func (self *Client) ReadPacket() (pkt av.Packet, err error) {
+	if err = self.prepare(stageCodecDataDone); err != nil {
 		return
 	}
-	if _, err = self.Describe(); err != nil {
-		return
-	}
-	if err = self.SetupAll(); err != nil {
-		return
-	}
-	if err = self.Play(); err != nil {
-		return
-	}
-	if err = self.Probe(); err != nil {
-		return
-	}
-	return
-}
-
-func Open(uri string) (cli *Client, err error) {
-	var _cli *Client
-	if _cli, err = Dial(uri); err != nil {
-		return
-	}
-	if err = _cli.ReadHeader(); err != nil {
-		return
-	}
-	cli = _cli
-	return
+	return self.readPacket()
 }
 
 func Handler(h *avutil.RegisterHandler) {
