@@ -19,10 +19,6 @@ func (self handlerDemuxer) Close() error {
 	return self.r.Close()
 }
 
-func (self handlerDemuxer) ReadHeader() error {
-	return self.Demuxer.(headerReader).ReadHeader()
-}
-
 type handlerMuxer struct {
 	av.Muxer
 	w io.WriteCloser
@@ -73,16 +69,11 @@ func (self *Handlers) createUrl(u *url.URL, uri string) (w io.WriteCloser, err e
 	return
 }
 
-type headerReader interface {
-	ReadHeader() error
-}
-
 func (self *Handlers) Open(uri string) (demuxer av.DemuxCloser, err error) {
 	if demuxer, err = self.OpenDemuxer(uri); err != nil {
 		return
 	}
-	hr := demuxer.(headerReader)
-	if err = hr.ReadHeader(); err != nil {
+	if _, err = demuxer.Streams(); err != nil {
 		return
 	}
 	return

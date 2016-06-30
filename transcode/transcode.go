@@ -85,7 +85,7 @@ func (self *tStream) audioDecodeAndEncode(inpkt av.Packet) (outpkts []av.Packet,
 		outpkt.Time = self.timeline.Pop(dur)
 
 		if debug {
-			fmt.Println("transcode: pop", outpkt.Time)
+			fmt.Println("transcode: pop", outpkt.Time, dur)
 		}
 
 		outpkts = append(outpkts, outpkt)
