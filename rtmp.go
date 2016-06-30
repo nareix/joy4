@@ -142,6 +142,7 @@ func (self *Server) ListenAndServe() (err error) {
 
 type stream struct {
 	codec av.CodecData
+	lasttime time.Duration
 }
 
 func newStream(codec av.CodecData) *stream {
@@ -972,28 +973,30 @@ func (self *Conn) writeChunks(csid uint32, timestamp uint32, msgtypeid uint8, ms
 	msghdrtype := 0
 	var tsdelta uint32
 
-	cs := self.writecsmap[csid]
-	if cs == nil {
-		cs = &chunkStream{}
-		self.writecsmap[csid] = cs
-	} else {
-		if msgsid == cs.msgsid {
-			if uint32(msgdatalen) == cs.msgdatalen && msgtypeid == cs.msgtypeid {
-				if timestamp == cs.timenow {
-					msghdrtype = 3
+	if false { // always msghdrtype==1 is ok
+		cs := self.writecsmap[csid]
+		if cs == nil {
+			cs = &chunkStream{}
+			self.writecsmap[csid] = cs
+		} else {
+			if msgsid == cs.msgsid {
+				if uint32(msgdatalen) == cs.msgdatalen && msgtypeid == cs.msgtypeid {
+					if timestamp == cs.timenow {
+						msghdrtype = 3
+					} else {
+						msghdrtype = 2
+					}
 				} else {
-					msghdrtype = 2
+					msghdrtype = 1
 				}
-			} else {
-				msghdrtype = 1
 			}
+			tsdelta = timestamp - cs.timenow
 		}
-		tsdelta = timestamp - cs.timenow
+		cs.timenow = timestamp
+		cs.msgdatalen = uint32(msgdatalen)
+		cs.msgtypeid = msgtypeid
+		cs.msgsid = msgsid
 	}
-	cs.timenow = timestamp
-	cs.msgdatalen = uint32(msgdatalen)
-	cs.msgtypeid = msgtypeid
-	cs.msgsid = msgsid
 
 	if err = self.bw.WriteU8(byte(csid)&0x3f|byte(msghdrtype)<<6); err != nil {
 		return
