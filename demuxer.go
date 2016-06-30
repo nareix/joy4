@@ -70,7 +70,7 @@ func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
 }
 
 func (self *Demuxer) poll() (err error) {
-	for self.gotpkt {
+	for !self.gotpkt {
 		if err = self.readTSPacket(); err != nil {
 			return
 		}
@@ -108,6 +108,7 @@ func (self *Demuxer) readTSPacket() (err error) {
 						stream.idx = i
 						stream.demuxer = self
 						stream.pid = info.ElementaryPID
+						stream.streamType = info.StreamType
 						switch info.StreamType {
 						case ElementaryStreamTypeH264:
 							self.streams = append(self.streams, stream)
@@ -142,19 +143,21 @@ func (self *Stream) payloadEnd() (err error) {
 		dts = pts
 	}
 
-	self.pkt = av.Packet{
+	pkt := &self.demuxer.pkt
+	*pkt = av.Packet{
 		Idx: int8(self.idx),
 		IsKeyFrame: self.tshdr.RandomAccessIndicator,
 		Time: time.Duration(dts)*time.Second / time.Duration(PTS_HZ),
 		Data:       payload,
 	}
 	if pts != dts {
-		self.pkt.CompositionTime = time.Duration(pts-dts)*time.Second / time.Duration(PTS_HZ)
+		pkt.CompositionTime = time.Duration(pts-dts)*time.Second / time.Duration(PTS_HZ)
 	}
 	self.demuxer.gotpkt = true
 
 	if self.CodecData == nil {
-		if self.streamType == ElementaryStreamTypeAdtsAAC {
+		switch self.streamType {
+		case ElementaryStreamTypeAdtsAAC:
 			var config aacparser.MPEG4AudioConfig
 			if config, _, _, _, err = aacparser.ReadADTSFrame(payload); err != nil {
 				err = fmt.Errorf("ReadADTSFrame failed: %s", err)
@@ -168,7 +171,8 @@ func (self *Stream) payloadEnd() (err error) {
 			if self.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(bw.Bytes()); err != nil {
 				return
 			}
-		} else if self.streamType == ElementaryStreamTypeH264 {
+
+		case ElementaryStreamTypeH264:
 			if false {
 				fmt.Println(hex.Dump(payload))
 			}

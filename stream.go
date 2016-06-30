@@ -25,7 +25,6 @@ type Stream struct {
 	cacheSize int
 
 	idx  int
-	pkt  av.Packet
 }
 
 func timeToPesTs(tm time.Duration) uint64 {
