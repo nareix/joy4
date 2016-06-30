@@ -20,12 +20,12 @@ type Demuxer struct {
 	pat     PAT
 	pmt     *PMT
 	streams []*Stream
-	streamsintf []av.CodecData
+
+	probed bool
 }
 
 func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
-	if len(self.streams) == 0 {
-		err = fmt.Errorf("ts: no streams")
+	if err = self.probe(); err != nil {
 		return
 	}
 	for _, stream := range self.streams {
@@ -34,7 +34,10 @@ func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
 	return
 }
 
-func (self *Demuxer) ReadHeader() (err error) {
+func (self *Demuxer) probe() (err error) {
+	if self.probed {
+		return
+	}
 	for {
 		if self.pmt != nil {
 			n := 0
@@ -51,10 +54,14 @@ func (self *Demuxer) ReadHeader() (err error) {
 			return
 		}
 	}
+	self.probed = true
 	return
 }
 
 func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
+	if err = self.probe(); err != nil {
+		return
+	}
 	if err = self.poll(); err != nil {
 		return
 	}
@@ -109,11 +116,6 @@ func (self *Demuxer) readTSPacket() (err error) {
 						}
 					}
 				}
-			}
-
-			self.streamsintf = make([]av.CodecData, len(self.streams))
-			for i, stream := range self.streams {
-				self.streamsintf[i] = stream
 			}
 
 		} else {
