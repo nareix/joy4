@@ -12,15 +12,6 @@ import (
 	"io"
 )
 
-func Open(R io.ReadSeeker) (demuxer *Demuxer, err error) {
-	_demuxer := &Demuxer{R: R}
-	if err = _demuxer.ReadHeader(); err != nil {
-		return
-	}
-	demuxer = _demuxer
-	return
-}
-
 type Demuxer struct {
 	R io.ReadSeeker
 

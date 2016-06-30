@@ -12,15 +12,6 @@ import (
 	"io"
 )
 
-func Create(W io.WriteSeeker, streams []av.CodecData) (muxer *Muxer, err error) {
-	_muxer := &Muxer{W: W}
-	if err = _muxer.WriteHeader(streams); err != nil {
-		return
-	}
-	muxer = _muxer
-	return
-}
-
 type Muxer struct {
 	W          io.WriteSeeker
 	streams    []*Stream
