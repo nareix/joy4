@@ -20,8 +20,7 @@ type Demuxer struct {
 }
 
 func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
-	if len(self.streams) == 0 {
-		err = fmt.Errorf("mp4: no streams")
+	if err = self.probe(); err != nil {
 		return
 	}
 	for _, stream := range self.streams {
@@ -30,7 +29,11 @@ func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
 	return
 }
 
-func (self *Demuxer) ReadHeader() (err error) {
+func (self *Demuxer) probe() (err error) {
+	if self.movieAtom != nil {
+		return
+	}
+
 	var N int64
 	var moov *atom.Movie
 
@@ -65,7 +68,6 @@ func (self *Demuxer) ReadHeader() (err error) {
 		err = fmt.Errorf("'moov' atom not found")
 		return
 	}
-	self.movieAtom = moov
 
 	self.streams = []*Stream{}
 	for i, atrack := range moov.Tracks {
@@ -101,6 +103,7 @@ func (self *Demuxer) ReadHeader() (err error) {
 		}
 	}
 
+	self.movieAtom = moov
 	return
 }
 
@@ -300,6 +303,10 @@ func (self *Stream) sampleCount() int {
 }
 
 func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
+	if err = self.probe(); err != nil {
+		return
+	}
+
 	var chosen *Stream
 	var chosenidx int
 	for i, stream := range self.streams {
