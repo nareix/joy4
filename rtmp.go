@@ -324,7 +324,7 @@ func (self *Conn) determineType() (err error) {
 	if err = self.writeSetPeerBandwidth(5000000, 2); err != nil {
 		return
 	}
-	self.writeMaxChunkSize = 4000
+	self.writeMaxChunkSize = 1024*1024*128
 	// > SetChunkSize
 	if err = self.writeSetChunkSize(uint32(self.writeMaxChunkSize)); err != nil {
 		return
