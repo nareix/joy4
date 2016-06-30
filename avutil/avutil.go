@@ -19,6 +19,10 @@ func (self handlerDemuxer) Close() error {
 	return self.r.Close()
 }
 
+func (self handlerDemuxer) ReadHeader() error {
+	return self.Demuxer.(headerReader).ReadHeader()
+}
+
 type handlerMuxer struct {
 	av.Muxer
 	w io.WriteCloser
@@ -32,7 +36,7 @@ type RegisterHandler struct {
 	Ext string
 	ReaderDemuxer func(io.Reader)av.Demuxer
 	WriterMuxer func(io.Writer)av.Muxer
-	UrlDemuxer func(string)(bool,av.DemuxerCloser,error)
+	UrlDemuxer func(string)(bool,av.DemuxCloser,error)
 	UrlReader func(string)(bool,io.ReadCloser,error)
 	Probe func([]byte)bool
 }
@@ -48,19 +52,19 @@ func (self *Handlers) Add(fn func(*RegisterHandler)) {
 }
 
 func (self *Handlers) openUrl(u *url.URL, uri string) (r io.ReadCloser, err error) {
-	if u == nil {
-		r, err = os.Open(uri)
-		return
-	}
-	for _, handler := range self.handlers {
-		if handler.UrlReader != nil {
-			var ok bool
-			if ok, r, err = handler.UrlReader(uri); ok {
-				return
+	if u != nil && u.Scheme != "" {
+		for _, handler := range self.handlers {
+			if handler.UrlReader != nil {
+				var ok bool
+				if ok, r, err = handler.UrlReader(uri); ok {
+					return
+				}
 			}
 		}
+		err = fmt.Errorf("avutil: openUrl %s failed", uri)
+	} else {
+		r, err = os.Open(uri)
 	}
-	err = fmt.Errorf("avutil: openUrl %s failed", uri)
 	return
 }
 
@@ -69,7 +73,22 @@ func (self *Handlers) createUrl(u *url.URL, uri string) (w io.WriteCloser, err e
 	return
 }
 
-func (self *Handlers) Open(uri string) (demuxer av.DemuxerCloser, err error) {
+type headerReader interface {
+	ReadHeader() error
+}
+
+func (self *Handlers) Open(uri string) (demuxer av.DemuxCloser, err error) {
+	if demuxer, err = self.OpenDemuxer(uri); err != nil {
+		return
+	}
+	hr := demuxer.(headerReader)
+	if err = hr.ReadHeader(); err != nil {
+		return
+	}
+	return
+}
+
+func (self *Handlers) OpenDemuxer(uri string) (demuxer av.DemuxCloser, err error) {
 	for _, handler := range self.handlers {
 		if handler.UrlDemuxer != nil {
 			var ok bool
@@ -82,17 +101,17 @@ func (self *Handlers) Open(uri string) (demuxer av.DemuxerCloser, err error) {
 	var r io.ReadCloser
 	var ext string
 	var u *url.URL
-	var uerr error
-	if u, uerr = url.Parse(uri); uerr != nil {
-		ext = path.Ext(uri)
-	} else {
+	if u, _ = url.Parse(uri); u != nil && u.Scheme != "" {
 		ext = path.Ext(u.Path)
+	} else {
+		ext = path.Ext(uri)
 	}
 
 	if ext != "" {
 		for _, handler := range self.handlers {
 			if handler.Ext == ext {
 				if handler.ReaderDemuxer != nil {
+					fmt.Println("openext", ext, handler.ReaderDemuxer)
 					if r, err = self.openUrl(u, uri); err != nil {
 						return
 					}
@@ -128,14 +147,13 @@ func (self *Handlers) Open(uri string) (demuxer av.DemuxerCloser, err error) {
 	return
 }
 
-func (self *Handlers) Create(uri string) (muxer av.MuxerCloser, err error) {
+func (self *Handlers) Create(uri string, streams []av.CodecData) (muxer av.MuxCloser, err error) {
 	var ext string
 	var u *url.URL
-	var uerr error
-	if u, uerr = url.Parse(uri); uerr != nil {
-		ext = path.Ext(uri)
-	} else {
+	if u, _ = url.Parse(uri); u != nil && u.Scheme != "" {
 		ext = path.Ext(u.Path)
+	} else {
+		ext = path.Ext(uri)
 	}
 
 	if ext != "" {
@@ -149,6 +167,9 @@ func (self *Handlers) Create(uri string) (muxer av.MuxerCloser, err error) {
 					Muxer: handler.WriterMuxer(w),
 					w: w,
 				}
+				if err = muxer.WriteHeader(streams); err != nil {
+					return
+				}
 				return
 			}
 		}
@@ -158,17 +179,17 @@ func (self *Handlers) Create(uri string) (muxer av.MuxerCloser, err error) {
 	return
 }
 
-var defaultHandlers = &Handlers{}
+var DefaultHandlers = &Handlers{}
 
 func AddHandler(fn func(*RegisterHandler)) {
-	defaultHandlers.Add(fn)
+	DefaultHandlers.Add(fn)
 }
 
-func Open(url string) (demuxer av.Demuxer, err error) {
-	return defaultHandlers.Open(url)
+func Open(url string) (demuxer av.DemuxCloser, err error) {
+	return DefaultHandlers.Open(url)
 }
 
-func Create(url string) (muxer av.Muxer, err error) {
-	return defaultHandlers.Create(url)
+func Create(url string, streams []av.CodecData) (muxer av.MuxCloser, err error) {
+	return DefaultHandlers.Create(url, streams)
 }
 
