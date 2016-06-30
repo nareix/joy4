@@ -4,6 +4,7 @@ import (
 	"time"
 	"fmt"
 	"github.com/nareix/av"
+	"github.com/nareix/av/avutil"
 	"github.com/nareix/codec/h264parser"
 	"github.com/nareix/codec/aacparser"
 	"github.com/nareix/pio"
@@ -106,6 +107,10 @@ func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
 		return
 	}
 
+	return
+}
+
+func (self *Muxer) WriteTrailer() (err error) {
 	return
 }
 
@@ -267,5 +272,18 @@ func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
 	pkt.Time = stream.tm
 
 	return
+}
+
+func Handler(h *avutil.RegisterHandler) {
+	h.Probe = func(b []byte) bool {
+		return b[0] == 'F' && b[1] == 'L' && b[2] == 'V'
+	}
+	h.Ext = ".flv"
+	h.ReaderDemuxer = func(r io.Reader) av.Demuxer {
+		return NewDemuxer(r)
+	}
+	h.WriterMuxer = func(w io.Writer) av.Muxer {
+		return NewMuxer(w)
+	}
 }
 
