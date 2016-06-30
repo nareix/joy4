@@ -122,6 +122,10 @@ func (self CodecType) String() string {
 		return "PCM_MULAW"
 	case PCM_ALAW:
 		return "PCM_ALAW"
+	case SPEEX:
+		return "SPEEX"
+	case NELLYMOSER:
+		return "NELLYMOSER"
 	}
 	return ""
 }
@@ -144,7 +148,7 @@ func MakeVideoCodecType(base uint32) (c CodecType) {
 	return
 }
 
-const avCodecTypeMagic = 16531653
+const avCodecTypeMagic = 233333
 
 var (
 	H264 = MakeVideoCodecType(avCodecTypeMagic + 1)
@@ -152,6 +156,8 @@ var (
 	AAC       = MakeAudioCodecType(avCodecTypeMagic + 1)
 	PCM_MULAW = MakeAudioCodecType(avCodecTypeMagic + 2)
 	PCM_ALAW  = MakeAudioCodecType(avCodecTypeMagic + 3)
+	SPEEX = MakeAudioCodecType(avCodecTypeMagic + 4)
+	NELLYMOSER = MakeAudioCodecType(avCodecTypeMagic + 5)
 )
 
 type CodecData interface {
