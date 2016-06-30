@@ -24,14 +24,6 @@ func NewMuxer(w io.Writer) *Muxer {
 	return self
 }
 
-func Create(w io.Writer, streams []av.CodecData) (muxer *Muxer, err error) {
-	muxer = NewMuxer(w)
-	if err = muxer.WriteHeader(streams); err != nil {
-		return
-	}
-	return
-}
-
 func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 	var flags uint8
 	for _, stream := range streams {
@@ -126,14 +118,7 @@ type Demuxer struct {
 	audiostreamidx int
 	pr *pio.Reader
 	probepkts []flvio.Tag
-}
-
-func Open(r io.Reader) (demuxer *Demuxer, err error) {
-	demuxer = NewDemuxer(r)
-	if err = demuxer.ReadHeader(); err != nil {
-		return
-	}
-	return
+	probed bool
 }
 
 func NewDemuxer(r io.Reader) *Demuxer {
@@ -142,7 +127,11 @@ func NewDemuxer(r io.Reader) *Demuxer {
 	}
 }
 
-func (self *Demuxer) ReadHeader() (err error) {
+func (self *Demuxer) probe() (err error) {
+	if self.probed {
+		return
+	}
+
 	var flags, got uint8
 	if flags, err = flvio.ReadFileHeader(self.pr); err != nil {
 		return
@@ -208,10 +197,14 @@ func (self *Demuxer) ReadHeader() (err error) {
 		}
 	}
 
+	self.probed = true
 	return
 }
 
 func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
+	if err = self.probe(); err != nil {
+		return
+	}
 	for _, stream := range self.streams {
 		streams = append(streams, stream.CodecData)
 	}
@@ -227,6 +220,10 @@ func timeToTs(tm time.Duration) int32 {
 }
 
 func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
+	if err = self.probe(); err != nil {
+		return
+	}
+
 	var timestamp int32
 	var stream *flvStream
 
