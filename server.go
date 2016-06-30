@@ -3,7 +3,7 @@ package rtmp
 
 import (
 	"strings"
-	_"bytes"
+	"bytes"
 	"net"
 	"net/url"
 	"bufio"
@@ -112,6 +112,10 @@ func (self *Server) ListenAndServe() (err error) {
 	var listener *net.TCPListener
 	if listener, err = net.ListenTCP("tcp", tcpaddr); err != nil {
 		return
+	}
+
+	if self.Debug {
+		fmt.Println("rtmp: server: listening on", addr)
 	}
 
 	var netconn net.Conn
@@ -336,7 +340,7 @@ func (self *Conn) determineType() (err error) {
 	flvio.WriteAMF0Val(w, flvio.AMFMap{
 		"level": "status",
 		"code": "NetConnection.Connect.Success",
-		"description": "Connection Success.",
+		"description": "Connection succeeded.",
 		"objectEncoding": 3,
 	})
 	if err = self.writeCommandMsgEnd(3, 0); err != nil {
@@ -422,13 +426,6 @@ func (self *Conn) determineType() (err error) {
 					"description": "Start live",
 				})
 				if err = self.writeCommandMsgEnd(5, self.avmsgsid); err != nil {
-					return
-				}
-
-				// > Stream Is Recored
-				w = self.writeUserControlMsgStart(eventtypeStreamIsRecorded)
-				w.WriteU32BE(self.avmsgsid)
-				if err = self.writeUserControlMsgEnd(); err != nil {
 					return
 				}
 
@@ -784,7 +781,7 @@ func (self *Conn) WritePacket(pkt av.Packet) (err error) {
 }
 
 func (self *Conn) WriteHeader(streams []av.CodecData) (err error) {
-	metadata := flvio.AMFECMAArray{}
+	metadata := flvio.AMFMap{}
 
 	for _, _stream := range streams {
 		typ := _stream.Type()
@@ -1420,22 +1417,50 @@ func hsMakeDigest(key []byte, src []byte, gap int) (dst []byte) {
 	return h.Sum(nil)
 }
 
-func hsCalcDigestPos(p []byte, off int, mod int, add int) (pos int) {
+func hsCalcDigestPos(p []byte, base int) (pos int) {
 	for i := 0; i < 4; i++ {
-		pos += int(p[i+off])
+		pos += int(p[base+i])
 	}
-	pos = pos%mod+add
+	pos = (pos%728)+base+4
 	return
 }
 
-func hsCreateC1(p []byte) {
-	p[4] = 9
-	p[5] = 0
-	p[6] = 124
-	p[7] = 2
-	rand.Read(p[8:])
-	gap := hsCalcDigestPos(p, 8, 728, 12)
-	digest := hsMakeDigest(hsClientPartialKey, p, gap)
+func hsFindDigest(p []byte, key []byte, base int) int {
+	gap := hsCalcDigestPos(p, base)
+	digest := hsMakeDigest(key, p, gap)
+	if bytes.Compare(p[gap:gap+32], digest) != 0 {
+		return -1
+	}
+	return gap
+}
+
+func hsParse1(p []byte, peerkey []byte, key []byte) (ok bool, digest []byte) {
+	var pos int
+	if pos = hsFindDigest(p, peerkey, 772); pos == -1 {
+		if pos = hsFindDigest(p, peerkey, 8); pos == -1 {
+			return
+		}
+	}
+	ok = true
+	digest = hsMakeDigest(key, p[pos:pos+32], -1)
+	return
+}
+
+func hsCreate01(p []byte, time uint32, ver uint32, key []byte) {
+	p[0] = 3
+	p1 := p[1:]
+	rand.Read(p1[8:])
+	pio.PutU32BE(p1[0:4], time)
+	pio.PutU32BE(p1[4:8], ver)
+	gap := hsCalcDigestPos(p1, 8)
+	digest := hsMakeDigest(key, p1, gap)
+	copy(p1[gap:], digest)
+}
+
+func hsCreate2(p []byte, key []byte) {
+	rand.Read(p)
+	gap := len(p)-32
+	digest := hsMakeDigest(key, p, gap)
 	copy(p[gap:], digest)
 }
 
@@ -1444,7 +1469,7 @@ func (self *Conn) handshakeClient() (err error) {
 
 	C0C1C2 := random[:1536*2+1]
 	C0 := C0C1C2[:1]
-	C1 := C0C1C2[1:1536+1]
+	//C1 := C0C1C2[1:1536+1]
 	C0C1 := C0C1C2[:1536+1]
 	C2 := C0C1C2[1536+1:]
 
@@ -1455,7 +1480,7 @@ func (self *Conn) handshakeClient() (err error) {
 	//S2 := S0S1S2[1536+1:]
 
 	C0[0] = 3
-	hsCreateC1(C1)
+	//hsCreate01(C0C1, hsClientFullKey)
 
 	// > C0C1
 	if _, err = self.bw.Write(C0C1); err != nil {
@@ -1474,11 +1499,8 @@ func (self *Conn) handshakeClient() (err error) {
 		fmt.Println("rtmp: handshakeClient: server version", S1[4],S1[5],S1[6],S1[7])
 	}
 
-	if S1[4] >= 3 {
-		// TODO
+	if ver := pio.GetU32BE(S1[4:8]); ver != 0 {
 		C2 = S1
-		//err = fmt.Errorf("rtmp: newstyle handshake unspported")
-		//return
 	} else {
 		C2 = S1
 	}
@@ -1504,9 +1526,9 @@ func (self *Conn) handshakeServer() (err error) {
 	C2 := C0C1C2[1536+1:]
 
 	S0S1S2 := random[1536*2+1:]
-	S0 := S0S1S2[:1]
+	//S0 := S0S1S2[:1]
 	S1 := S0S1S2[1:1536+1]
-	//S0S1 := S0S1S2[:1536+1]
+	S0S1 := S0S1S2[:1536+1]
 	S2 := S0S1S2[1536+1:]
 
 	// < C0C1
@@ -1518,16 +1540,24 @@ func (self *Conn) handshakeServer() (err error) {
 		return
 	}
 
-	if false {
-		epoch := pio.GetU32BE(C1[0:4])
-		fmt.Println("rtmp: handshake client epoch", epoch)
-	}
+	clitime := pio.GetU32BE(C1[0:4])
+	srvtime := clitime
+	srvver := uint32(0x0d0e0a0d)
+	cliver := pio.GetU32BE(C1[4:8])
 
-	S0[0] = 3
-	copy(S1[0:4], C1[0:4])
-	rand.Read(S1[8:])
-	copy(S2[0:4], C1[0:4])
-	copy(S2[8:], C1[8:])
+	if cliver != 0 {
+		var ok bool
+		var digest []byte
+		if ok, digest = hsParse1(C1, hsClientPartialKey, hsServerFullKey); !ok {
+			err = fmt.Errorf("rtmp: handshake server: C1 invalid")
+			return
+		}
+		hsCreate01(S0S1, srvtime, srvver, hsServerPartialKey)
+		hsCreate2(S2, digest)
+	} else {
+		copy(S1, C1)
+		copy(S2, C2)
+	}
 
 	// > S0S1S2
 	if _, err = self.bw.Write(S0S1S2); err != nil {
