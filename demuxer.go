@@ -145,23 +145,41 @@ func (self *Demuxer) readTSPacket() (err error) {
 	return
 }
 
-func (self *Stream) payloadEnd() (err error) {
-	payload := self.buf.Bytes()
-
+func (self *Stream) addPacket(payload []byte, timedelta time.Duration) {
 	dts := self.peshdr.DTS
 	pts := self.peshdr.PTS
 	if dts == 0 {
 		dts = pts
 	}
 
-	if self.CodecData == nil {
-		switch self.streamType {
-		case ElementaryStreamTypeAdtsAAC:
-			var config aacparser.MPEG4AudioConfig
-			if config, _, _, _, err = aacparser.ReadADTSFrame(payload); err != nil {
-				err = fmt.Errorf("ReadADTSFrame failed: %s", err)
-				return
-			}
+	demuxer := self.demuxer
+	pkt := av.Packet{
+		Idx: int8(self.idx),
+		IsKeyFrame: self.tshdr.RandomAccessIndicator,
+		Time: time.Duration(dts)*time.Second / time.Duration(PTS_HZ) + timedelta,
+		Data:       payload,
+	}
+	if pts != dts {
+		pkt.CompositionTime = time.Duration(pts-dts)*time.Second / time.Duration(PTS_HZ)
+	}
+	demuxer.pkts = append(demuxer.pkts, pkt)
+}
+
+func (self *Stream) payloadEnd() (err error) {
+	payload := self.buf.Bytes()
+
+	switch self.streamType {
+	case ElementaryStreamTypeAdtsAAC:
+		var config aacparser.MPEG4AudioConfig
+		var packets [][]byte
+		var totsamples int
+		if config, packets, totsamples, err = aacparser.SplitADTSFrames(payload); err != nil {
+			err = fmt.Errorf("ts: demuxer: SplitADTSFrames failed: %s", err)
+			return
+		}
+		config = config.Complete()
+
+		if self.CodecData == nil {
 			bw := &bytes.Buffer{}
 			if err = aacparser.WriteMPEG4AudioConfig(bw, config); err != nil {
 				err = fmt.Errorf("WriteMPEG4AudioConfig failed: %s", err)
@@ -170,42 +188,43 @@ func (self *Stream) payloadEnd() (err error) {
 			if self.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(bw.Bytes()); err != nil {
 				return
 			}
+		}
 
-		case ElementaryStreamTypeH264:
-			if false {
-				fmt.Println(hex.Dump(payload))
-			}
-			nalus, _ := h264parser.SplitNALUs(payload)
-			var sps, pps []byte
-			for _, nalu := range nalus {
-				if len(nalu) > 0 {
-					naltype := nalu[0] & 0x1f
-					if naltype == 7 {
-						sps = nalu
-					} else if naltype == 8 {
-						pps = nalu
+		frametime := time.Duration(totsamples / len(packets)) * time.Second / time.Duration(config.SampleRate)
+		timedelta := time.Duration(0)
+		for _, packet := range packets {
+			self.addPacket(packet, timedelta)
+			timedelta += frametime
+		}
+
+	case ElementaryStreamTypeH264:
+		nalus, _ := h264parser.SplitNALUs(payload)
+		var sps, pps []byte
+		for _, nalu := range nalus {
+			if len(nalu) > 0 {
+				naltype := nalu[0] & 0x1f
+				switch naltype {
+				case 7:
+					sps = nalu
+				case 8:
+					pps = nalu
+				case 6:
+				case 9:
+				default:
+					if false {
+						fmt.Println("h264", len(nalus), "\n", hex.Dump(nalu))
 					}
-				}
-			}
-			if len(sps) > 0 && len(pps) > 0 {
-				if self.CodecData, err = h264parser.NewCodecDataFromSPSAndPPS(sps, pps); err != nil {
-					return
+					self.addPacket(nalu, time.Duration(0))
 				}
 			}
 		}
-	}
 
-	demuxer := self.demuxer
-	pkt := &av.Packet{
-		Idx: int8(self.idx),
-		IsKeyFrame: self.tshdr.RandomAccessIndicator,
-		Time: time.Duration(dts)*time.Second / time.Duration(PTS_HZ),
-		Data:       payload,
+		if self.CodecData == nil && len(sps) > 0 && len(pps) > 0 {
+			if self.CodecData, err = h264parser.NewCodecDataFromSPSAndPPS(sps, pps); err != nil {
+				return
+			}
+		}
 	}
-	if pts != dts {
-		pkt.CompositionTime = time.Duration(pts-dts)*time.Second / time.Duration(PTS_HZ)
-	}
-	demuxer.pkts = append(demuxer.pkts, *pkt)
 
 	return
 }
