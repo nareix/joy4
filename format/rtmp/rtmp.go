@@ -1029,7 +1029,7 @@ func (self *Conn) writeChunks(csid uint32, timestamp uint32, msgtypeid uint8, ms
 	msghdrtype := 0
 	var tsdelta uint32
 
-	if false { // always msghdrtype==1 is ok
+	if false { // always msghdrtype==0 is ok
 		cs := self.writecsmap[csid]
 		if cs == nil {
 			cs = &chunkStream{}
