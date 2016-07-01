@@ -3,7 +3,7 @@ package channels
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/nareix/av"
+	"github.com/nareix/joy4/av"
 	"hash/fnv"
 	"io"
 	"sync"

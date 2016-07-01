@@ -2,8 +2,8 @@ package mp4
 
 import (
 	"io"
-	"github.com/nareix/av"
-	"github.com/nareix/av/avutil"
+	"github.com/nareix/joy4/av"
+	"github.com/nareix/joy4/av/avutil"
 )
 
 func Handler(h *avutil.RegisterHandler) {

@@ -3,8 +3,8 @@ package transcode
 import (
 	"fmt"
 	"time"
-	"github.com/nareix/av"
-	"github.com/nareix/av/pktque"
+	"github.com/nareix/joy4/av"
+	"github.com/nareix/joy4/av/pktque"
 )
 
 const debug = true

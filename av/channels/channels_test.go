@@ -2,7 +2,7 @@ package channels
 
 import (
 	"fmt"
-	"github.com/nareix/av"
+	"github.com/nareix/joy4/av"
 	"time"
 )
 

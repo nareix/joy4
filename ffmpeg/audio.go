@@ -16,8 +16,8 @@ import (
 	"runtime"
 	"fmt"
 	"time"
-	"github.com/nareix/av"
-	"github.com/nareix/codec/aacparser"
+	"github.com/nareix/joy4/av"
+	"github.com/nareix/joy4/codec/aacparser"
 )
 
 const debug = false

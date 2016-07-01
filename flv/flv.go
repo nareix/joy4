@@ -3,12 +3,12 @@ package flv
 import (
 	"time"
 	"fmt"
-	"github.com/nareix/av"
-	"github.com/nareix/av/avutil"
-	"github.com/nareix/codec/h264parser"
-	"github.com/nareix/codec/aacparser"
+	"github.com/nareix/joy4/av"
+	"github.com/nareix/joy4/av/avutil"
+	"github.com/nareix/joy4/codec/h264parser"
+	"github.com/nareix/joy4/codec/aacparser"
 	"github.com/nareix/pio"
-	"github.com/nareix/flv/flvio"
+	"github.com/nareix/joy4/flv/flvio"
 	"io"
 	"bufio"
 )

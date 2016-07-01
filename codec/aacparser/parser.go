@@ -2,7 +2,7 @@ package aacparser
 
 import (
 	"github.com/nareix/bits"
-	"github.com/nareix/av"
+	"github.com/nareix/joy4/av"
 	"time"
 	"fmt"
 	"bytes"

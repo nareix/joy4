@@ -3,7 +3,7 @@ package flvio
 import (
 	"fmt"
 	"github.com/nareix/pio"
-	"github.com/nareix/av"
+	"github.com/nareix/joy4/av"
 	"io"
 )
 

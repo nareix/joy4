@@ -1,7 +1,7 @@
 package codec
 
 import (
-	"github.com/nareix/av"
+	"github.com/nareix/joy4/av"
 	"time"
 )
 

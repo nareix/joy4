@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"time"
 	"fmt"
-	"github.com/nareix/av"
-	"github.com/nareix/codec/aacparser"
-	"github.com/nareix/codec/h264parser"
-	"github.com/nareix/mp4/atom"
-	"github.com/nareix/mp4/isom"
+	"github.com/nareix/joy4/av"
+	"github.com/nareix/joy4/codec/aacparser"
+	"github.com/nareix/joy4/codec/h264parser"
+	"github.com/nareix/joy4/mp4/atom"
+	"github.com/nareix/joy4/mp4/isom"
 	"io"
 )
 

@@ -3,7 +3,7 @@ package ts
 import (
 	"time"
 	"bytes"
-	"github.com/nareix/av"
+	"github.com/nareix/joy4/av"
 )
 
 type Stream struct {

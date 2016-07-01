@@ -2,7 +2,7 @@
 package h264parser
 
 import (
-	"github.com/nareix/av"
+	"github.com/nareix/joy4/av"
 	"github.com/nareix/bits"
 	"io"
 	"fmt"
