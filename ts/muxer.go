@@ -146,7 +146,7 @@ func (self *Muxer) writePacket(pkt av.Packet) (err error) {
 	case av.AAC:
 		codec := stream.CodecData.(aacparser.CodecData)
 		data := pkt.Data
-		data = append(codec.MakeADTSHeader(1024, len(data)), data...)
+		data = append(aacparser.MakeADTSHeader(codec.Config, 1024, len(data)), data...)
 
 		buf := &bytes.Buffer{}
 		pes := PESHeader{
