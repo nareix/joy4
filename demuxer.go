@@ -65,7 +65,7 @@ func (self *Demuxer) probe() (err error) {
 	}
 
 	if moov == nil {
-		err = fmt.Errorf("'moov' atom not found")
+		err = fmt.Errorf("mp4: 'moov' atom not found")
 		return
 	}
 
@@ -80,7 +80,7 @@ func (self *Demuxer) probe() (err error) {
 			stream.sample = atrack.Media.Info.Sample
 			stream.timeScale = int64(atrack.Media.Header.TimeScale)
 		} else {
-			err = fmt.Errorf("sample table not found")
+			err = fmt.Errorf("mp4: sample table not found")
 			return
 		}
 
@@ -126,7 +126,7 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 		start += n
 	}
 	if !found {
-		err = fmt.Errorf("stream[%d]: cannot locate sample index in chunk", self.idx)
+		err = fmt.Errorf("mp4: stream[%d]: cannot locate sample index in chunk", self.idx)
 		return
 	}
 
@@ -134,7 +134,7 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 		self.sampleOffsetInChunk = int64(self.sampleIndexInChunk * self.sample.SampleSize.SampleSize)
 	} else {
 		if index >= len(self.sample.SampleSize.Entries) {
-			err = fmt.Errorf("stream[%d]: sample index out of range", self.idx)
+			err = fmt.Errorf("mp4: stream[%d]: sample index out of range", self.idx)
 			return
 		}
 		self.sampleOffsetInChunk = int64(0)
@@ -161,7 +161,7 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 		self.sttsEntryIndex++
 	}
 	if !found {
-		err = fmt.Errorf("stream[%d]: cannot locate sample index in stts entry", self.idx)
+		err = fmt.Errorf("mp4: stream[%d]: cannot locate sample index in stts entry", self.idx)
 		return
 	}
 
@@ -180,7 +180,7 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 			self.cttsEntryIndex++
 		}
 		if !found {
-			err = fmt.Errorf("stream[%d]: cannot locate sample index in ctts entry", self.idx)
+			err = fmt.Errorf("mp4: stream[%d]: cannot locate sample index in ctts entry", self.idx)
 			return
 		}
 	}
@@ -196,7 +196,7 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 	}
 
 	if false {
-		fmt.Printf("stream[%d]: setSampleIndex chunkGroupIndex=%d chunkIndex=%d sampleOffsetInChunk=%d\n",
+		fmt.Printf("mp4: stream[%d]: setSampleIndex chunkGroupIndex=%d chunkIndex=%d sampleOffsetInChunk=%d\n",
 			self.idx, self.chunkGroupIndex, self.chunkIndex, self.sampleOffsetInChunk)
 	}
 
