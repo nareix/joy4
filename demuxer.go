@@ -382,6 +382,15 @@ func (self *Stream) readPacket() (pkt av.Packet, err error) {
 		return
 	}
 
+	switch self.Type() {
+	case av.H264:
+		if typ := h264parser.CheckNALUsType(pkt.Data); typ != h264parser.NALU_AVCC {
+			err = fmt.Errorf("mp4: demuxer: h264 nalu format=%d invalid", typ)
+			return
+		}
+		pkt.Data = pkt.Data[4:]
+	}
+
 	if self.sample.SyncSample != nil {
 		if self.sample.SyncSample.Entries[self.syncSampleIndex]-1 == self.sampleIndex {
 			pkt.IsKeyFrame = true
