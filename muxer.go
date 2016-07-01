@@ -146,9 +146,7 @@ func (self *Muxer) writePacket(pkt av.Packet) (err error) {
 	case av.AAC:
 		codec := stream.CodecData.(aacparser.CodecData)
 		data := pkt.Data
-		if !aacparser.IsADTSFrame(data) {
-			data = append(codec.MakeADTSHeader(1024, len(data)), data...)
-		}
+		data = append(codec.MakeADTSHeader(1024, len(data)), data...)
 
 		buf := &bytes.Buffer{}
 		pes := PESHeader{
@@ -174,10 +172,15 @@ func (self *Muxer) writePacket(pkt av.Packet) (err error) {
 		}
 		WritePESHeader(buf, pes, 0)
 
-		nalus, _ := h264parser.SplitNALUs(pkt.Data)
-		if pkt.IsKeyFrame {
-			nalus = append([][]byte{codec.SPS(), codec.PPS()}, nalus...)
+		if typ := h264parser.CheckNALUsType(pkt.Data); typ != h264parser.NALU_RAW {
+			err = fmt.Errorf("ts: h264 nalu format=%d invalid", typ)
+			return
 		}
+		nalus := [][]byte{}
+		if pkt.IsKeyFrame {
+			nalus = append([][]byte{codec.SPS(), codec.PPS()})
+		}
+		nalus = append(nalus, pkt.Data)
 		h264parser.WalkNALUsAnnexb(nalus, func(b []byte) {
 			buf.Write(b)
 		})
