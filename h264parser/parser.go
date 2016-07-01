@@ -16,6 +16,11 @@ const (
 	NALU_AUD = 9
 )
 
+func IsDataNALU(b []byte) bool {
+	typ := b[0] & 0x1f
+	return typ >= 1 && typ <= 5
+}
+
 /*
 From: http://stackoverflow.com/questions/24884827/possible-locations-for-sequence-picture-parameter-sets-for-h-264-stream
 
@@ -215,23 +220,23 @@ func WalkNALUsAVCC(nalus [][]byte, write func([]byte)) {
 	}
 }
 
-func CheckNALUsType(b []byte) int {
-	if len(b) < 4 {
-		return NALU_RAW
+func CheckNALUsType(b []byte) (typ int) {
+	_, typ = SplitNALUs(b)
+	return
+}
+
+func FindDataNALUInAVCCNALUs(b []byte) (data []byte, ok bool) {
+	var typ int
+	var nalus [][]byte
+	if nalus, typ = SplitNALUs(b); typ != NALU_AVCC {
+		return
 	}
-
-	val3 := bits.GetUIntBE(b, 24)
-	val4 := bits.GetUIntBE(b, 32)
-
-	if val4+4 == uint(len(b)) {
-		return NALU_AVCC
+	for _, nalu := range nalus {
+		if IsDataNALU(nalu) {
+			return nalu, true
+		}
 	}
-
-	if val4 == 1 || val3 == 1 {
-		return NALU_ANNEXB
-	}
-
-	return NALU_RAW
+	return
 }
 
 const (
