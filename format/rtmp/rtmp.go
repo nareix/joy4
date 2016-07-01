@@ -840,6 +840,10 @@ func (self *Conn) WritePacket(pkt av.Packet) (err error) {
 	return
 }
 
+func (self *Conn) WriteTrailer() (err error) {
+	return
+}
+
 func (self *Conn) WriteHeader(streams []av.CodecData) (err error) {
 	if err = self.prepare(stageCommandDone, prepareWriting); err != nil {
 		return
