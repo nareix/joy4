@@ -133,6 +133,7 @@ func (self *Handlers) OpenDemuxer(uri string) (demuxer av.DemuxCloser, err error
 		}
 	}
 
+	r.Close()
 	err = fmt.Errorf("avutil: open %s failed", uri)
 	return
 }
