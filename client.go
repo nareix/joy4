@@ -723,7 +723,7 @@ func (self *Stream) makeCodecData() (err error) {
 			}
 
 			if len(self.sps) == 0 || len(self.pps) == 0 {
-				if nalus, ok := h264parser.SplitNALUs(media.Config); ok {
+				if nalus, typ := h264parser.SplitNALUs(media.Config); typ != h264parser.NALU_RAW {
 					for _, nalu := range nalus {
 						if len(nalu) > 0 {
 							self.handleH264Payload(0, nalu)
@@ -772,7 +772,7 @@ func (self *Stream) makeCodecData() (err error) {
 func (self *Stream) handleBuggyAnnexbH264Packet(timestamp uint32, packet []byte) (isBuggy bool, err error) {
 	if len(packet) >= 4 && packet[0] == 0 && packet[1] == 0 && packet[2] == 0 && packet[3] == 1 {
 		isBuggy = true
-		if nalus, ok := h264parser.SplitNALUs(packet); ok {
+		if nalus, typ := h264parser.SplitNALUs(packet); typ != h264parser.NALU_RAW {
 			for _, nalu := range nalus {
 				if len(nalu) > 0 {
 					if err = self.handleH264Payload(timestamp, nalu); err != nil {
