@@ -15,16 +15,31 @@ type handlerDemuxer struct {
 	r io.ReadCloser
 }
 
-func (self handlerDemuxer) Close() error {
+func (self *handlerDemuxer) Close() error {
 	return self.r.Close()
 }
 
 type handlerMuxer struct {
 	av.Muxer
 	w io.WriteCloser
+	trailerwritten bool
 }
 
-func (self handlerMuxer) Close() error {
+func (self *handlerMuxer) WriteTrailer() (err error) {
+	if self.trailerwritten {
+		return
+	}
+	if err = self.Muxer.WriteTrailer(); err != nil {
+		return
+	}
+	self.trailerwritten = true
+	return
+}
+
+func (self *handlerMuxer) Close() (err error) {
+	if err = self.WriteTrailer(); err != nil {
+		return
+	}
 	return self.w.Close()
 }
 
@@ -105,7 +120,7 @@ func (self *Handlers) OpenDemuxer(uri string) (demuxer av.DemuxCloser, err error
 					if r, err = self.openUrl(u, uri); err != nil {
 						return
 					}
-					demuxer = handlerDemuxer{
+					demuxer = &handlerDemuxer{
 						Demuxer: handler.ReaderDemuxer(r),
 						r: r,
 					}
@@ -125,7 +140,7 @@ func (self *Handlers) OpenDemuxer(uri string) (demuxer av.DemuxCloser, err error
 
 	for _, handler := range self.handlers {
 		if handler.Probe != nil && handler.Probe(probebuf[:]) && handler.ReaderDemuxer != nil {
-			demuxer = handlerDemuxer{
+			demuxer = &handlerDemuxer{
 				Demuxer: handler.ReaderDemuxer(io.MultiReader(bytes.NewReader(probebuf[:]), r)),
 				r: r,
 			}
@@ -138,7 +153,7 @@ func (self *Handlers) OpenDemuxer(uri string) (demuxer av.DemuxCloser, err error
 	return
 }
 
-func (self *Handlers) Create(uri string, streams []av.CodecData) (muxer av.MuxCloser, err error) {
+func (self *Handlers) CreateMuxer(uri string) (muxer av.MuxCloser, err error) {
 	var ext string
 	var u *url.URL
 	if u, _ = url.Parse(uri); u != nil && u.Scheme != "" {
@@ -154,19 +169,26 @@ func (self *Handlers) Create(uri string, streams []av.CodecData) (muxer av.MuxCl
 				if w, err = self.createUrl(u, uri); err != nil {
 					return
 				}
-				muxer = handlerMuxer{
+				muxer = &handlerMuxer{
 					Muxer: handler.WriterMuxer(w),
 					w: w,
-				}
-				if err = muxer.WriteHeader(streams); err != nil {
-					return
 				}
 				return
 			}
 		}
 	}
 
-	err = fmt.Errorf("avutil: create %s failed", uri)
+	err = fmt.Errorf("avutil: create muxer %s failed", uri)
+	return
+}
+
+func (self *Handlers) Create(uri string, streams []av.CodecData) (muxer av.MuxCloser, err error) {
+	if muxer, err = self.CreateMuxer(uri); err != nil {
+		return
+	}
+	if err = muxer.WriteHeader(streams); err != nil {
+		return
+	}
 	return
 }
 
