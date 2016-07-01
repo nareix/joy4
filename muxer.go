@@ -78,6 +78,11 @@ func (self *Muxer) newStream(codec av.CodecData) (err error) {
 		},
 	}
 
+	switch codec.Type() {
+	case av.H264:
+		stream.sample.SyncSample = &atom.SyncSample{}
+	}
+
 	stream.timeScale = 90000
 	stream.muxer = self
 	self.streams = append(self.streams, stream)
@@ -103,7 +108,6 @@ func (self *Stream) fillTrackAtom() (err error) {
 			ColorTableId:         -1,
 			Conf:                 &atom.Avc1Conf{Data: codec.AVCDecoderConfRecordBytes()},
 		}
-		self.sample.SyncSample = &atom.SyncSample{}
 		self.trackAtom.Media.Handler = &atom.HandlerRefer{
 			SubType: "vide",
 			Name:    "Video Media Handler",
