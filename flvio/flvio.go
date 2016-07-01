@@ -257,6 +257,7 @@ type Videodata struct {
 	AVCPacketType uint8
 
 	Data            []byte
+	Datav           [][]byte
 	CompositionTime int32
 }
 
@@ -265,7 +266,7 @@ func (self Videodata) Type() uint8 {
 }
 
 func (self Videodata) Len() int {
-	return 5 + len(self.Data)
+	return 5 + len(self.Data) + pio.VecLen(self.Datav)
 }
 
 func (self *Videodata) Unmarshal(r *pio.Reader) (err error) {
@@ -306,6 +307,11 @@ func (self Videodata) Marshal(w *pio.Writer) (err error) {
 	case AVC_SEQHDR, AVC_NALU:
 		if _, err = w.Write(self.Data); err != nil {
 			return
+		}
+		for _, data := range self.Datav {
+			if _, err = w.Write(data); err != nil {
+				return
+			}
 		}
 	}
 	return
