@@ -386,7 +386,7 @@ func (self *Stream) readPacket() (pkt av.Packet, err error) {
 	case av.H264:
 		var ok bool
 		if pkt.Data, ok = h264parser.FindDataNALUInAVCCNALUs(pkt.Data); !ok {
-			err = fmt.Errorf("rtmp: input h264 format invalid")
+			err = fmt.Errorf("mp4: input h264 format invalid")
 			return
 		}
 	}
