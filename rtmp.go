@@ -708,11 +708,11 @@ func (self *Conn) ReadPacket() (pkt av.Packet, err error) {
 		switch tag := _tag.(type) {
 		case *flvio.Videodata:
 			pkt.CompositionTime = tsToTime(uint32(tag.CompositionTime))
-			if typ := h264parser.CheckNALUsType(tag.Data); typ != h264parser.NALU_AVCC {
-				err = fmt.Errorf("rtmp: input h264 nalu format=%d invalid", typ)
+			var ok bool
+			if pkt.Data, ok = h264parser.FindDataNALUInAVCCNALUs(tag.Data); !ok {
+				err = fmt.Errorf("rtmp: input h264 format invalid")
 				return
 			}
-			pkt.Data = tag.Data[4:]
 			pkt.IsKeyFrame = tag.FrameType == flvio.FRAME_KEY
 			pkt.Idx = int8(self.videostreamidx)
 			break poll
