@@ -215,9 +215,15 @@ func WalkNALUsAVCC(nalus [][]byte, write func([]byte)) {
 	}
 }
 
-func SplitNALUs(b []byte) (nalus [][]byte, ok bool) {
+const (
+	NALU_RAW = iota
+	NALU_AVCC
+	NALU_ANNEXB
+)
+
+func SplitNALUs(b []byte) (nalus [][]byte, typ int) {
 	if len(b) < 4 {
-		return [][]byte{b}, false
+		return [][]byte{b}, NALU_RAW
 	}
 
 	val3 := bits.GetUIntBE(b, 24)
@@ -241,7 +247,7 @@ func SplitNALUs(b []byte) (nalus [][]byte, ok bool) {
 			}
 		}
 		if len(_b) == 0 {
-			return nalus, true
+			return nalus, NALU_AVCC
 		}
 	}
 
@@ -285,11 +291,11 @@ func SplitNALUs(b []byte) (nalus [][]byte, ok bool) {
 				}
 			}
 		}
-		ok = true
+		typ = NALU_ANNEXB
 		return
 	}
 
-	return [][]byte{b}, false
+	return [][]byte{b}, NALU_RAW
 }
 
 type SPSInfo struct {
