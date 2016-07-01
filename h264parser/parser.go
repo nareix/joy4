@@ -9,6 +9,13 @@ import (
 	"bytes"
 )
 
+const (
+	NALU_SEI = 6
+	NALU_PPS = 7
+	NALU_SPS = 8
+	NALU_AUD = 9
+)
+
 /*
 From: http://stackoverflow.com/questions/24884827/possible-locations-for-sequence-picture-parameter-sets-for-h-264-stream
 
@@ -677,20 +684,20 @@ type SliceType uint
 
 func (self SliceType) String() string {
 	switch self {
-	case P:
+	case SLICE_P:
 		return "P"
-	case B:
+	case SLICE_B:
 		return "B"
-	case I:
+	case SLICE_I:
 		return "I"
 	}
 	return ""
 }
 
 const (
-	P = iota+1
-	B
-	I
+	SLICE_P = iota+1
+	SLICE_B
+	SLICE_I
 )
 
 func ParseSliceHeaderFromNALU(packet []byte) (sliceType SliceType, err error) {
@@ -726,11 +733,11 @@ func ParseSliceHeaderFromNALU(packet []byte) (sliceType SliceType, err error) {
 
 	switch u {
 	case 0,3,5,8:
-		sliceType = P
+		sliceType = SLICE_P
 	case 1,6:
-		sliceType = B
+		sliceType = SLICE_B
 	case 2,4,7,9:
-		sliceType = I
+		sliceType = SLICE_I
 	default:
 		err = fmt.Errorf("h264parser: slice_type=%d invalid", u)
 		return

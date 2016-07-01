@@ -133,7 +133,7 @@ func MakeADTSHeader(config MPEG4AudioConfig, samples int, payloadLength int) (he
 	return
 }
 
-func ExtractADTSFrames(frames []byte) (config MPEG4AudioConfig, payload [][]byte, samples int, err error) {
+func SplitADTSFrames(frames []byte) (config MPEG4AudioConfig, payload [][]byte, samples int, err error) {
 	for len(frames) > 0 {
 		var n, framelen int
 		var _payload []byte
