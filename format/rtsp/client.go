@@ -13,7 +13,7 @@ import (
 	"github.com/nareix/joy4/codec"
 	"github.com/nareix/joy4/codec/aacparser"
 	"github.com/nareix/joy4/codec/h264parser"
-	"github.com/nareix/joy4/rtsp/sdp"
+	"github.com/nareix/joy4/format/rtsp/sdp"
 	"io"
 	"net"
 	"net/textproto"

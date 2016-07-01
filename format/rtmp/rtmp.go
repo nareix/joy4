@@ -12,7 +12,7 @@ import (
 	"encoding/hex"
 	"io"
 	"github.com/nareix/pio"
-	"github.com/nareix/joy4/flv/flvio"
+	"github.com/nareix/joy4/format/flv/flvio"
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/av/avutil"
 	"github.com/nareix/joy4/codec"

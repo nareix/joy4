@@ -8,7 +8,7 @@ import (
 	"github.com/nareix/joy4/codec/h264parser"
 	"github.com/nareix/joy4/codec/aacparser"
 	"github.com/nareix/pio"
-	"github.com/nareix/joy4/flv/flvio"
+	"github.com/nareix/joy4/format/flv/flvio"
 	"io"
 	"bufio"
 )

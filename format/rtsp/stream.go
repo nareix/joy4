@@ -2,7 +2,7 @@ package rtsp
 
 import (
 	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/rtsp/sdp"
+	"github.com/nareix/joy4/format/rtsp/sdp"
 	"time"
 )
 

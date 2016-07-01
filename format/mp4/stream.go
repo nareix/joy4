@@ -2,7 +2,7 @@ package mp4
 
 import (
 	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/mp4/atom"
+	"github.com/nareix/joy4/format/mp4/atom"
 	"time"
 	"io"
 )

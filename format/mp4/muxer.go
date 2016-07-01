@@ -8,8 +8,8 @@ import (
 	"github.com/nareix/pio"
 	"github.com/nareix/joy4/codec/aacparser"
 	"github.com/nareix/joy4/codec/h264parser"
-	"github.com/nareix/joy4/mp4/atom"
-	"github.com/nareix/joy4/mp4/isom"
+	"github.com/nareix/joy4/format/mp4/atom"
+	"github.com/nareix/joy4/format/mp4/isom"
 	"io"
 )
 
