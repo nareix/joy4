@@ -215,6 +215,25 @@ func WalkNALUsAVCC(nalus [][]byte, write func([]byte)) {
 	}
 }
 
+func CheckNALUsType(b []byte) int {
+	if len(b) < 4 {
+		return NALU_RAW
+	}
+
+	val3 := bits.GetUIntBE(b, 24)
+	val4 := bits.GetUIntBE(b, 32)
+
+	if val4+4 == uint(len(b)) {
+		return NALU_AVCC
+	}
+
+	if val4 == 1 || val3 == 1 {
+		return NALU_ANNEXB
+	}
+
+	return NALU_RAW
+}
+
 const (
 	NALU_RAW = iota
 	NALU_AVCC
