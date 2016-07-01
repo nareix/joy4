@@ -1064,7 +1064,7 @@ func (self *Stream) handleRtpPacket(packet []byte) (err error) {
 			return
 		}
 		self.gotpkt = true
-		self.pkt.Data = payload[4:] // TODO: remove this hack
+		self.pkt.Data = payload[4+7:] // TODO: remove this hack
 		self.timestamp = timestamp
 
 	default:
