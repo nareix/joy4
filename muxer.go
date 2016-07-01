@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 	"github.com/nareix/av"
+	"github.com/nareix/pio"
 	"github.com/nareix/codec/aacparser"
 	"github.com/nareix/codec/h264parser"
 	"github.com/nareix/mp4/atom"
@@ -190,12 +191,17 @@ func (self *Stream) writePacket(pkt av.Packet) (err error) {
 	}
 
 	if self.Type() == av.H264 {
-		nalus, _ := h264parser.SplitNALUs(pkt.Data)
-		h264parser.WalkNALUsAVCC(nalus, func(b []byte) {
-			sampleSize += len(b)
-			_, err = self.muxer.mdatWriter.Write(b)
-		})
-		if err != nil {
+		if typ := h264parser.CheckNALUsType(pkt.Data); typ != h264parser.NALU_RAW {
+			err = fmt.Errorf("mp4: nalu format=%d is not raw", typ)
+			return
+		}
+		var b [4]byte
+		pio.PutU32BE(b[:], uint32(len(pkt.Data)))
+		sampleSize += len(pkt.Data)+4
+		if _, err = self.muxer.mdatWriter.Write(b[:]); err != nil {
+			return
+		}
+		if _, err = self.muxer.mdatWriter.Write(pkt.Data); err != nil {
 			return
 		}
 	} else {
