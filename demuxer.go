@@ -384,11 +384,11 @@ func (self *Stream) readPacket() (pkt av.Packet, err error) {
 
 	switch self.Type() {
 	case av.H264:
-		if typ := h264parser.CheckNALUsType(pkt.Data); typ != h264parser.NALU_AVCC {
-			err = fmt.Errorf("mp4: demuxer: h264 nalu format=%d invalid", typ)
+		var ok bool
+		if pkt.Data, ok = h264parser.FindDataNALUInAVCCNALUs(pkt.Data); !ok {
+			err = fmt.Errorf("rtmp: input h264 format invalid")
 			return
 		}
-		pkt.Data = pkt.Data[4:]
 	}
 
 	if self.sample.SyncSample != nil {
