@@ -1,0 +1,52 @@
+
+The first h264 packet
+
+00000000  00 00 00 01 09 f0 00 00  00 01 06 00 07 86 96 7f  |................|
+                    ^                     ^
+00000010  80 00 00 40 80 00 00 01  06 05 11 03 87 f4 4e cd  |...@..........N.|
+                                    ^
+00000020  0a 4b dc a1 94 3a c3 d4  9b 17 1f 00 80 00 00 00  |.K...:..........|
+00000030  01 27 4d 40 0a a9 19 bf  2c b8 0b 50 10 10 13 0a  |.'M@....,..P....|
+              ^
+00000040  d7 bd f0 10 00 00 00 01  28 fe 09 88 00 00 01 25  |........(......%|
+                                    ^                    ^
+00000050  b8 20 20 bf ed 7e de 3b  56 7f 03 c5 d1 06 9a c3  |.  ..~.;V.......|
+00000060  74 e5 9d 18 e6 3f 9d 63  19 cc 46 fd 36 13 c5 b8  |t....?.c..F.6...|
+00000070  7f 3e d9 39 1b 21 74 61  6d 9d b7 5b 71 e6 a2 de  |.>.9.!tam..[q...|
+00000080  68 0b bf 7e b8 d4 9d 2f  49 19 3b 11 6e 40 a3 0a  |h..~.../I.;.n@..|
+00000090  3f 02 c5 a3 47 1d ed 2a  3a a1 33 0e 15 2f 36 d8  |?...G..*:.3../6.|
+000000a0  c7 2a eb c6 bf 0d 95 e4  42 3e 7b 5f 44 3f b9 a5  |.*......B>{_D?..|
+000000b0  d7 a2 c6 f4 41 e8 82 b5  cc cd c9 a4 ec 29 6f 58  |....A........)oX|
+000000c0  6c 78 38 7c b5 5b 27 97  9d 56 5f e0 00 00 01 25  |lx8|.['..V_....%|
+                                                         ^
+000000d0  2b 82 02 0b af 43 64 9c  f1 eb 03 7e 39 a0 b6 f8  |+....Cd....~9...|
+000000e0  eb c4 88 d2 ef 79 1f 7c  d6 4e 1a d3 5d 27 39 ca  |.....y.|.N..]'9.|
+000000f0  c6 0b a9 63 78 e2 19 41  71 d4 47 26 bc 58 e4 45  |...cx..Aq.G&.X.E|
+00000100  db 77 7b 60 7f d9 e4 11  03 3d 05 0d 72 5e 0d a0  |.w{`.....=..r^..|
+00000110  56 4f 1a a9 9e 4f 80                              |VO...O.|
+
+[h264 @ 0x7fdf01802200] NAL 9(AUD) at 4/279 length 1
+[h264 @ 0x7fdf01802200] NAL 6(SEI) at 10/279 length 10
+[h264 @ 0x7fdf01802200] NAL 6(SEI) at 24/279 length 20
+[h264 @ 0x7fdf01802200] NAL 7(SPS) at 49/279 length 18
+[h264 @ 0x7fdf01802200] NAL 8(PPS) at 72/279 length 3
+[h264 @ 0x7fdf01802200] NAL 5(IDR) at 79/279 length 124
+[h264 @ 0x7fdf01802200] NAL 5(IDR) at 207/279 length 71
+
+AUD is a must for QuickTime player.
+
+NAL_SLICE           = 1,
+NAL_DPA             = 2,
+NAL_DPB             = 3,
+NAL_DPC             = 4,
+NAL_IDR_SLICE       = 5,
+NAL_SEI             = 6,
+NAL_SPS             = 7,
+NAL_PPS             = 8,
+NAL_AUD             = 9,
+NAL_END_SEQUENCE    = 10,
+NAL_END_STREAM      = 11,
+NAL_FILLER_DATA     = 12,
+NAL_SPS_EXT         = 13,
+NAL_AUXILIARY_SLICE = 19,
+
