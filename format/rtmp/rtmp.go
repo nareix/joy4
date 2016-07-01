@@ -578,20 +578,18 @@ func (self *Conn) probe() (err error) {
 	return
 }
 
-func (self *Conn) connectPlay() (err error) {
-	connectpath, playpath := splitPath(self.Path)
-
+func (self *Conn) connect(path string) (err error) {
 	// > connect("app")
 	if self.Debug {
-		fmt.Printf("rtmp: > connect('%s') host=%s\n", connectpath, self.Host)
+		fmt.Printf("rtmp: > connect('%s') host=%s\n", path, self.Host)
 	}
 	w := self.writeCommandMsgStart()
 	flvio.WriteAMF0Val(w, "connect")
 	flvio.WriteAMF0Val(w, 1)
 	flvio.WriteAMF0Val(w, flvio.AMFMap{
-		"app": connectpath,
+		"app": path,
 		"flashVer": "MAC 22,0,0,192",
-		"tcUrl": fmt.Sprintf("rtmp://%s/%s", self.Host, connectpath),
+		"tcUrl": fmt.Sprintf("rtmp://%s/%s", self.Host, path),
 		"fpad": false,
 		"capabilities": 15,
 		"audioCodecs": 4071,
@@ -629,11 +627,21 @@ func (self *Conn) connectPlay() (err error) {
 		}
 	}
 
+	return
+}
+
+func (self *Conn) connectPlay() (err error) {
+	connectpath, playpath := splitPath(self.Path)
+
+	if err = self.connect(connectpath); err != nil {
+		return
+	}
+
 	// > createStream()
 	if self.Debug {
 		fmt.Printf("rtmp: > createStream()\n")
 	}
-	w = self.writeCommandMsgStart()
+	w := self.writeCommandMsgStart()
 	flvio.WriteAMF0Val(w, "createStream")
 	flvio.WriteAMF0Val(w, 2)
 	flvio.WriteAMF0Val(w, nil)
