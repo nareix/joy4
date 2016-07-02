@@ -25,6 +25,17 @@ const (
 	TRACE = int(C.AV_LOG_TRACE)
 )
 
+func HasEncoder(name string) bool {
+	return C.avcodec_find_encoder_by_name(C.CString(name)) != nil
+}
+
+func HasDecoder(name string) bool {
+	return C.avcodec_find_decoder_by_name(C.CString(name)) != nil
+}
+
+//func EncodersList() []string
+//func DecodersList() []string
+
 func SetLogLevel(level int) {
 	C.av_log_set_level(C.int(level))
 }
