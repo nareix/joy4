@@ -630,6 +630,65 @@ func (self *Conn) connect(path string) (err error) {
 	return
 }
 
+func (self *Conn) connectPublish() (err error) {
+	connectpath, publishpath := splitPath(self.Path)
+
+	if err = self.connect(connectpath); err != nil {
+		return
+	}
+
+	transid := 2
+
+	// > createStream()
+	if self.Debug {
+		fmt.Printf("rtmp: > createStream()\n")
+	}
+	w := self.writeCommandMsgStart()
+	flvio.WriteAMF0Val(w, "createStream")
+	flvio.WriteAMF0Val(w, transid)
+	flvio.WriteAMF0Val(w, nil)
+	if err = self.writeCommandMsgEnd(3, 0); err != nil {
+		return
+	}
+	transid++
+
+	for {
+		if err = self.pollMsg(); err != nil {
+			return
+		}
+		if self.gotcommand {
+			// < _result(avmsgsid) of createStream
+			if self.commandname == "_result" {
+				var ok bool
+				if ok, self.avmsgsid = self.checkCreateStreamResult(); !ok {
+					err = fmt.Errorf("rtmp: createStream command failed")
+					return
+				}
+				break
+			}
+		}
+	}
+
+	// > publish('app')
+	if self.Debug {
+		fmt.Printf("rtmp: > publish('%s')\n", publishpath)
+	}
+	w = self.writeCommandMsgStart()
+	flvio.WriteAMF0Val(w, "publish")
+	flvio.WriteAMF0Val(w, transid)
+	flvio.WriteAMF0Val(w, nil)
+	flvio.WriteAMF0Val(w, publishpath)
+	if err = self.writeCommandMsgEnd(8, self.avmsgsid); err != nil {
+		return
+	}
+	transid++
+
+	self.writing = true
+	self.publishing = true
+	self.stage++
+	return
+}
+
 func (self *Conn) connectPlay() (err error) {
 	connectpath, playpath := splitPath(self.Path)
 
@@ -761,8 +820,9 @@ func (self *Conn) prepare(stage int, flags int) (err error) {
 						return
 					}
 				} else {
-					err = fmt.Errorf("rtmp: connect publish unsupported")
-					return
+					if err = self.connectPublish(); err != nil {
+						return
+					}
 				}
 			}
 
