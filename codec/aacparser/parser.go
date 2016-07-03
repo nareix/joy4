@@ -99,7 +99,11 @@ func ParseADTSHeader(frame []byte) (config MPEG4AudioConfig, hdrlen int, framele
 	config.ObjectType = uint(frame[2]>>6) + 1
 	config.SampleRateIndex = uint(frame[2] >> 2 & 0xf)
 	config.ChannelConfig = uint(frame[2]<<2&0x4 | frame[3]>>6&0x3)
-	config = config.Complete()
+	if config.ChannelConfig == uint(0) {
+		err = fmt.Errorf("adts channel count invalid")
+		return
+	}
+	(&config).Complete()
 	framelen = int(frame[3]&0x3)<<11 | int(frame[4])<<3 | int(frame[5]>>5)
 	samples = (int(frame[6]&0x3) + 1) * 1024
 	hdrlen = 7
@@ -199,12 +203,12 @@ func (self MPEG4AudioConfig) IsValid() bool {
 	return self.ObjectType > 0
 }
 
-func (self *MPEG4AudioConfig) Complete() (config MPEG4AudioConfig) {
-	if int(config.SampleRateIndex) < len(sampleRateTable) {
-		config.SampleRate = sampleRateTable[config.SampleRateIndex]
+func (self *MPEG4AudioConfig) Complete() {
+	if int(self.SampleRateIndex) < len(sampleRateTable) {
+		self.SampleRate = sampleRateTable[self.SampleRateIndex]
 	}
-	if int(config.ChannelConfig) < len(chanConfigTable) {
-		config.ChannelLayout = chanConfigTable[config.ChannelConfig]
+	if int(self.ChannelConfig) < len(chanConfigTable) {
+		self.ChannelLayout = chanConfigTable[self.ChannelConfig]
 	}
 	return
 }
@@ -222,7 +226,7 @@ func ParseMPEG4AudioConfigBytes(data []byte) (config MPEG4AudioConfig, err error
 	if config.ChannelConfig, err = br.ReadBits(4); err != nil {
 		return
 	}
-	config = config.Complete()
+	(&config).Complete()
 	return
 }
 
