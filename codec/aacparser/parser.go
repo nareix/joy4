@@ -91,36 +91,40 @@ var chanConfigTable = []av.ChannelLayout{
 	av.CH_FRONT_CENTER|av.CH_FRONT_LEFT|av.CH_FRONT_RIGHT|av.CH_SIDE_LEFT|av.CH_SIDE_RIGHT|av.CH_BACK_LEFT|av.CH_BACK_RIGHT|av.CH_LOW_FREQ,
 }
 
-func IsADTSFrame(frames []byte) bool {
-	return len(frames) > 7 && frames[0] == 0xff && frames[1]&0xf0 == 0xf0
-}
-
-func ReadADTSFrame(frame []byte) (config MPEG4AudioConfig, payload []byte, samples int, framelen int, err error) {
-	if !IsADTSFrame(frame) {
-		err = fmt.Errorf("not adts frame")
+func ParseADTSHeader(frame []byte) (config MPEG4AudioConfig, hdrlen int, framelen int, samples int, err error) {
+	if frame[0] != 0xff || frame[1]&0xf6 != 0xf0 {
+		err = fmt.Errorf("not adts header")
 		return
 	}
 	config.ObjectType = uint(frame[2]>>6) + 1
 	config.SampleRateIndex = uint(frame[2] >> 2 & 0xf)
 	config.ChannelConfig = uint(frame[2]<<2&0x4 | frame[3]>>6&0x3)
+	config = config.Complete()
 	framelen = int(frame[3]&0x3)<<11 | int(frame[4])<<3 | int(frame[5]>>5)
 	samples = (int(frame[6]&0x3) + 1) * 1024
-	hdrlen := 7
+	hdrlen = 7
 	if frame[1]&0x1 == 0 {
 		hdrlen = 9
 	}
-	if framelen < hdrlen || len(frame) < framelen {
-		err = fmt.Errorf("invalid adts header length")
+	if framelen < hdrlen {
+		err = fmt.Errorf("adts framelen < hdrlen")
 		return
 	}
-	payload = frame[hdrlen:framelen]
 	return
 }
 
-func MakeADTSHeader(config MPEG4AudioConfig, samples int, payloadLength int) (header []byte) {
+const ADTSHeaderLength = 7
+
+func FillADTSHeader(header []byte, config MPEG4AudioConfig, samples int, payloadLength int) {
 	payloadLength += 7
 	//AAAAAAAA AAAABCCD EEFFFFGH HHIJKLMM MMMMMMMM MMMOOOOO OOOOOOPP (QQQQQQQQ QQQQQQQQ)
-	header = []byte{0xff, 0xf1, 0x50, 0x80, 0x043, 0xff, 0xcd}
+	header[0] = 0xff
+	header[1] = 0xf1
+	header[2] = 0x50
+	header[3] = 0x80
+	header[4] = 0x43
+	header[5] = 0xff
+	header[6] = 0xcd
 	//config.ObjectType = uint(frames[2]>>6)+1
 	//config.SampleRateIndex = uint(frames[2]>>2&0xf)
 	//config.ChannelConfig = uint(frames[2]<<2&0x4|frames[3]>>6&0x3)
@@ -130,20 +134,6 @@ func MakeADTSHeader(config MPEG4AudioConfig, samples int, payloadLength int) (he
 	header[4] = byte(payloadLength >> 3)
 	header[5] = header[5]&0x1f | (byte(payloadLength)&0x7)<<5
 	header[6] = header[6]&0xfc | byte(samples/1024-1)
-	return
-}
-
-func SplitADTSFrames(frames []byte) (config MPEG4AudioConfig, payload [][]byte, samples int, err error) {
-	for len(frames) > 0 {
-		var n, framelen int
-		var _payload []byte
-		if config, _payload, n, framelen, err = ReadADTSFrame(frames); err != nil {
-			return
-		}
-		payload = append(payload, _payload)
-		frames = frames[framelen:]
-		samples += n
-	}
 	return
 }
 
@@ -209,8 +199,7 @@ func (self MPEG4AudioConfig) IsValid() bool {
 	return self.ObjectType > 0
 }
 
-func (self MPEG4AudioConfig) Complete() (config MPEG4AudioConfig) {
-	config = self
+func (self *MPEG4AudioConfig) Complete() (config MPEG4AudioConfig) {
 	if int(config.SampleRateIndex) < len(sampleRateTable) {
 		config.SampleRate = sampleRateTable[config.SampleRateIndex]
 	}
@@ -220,20 +209,10 @@ func (self MPEG4AudioConfig) Complete() (config MPEG4AudioConfig) {
 	return
 }
 
-func ParseMPEG4AudioConfig(data []byte) (config MPEG4AudioConfig, err error) {
-	r := bytes.NewReader(data)
-	if config, err = ReadMPEG4AudioConfig(r); err != nil {
-		err = fmt.Errorf("CodecData invalid: parse MPEG4AudioConfig failed(%s)", err)
-		return
-	}
-	config = config.Complete()
-	return
-}
-
-func ReadMPEG4AudioConfig(r io.Reader) (config MPEG4AudioConfig, err error) {
+func ParseMPEG4AudioConfigBytes(data []byte) (config MPEG4AudioConfig, err error) {
 	// copied from libavcodec/mpeg4audio.c avpriv_mpeg4audio_get_config()
+	r := bytes.NewReader(data)
 	br := &bits.Reader{R: r}
-
 	if config.ObjectType, err = readObjectType(br); err != nil {
 		return
 	}
@@ -243,12 +222,12 @@ func ReadMPEG4AudioConfig(r io.Reader) (config MPEG4AudioConfig, err error) {
 	if config.ChannelConfig, err = br.ReadBits(4); err != nil {
 		return
 	}
+	config = config.Complete()
 	return
 }
 
 func WriteMPEG4AudioConfig(w io.Writer, config MPEG4AudioConfig) (err error) {
 	bw := &bits.Writer{W: w}
-
 	if err = writeObjectType(bw, config.ObjectType); err != nil {
 		return
 	}
@@ -311,9 +290,15 @@ func (self CodecData) PacketDuration(data []byte) (dur time.Duration, err error)
 	return
 }
 
+func NewCodecDataFromMPEG4AudioConfig(config MPEG4AudioConfig) (self CodecData, err error) {
+	b := &bytes.Buffer{}
+	WriteMPEG4AudioConfig(b, config)
+	return NewCodecDataFromMPEG4AudioConfigBytes(b.Bytes())
+}
+
 func NewCodecDataFromMPEG4AudioConfigBytes(config []byte) (self CodecData, err error) {
 	self.ConfigBytes = config
-	if self.Config, err = ParseMPEG4AudioConfig(config); err != nil {
+	if self.Config, err = ParseMPEG4AudioConfigBytes(config); err != nil {
 		err = fmt.Errorf("parse MPEG4AudioConfig failed(%s)", err)
 		return
 	}

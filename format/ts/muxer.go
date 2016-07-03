@@ -145,16 +145,17 @@ func (self *Muxer) writePacket(pkt av.Packet) (err error) {
 	switch stream.Type() {
 	case av.AAC:
 		codec := stream.CodecData.(aacparser.CodecData)
-		data := pkt.Data
-		data = append(aacparser.MakeADTSHeader(codec.Config, 1024, len(data)), data...)
+		adtshdr := make([]byte, aacparser.ADTSHeaderLength)
+		aacparser.FillADTSHeader(adtshdr, codec.Config, 1024, len(pkt.Data))
 
 		buf := &bytes.Buffer{}
 		pes := PESHeader{
 			StreamId: StreamIdAAC,
 			PTS:      timeToPesTs(pkt.Time),
 		}
-		WritePESHeader(buf, pes, len(data))
-		buf.Write(data)
+		WritePESHeader(buf, pes, len(pkt.Data)+len(adtshdr))
+		buf.Write(adtshdr)
+		buf.Write(pkt.Data)
 
 		stream.tsw.RandomAccessIndicator = true
 		stream.tsw.PCR = timeToPCR(pkt.Time)
