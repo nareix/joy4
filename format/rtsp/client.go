@@ -377,7 +377,6 @@ func (self *Client) findRTSP() (block []byte, data []byte, err error) {
 	for {
 		var b byte
 		if b, err = self.brconn.ReadByte(); err != nil {
-			err = fmt.Errorf("rtsp: find rtsp header failed: %v", err)
 			return
 		}
 		switch b {
@@ -420,7 +419,6 @@ func (self *Client) findRTSP() (block []byte, data []byte, err error) {
 				left := blocklen+4-len(peek)
 				block = append(peek, make([]byte, left)...)
 				if _, err = io.ReadFull(self.brconn, block[len(peek):]); err != nil {
-					err = fmt.Errorf("rtsp: read block failed: %v", err)
 					return
 				}
 				return
@@ -447,7 +445,6 @@ func (self *Client) readLFLF() (block []byte, data []byte, err error) {
 	for {
 		var b byte
 		if b, err = self.brconn.ReadByte(); err != nil {
-			err = fmt.Errorf("rtsp: read LFLF failed: %v", err)
 			return
 		}
 		switch b {
@@ -476,7 +473,6 @@ func (self *Client) readLFLF() (block []byte, data []byte, err error) {
 			if blocklen, _, ok := self.parseBlockHeader(peek[start:]); ok {
 				block = append(peek[start:], make([]byte, blocklen+4-hdrlen)...)
 				if _, err = io.ReadFull(self.brconn, block[hdrlen:]); err != nil {
-					err = fmt.Errorf("rtsp: read block failed: %v", err)
 					return
 				}
 				return
@@ -498,7 +494,6 @@ func (self *Client) readResp(b []byte) (res Response, err error) {
 	if res.ContentLength > 0 {
 		res.Body = make([]byte, res.ContentLength)
 		if _, err = io.ReadFull(self.brconn, res.Body); err != nil {
-			err = fmt.Errorf("rtsp: read body failed: %v", err)
 			return
 		}
 	}
