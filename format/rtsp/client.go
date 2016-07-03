@@ -1059,20 +1059,13 @@ func (self *Stream) handleRtpPacket(packet []byte) (err error) {
 		}
 
 	case av.AAC:
-		if len(payload) < 4+7 {
+		if len(payload) < 4 {
 			err = fmt.Errorf("rtp: aac packet too short")
 			return
 		}
 		payload = payload[4:] // TODO: remove this hack
-
-		var hdrlen, framelen int
-		if _, hdrlen, framelen, _, err = aacparser.ParseADTSHeader(payload); err != nil {
-			err = fmt.Errorf("rtsp: aac invalid: %s", err)
-			return
-		}
-
 		self.gotpkt = true
-		self.pkt.Data = payload[hdrlen:framelen]
+		self.pkt.Data = payload
 		self.timestamp = timestamp
 
 	default:
