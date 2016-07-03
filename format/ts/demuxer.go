@@ -2,9 +2,9 @@ package ts
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"time"
+	"github.com/nareix/pio"
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/codec/aacparser"
 	"github.com/nareix/joy4/codec/h264parser"
@@ -203,18 +203,17 @@ func (self *Stream) payloadEnd() (err error) {
 		for _, nalu := range nalus {
 			if len(nalu) > 0 {
 				naltype := nalu[0] & 0x1f
-				switch naltype {
-				case 7:
+				switch {
+				case naltype == 7:
 					sps = nalu
-				case 8:
+				case naltype == 8:
 					pps = nalu
-				case 6:
-				case 9:
-				default:
-					if false {
-						fmt.Println("h264", len(nalus), "\n", hex.Dump(nalu))
-					}
-					self.addPacket(nalu, time.Duration(0))
+				case h264parser.IsDataNALU(nalu):
+					// raw nalu to avcc
+					b := make([]byte, 4+len(nalu))
+					pio.PutU32BE(b[0:4], uint32(len(nalu)))
+					copy(b[4:], nalu)
+					self.addPacket(b, time.Duration(0))
 				}
 			}
 		}

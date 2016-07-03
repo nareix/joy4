@@ -382,15 +382,6 @@ func (self *Stream) readPacket() (pkt av.Packet, err error) {
 		return
 	}
 
-	switch self.Type() {
-	case av.H264:
-		var ok bool
-		if pkt.Data, ok = h264parser.FindDataNALUInAVCCNALUs(pkt.Data); !ok {
-			err = fmt.Errorf("mp4: input h264 format invalid")
-			return
-		}
-	}
-
 	if self.sample.SyncSample != nil {
 		if self.sample.SyncSample.Entries[self.syncSampleIndex]-1 == self.sampleIndex {
 			pkt.IsKeyFrame = true

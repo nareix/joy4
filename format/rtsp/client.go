@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"github.com/nareix/pio"
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/av/avutil"
 	"github.com/nareix/joy4/codec"
@@ -821,7 +822,11 @@ func (self *Stream) handleH264Payload(timestamp uint32, packet []byte) (err erro
 				self.pkt.IsKeyFrame = true
 			}
 			self.gotpkt = true
-			self.pkt.Data = packet
+			// raw nalu to avcc
+			b := make([]byte, 4+len(packet))
+			pio.PutU32BE(b[0:4], uint32(len(packet)))
+			copy(b[4:], packet)
+			self.pkt.Data = b
 			self.timestamp = timestamp
 		} else {
 			err = fmt.Errorf("rtsp: unsupported H264 naluType=%d", naluType)

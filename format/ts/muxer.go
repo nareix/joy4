@@ -172,15 +172,11 @@ func (self *Muxer) writePacket(pkt av.Packet) (err error) {
 		}
 		WritePESHeader(buf, pes, 0)
 
-		if typ := h264parser.CheckNALUsType(pkt.Data); typ != h264parser.NALU_RAW {
-			err = fmt.Errorf("ts: h264 nalu format=%d invalid", typ)
-			return
-		}
 		nalus := [][]byte{}
 		if pkt.IsKeyFrame {
 			nalus = append([][]byte{codec.SPS(), codec.PPS()})
 		}
-		nalus = append(nalus, pkt.Data)
+		nalus = append(nalus, pkt.Data[4:])
 		h264parser.WalkNALUsAnnexb(nalus, func(b []byte) {
 			buf.Write(b)
 		})

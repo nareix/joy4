@@ -775,11 +775,7 @@ func (self *Conn) ReadPacket() (pkt av.Packet, err error) {
 		switch tag := _tag.(type) {
 		case *flvio.Videodata:
 			pkt.CompositionTime = tsToTime(uint32(tag.CompositionTime))
-			var ok bool
-			if pkt.Data, ok = h264parser.FindDataNALUInAVCCNALUs(tag.Data); !ok {
-				err = fmt.Errorf("rtmp: input h264 format invalid")
-				return
-			}
+			pkt.Data = tag.Data
 			pkt.IsKeyFrame = tag.FrameType == flvio.FRAME_KEY
 			pkt.Idx = int8(self.videostreamidx)
 			break poll
@@ -881,14 +877,7 @@ func (self *Conn) WritePacket(pkt av.Packet) (err error) {
 		}
 
 	case av.H264:
-		if typ := h264parser.CheckNALUsType(pkt.Data); typ != h264parser.NALU_RAW {
-			err = fmt.Errorf("rtmp: h264 nalu format=%d invalid", typ)
-			return
-		}
-		var b [4]byte
-		pio.PutU32BE(b[:], uint32(len(pkt.Data)))
-		videodata := self.makeH264Videodata(flvio.AVC_NALU, pkt.IsKeyFrame, []byte{})
-		videodata.Datav = [][]byte{b[:], pkt.Data}
+		videodata := self.makeH264Videodata(flvio.AVC_NALU, pkt.IsKeyFrame, pkt.Data)
 		videodata.CompositionTime = int32(timeToTs(pkt.CompositionTime))
 		w := self.writeVideoDataStart()
 		videodata.Marshal(w)

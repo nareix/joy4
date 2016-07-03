@@ -77,16 +77,10 @@ func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
 
 	switch stream.Type() {
 	case av.H264:
-		if typ := h264parser.CheckNALUsType(pkt.Data); typ != h264parser.NALU_RAW {
-			err = fmt.Errorf("flv: h264 nalu format=%d invalid", typ)
-			return
-		}
-		var b [4]byte
-		pio.PutU32BE(b[:], uint32(len(pkt.Data)))
 		tag := &flvio.Videodata{
 			AVCPacketType: flvio.AVC_NALU,
 			CodecID: flvio.VIDEO_H264,
-			Datav: [][]byte{b[:], pkt.Data},
+			Data: pkt.Data,
 			CompositionTime: timeToTs(pkt.CompositionTime),
 		}
 		if pkt.IsKeyFrame {
@@ -251,11 +245,7 @@ func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
 				pkt.Idx = int8(self.videostreamidx)
 				pkt.CompositionTime = tsToTime(tag.CompositionTime)
 				pkt.IsKeyFrame = tag.FrameType == flvio.FRAME_KEY
-				var ok bool
-				if pkt.Data, ok = h264parser.FindDataNALUInAVCCNALUs(tag.Data); !ok {
-					err = fmt.Errorf("flv: input h264 format invalid")
-					return
-				}
+				pkt.Data = tag.Data
 				break loop
 			}
 

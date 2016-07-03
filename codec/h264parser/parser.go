@@ -225,20 +225,6 @@ func CheckNALUsType(b []byte) (typ int) {
 	return
 }
 
-func FindDataNALUInAVCCNALUs(b []byte) (data []byte, ok bool) {
-	var typ int
-	var nalus [][]byte
-	if nalus, typ = SplitNALUs(b); typ != NALU_AVCC {
-		return
-	}
-	for _, nalu := range nalus {
-		if IsDataNALU(nalu) {
-			return nalu, true
-		}
-	}
-	return
-}
-
 const (
 	NALU_RAW = iota
 	NALU_AVCC
