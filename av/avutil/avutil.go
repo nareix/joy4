@@ -85,16 +85,6 @@ func (self *Handlers) createUrl(u *url.URL, uri string) (w io.WriteCloser, err e
 }
 
 func (self *Handlers) Open(uri string) (demuxer av.DemuxCloser, err error) {
-	if demuxer, err = self.OpenDemuxer(uri); err != nil {
-		return
-	}
-	if _, err = demuxer.Streams(); err != nil {
-		return
-	}
-	return
-}
-
-func (self *Handlers) OpenDemuxer(uri string) (demuxer av.DemuxCloser, err error) {
 	for _, handler := range self.handlers {
 		if handler.UrlDemuxer != nil {
 			var ok bool
@@ -153,7 +143,7 @@ func (self *Handlers) OpenDemuxer(uri string) (demuxer av.DemuxCloser, err error
 	return
 }
 
-func (self *Handlers) CreateMuxer(uri string) (muxer av.MuxCloser, err error) {
+func (self *Handlers) Create(uri string) (muxer av.MuxCloser, err error) {
 	var ext string
 	var u *url.URL
 	if u, _ = url.Parse(uri); u != nil && u.Scheme != "" {
@@ -182,16 +172,6 @@ func (self *Handlers) CreateMuxer(uri string) (muxer av.MuxCloser, err error) {
 	return
 }
 
-func (self *Handlers) Create(uri string, streams []av.CodecData) (muxer av.MuxCloser, err error) {
-	if muxer, err = self.CreateMuxer(uri); err != nil {
-		return
-	}
-	if err = muxer.WriteHeader(streams); err != nil {
-		return
-	}
-	return
-}
-
 var DefaultHandlers = &Handlers{}
 
 func AddHandler(fn func(*RegisterHandler)) {
@@ -202,7 +182,7 @@ func Open(url string) (demuxer av.DemuxCloser, err error) {
 	return DefaultHandlers.Open(url)
 }
 
-func Create(url string, streams []av.CodecData) (muxer av.MuxCloser, err error) {
-	return DefaultHandlers.Create(url, streams)
+func Create(url string) (muxer av.MuxCloser, err error) {
+	return DefaultHandlers.Create(url)
 }
 
