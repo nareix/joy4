@@ -2,7 +2,7 @@ package ts
 
 import (
 	"bytes"
-	"fmt"
+	_"fmt"
 	"time"
 	"github.com/nareix/pio"
 	"github.com/nareix/joy4/av"
@@ -171,26 +171,21 @@ func (self *Stream) payloadEnd() (err error) {
 	switch self.streamType {
 	case ElementaryStreamTypeAdtsAAC:
 		var config aacparser.MPEG4AudioConfig
-		if config, _, _, _, err = aacparser.ParseADTSHeader(payload); err != nil {
-			err = fmt.Errorf("ts: aac invalid: %s", err)
-			return
-		}
-
-		if self.CodecData == nil {
-			if self.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfig(config); err != nil {
-				return
-			}
-		}
 
 		delta := time.Duration(0)
 		for len(payload) > 0 {
 			var hdrlen, framelen, samples int
-			if _, hdrlen, framelen, samples, err = aacparser.ParseADTSHeader(payload); err != nil {
+			if config, hdrlen, framelen, samples, err = aacparser.ParseADTSHeader(payload); err != nil {
 				return
+			}
+			if self.CodecData == nil {
+				if self.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfig(config); err != nil {
+					return
+				}
 			}
 			self.addPacket(payload[hdrlen:framelen], delta)
 			delta += time.Duration(samples) * time.Second / time.Duration(config.SampleRate)
-			payload = payload[:framelen]
+			payload = payload[framelen:]
 		}
 
 	case ElementaryStreamTypeH264:
