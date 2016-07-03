@@ -186,3 +186,36 @@ func Create(url string) (muxer av.MuxCloser, err error) {
 	return DefaultHandlers.Create(url)
 }
 
+func CopyPackets(dst av.PacketWriter, src av.PacketReader) (err error) {
+	for {
+		var pkt av.Packet
+		if pkt, err = src.ReadPacket(); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return
+		}
+		if err = dst.WritePacket(pkt); err != nil {
+			return
+		}
+	}
+	return
+}
+
+func CopyFile(dst av.Muxer, src av.Demuxer) (err error) {
+	var streams []av.CodecData
+	if streams, err = src.Streams(); err != nil {
+		return
+	}
+	if err = dst.WriteHeader(streams); err != nil {
+		return
+	}
+	if err = CopyPackets(dst, src); err != nil {
+		return
+	}
+	if err = dst.WriteTrailer(); err != nil {
+		return
+	}
+	return
+}
+
