@@ -177,7 +177,6 @@ func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
 func (self *Stream) writePacket(pkt av.Packet) (err error) {
 	if self.lasttime == 0 {
 		self.lasttime = pkt.Time
-		return
 	}
 	rawdur := pkt.Time - self.lasttime
 	if rawdur < 0 {
