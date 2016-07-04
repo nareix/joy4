@@ -827,8 +827,7 @@ func (self *Stream) handleH264Payload(timestamp uint32, packet []byte) (err erro
 		30-31    reserved                                     -
 	*/
 	switch {
-	default:
-		if naluType >= 1 && naluType <= 5 {
+	case naluType >= 1 && naluType <= 5:
 			if naluType == 5 {
 				self.pkt.IsKeyFrame = true
 			}
@@ -839,10 +838,6 @@ func (self *Stream) handleH264Payload(timestamp uint32, packet []byte) (err erro
 			copy(b[4:], packet)
 			self.pkt.Data = b
 			self.timestamp = timestamp
-		} else {
-			err = fmt.Errorf("rtsp: unsupported H264 naluType=%d", naluType)
-			return
-		}
 
 	case naluType == 7: // sps
 		if self.client != nil && self.client.DebugRtp {
@@ -975,6 +970,16 @@ func (self *Stream) handleH264Payload(timestamp uint32, packet []byte) (err erro
 			}
 			packet = packet[size+2:]
 		}
+		return
+
+	case naluType >= 6 && naluType <= 23: // other single NALU packet
+	case naluType == 25: // STAB-B
+	case naluType == 26: // MTAP-16
+	case naluType == 27: // MTAP-24
+	case naluType == 28: // FU-B
+
+	default:
+		err = fmt.Errorf("rtsp: unsupported H264 naluType=%d", naluType)
 		return
 	}
 
