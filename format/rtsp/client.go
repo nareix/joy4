@@ -26,6 +26,10 @@ import (
 
 var ErrCodecDataChange = fmt.Errorf("rtsp: codec data change, please call HandleCodecDataChange()")
 
+var DebugRtp = false
+var DebugRtsp = false
+var SkipErrRtpBlock = false
+
 const (
 	stageDescribeDone = iota+1
 	stageSetupDone
@@ -105,6 +109,9 @@ func DialTimeout(uri string, timeout time.Duration) (self *Client, err error) {
 		brconn:     bufio.NewReaderSize(connt, 256),
 		url:        URL,
 		requestUri: u2.String(),
+		DebugRtp:   DebugRtp,
+		DebugRtsp:  DebugRtsp,
+		SkipErrRtpBlock: SkipErrRtpBlock,
 	}
 	return
 }
@@ -374,7 +381,7 @@ func (self *Client) findRTSP() (block []byte, data []byte, err error) {
 	peek := _peek[0:0]
 	stat := 0
 
-	for {
+	for i := 0;; i++ {
 		var b byte
 		if b, err = self.brconn.ReadByte(); err != nil {
 			return
@@ -397,13 +404,19 @@ func (self *Client) findRTSP() (block []byte, data []byte, err error) {
 				stat = Header
 			}
 		case '$':
-			stat = Dollar
-			peek = _peek[0:0]
+			if stat != Dollar {
+				stat = Dollar
+				peek = _peek[0:0]
+			}
 		default:
 			if stat != Dollar {
 				stat = 0
 				peek = _peek[0:0]
 			}
+		}
+
+		if self.DebugRtp {
+			fmt.Println("rtsp: findRTSP", i, b)
 		}
 
 		if stat != 0 {
@@ -415,6 +428,9 @@ func (self *Client) findRTSP() (block []byte, data []byte, err error) {
 		}
 
 		if stat == Dollar && len(peek) >= 12 {
+			if self.DebugRtp {
+				fmt.Println("rtsp: dollar at", i, len(peek))
+			}
 			if blocklen, _, ok := self.parseBlockHeader(peek); ok {
 				left := blocklen+4-len(peek)
 				block = append(peek, make([]byte, left)...)
@@ -828,7 +844,7 @@ func (self *Stream) handleH264Payload(timestamp uint32, packet []byte) (err erro
 			return
 		}
 
-	case naluType == 6: // SEI ignored
+	//case naluType == 6: // SEI ignored
 
 	case naluType == 7: // sps
 		if self.client != nil && self.client.DebugRtp {
@@ -974,7 +990,7 @@ func (self *Stream) handleRtpPacket(packet []byte) (err error) {
 	}
 
 	if self.client != nil && self.client.DebugRtp {
-		fmt.Println("rtp: packet len", len(packet))
+		fmt.Println("rtp: packet", self.CodecData.Type(), "len", len(packet))
 		dumpsize := len(packet)
 		if dumpsize > 32 {
 			dumpsize = 32
@@ -1114,6 +1130,9 @@ func (self *Client) Close() (err error) {
 func (self *Client) handleBlock(block []byte) (pkt av.Packet, ok bool, err error) {
 	_, blockno, _ := self.parseBlockHeader(block)
 	if blockno%2 != 0 {
+		if self.DebugRtp {
+			fmt.Println("rtsp: rtcp block len", len(block)-4)
+		}
 		return
 	}
 
