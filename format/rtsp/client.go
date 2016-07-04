@@ -415,7 +415,7 @@ func (self *Client) findRTSP() (block []byte, data []byte, err error) {
 			}
 		}
 
-		if self.DebugRtp {
+		if false && self.DebugRtp {
 			fmt.Println("rtsp: findRTSP", i, b)
 		}
 
