@@ -828,7 +828,7 @@ func (self *Stream) handleH264Payload(timestamp uint32, packet []byte) (err erro
 	*/
 	switch {
 	default:
-		if naluType >= 1 && naluType <= 23 {
+		if naluType >= 1 && naluType <= 5 {
 			if naluType == 5 {
 				self.pkt.IsKeyFrame = true
 			}
@@ -843,8 +843,6 @@ func (self *Stream) handleH264Payload(timestamp uint32, packet []byte) (err erro
 			err = fmt.Errorf("rtsp: unsupported H264 naluType=%d", naluType)
 			return
 		}
-
-	//case naluType == 6: // SEI ignored
 
 	case naluType == 7: // sps
 		if self.client != nil && self.client.DebugRtp {
