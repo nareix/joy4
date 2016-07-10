@@ -324,12 +324,6 @@ var atoms = {
 
 	sampleSize: {
 		cc4: 'stsz',
-		fields: [
-			['version', 'int8'],
-			['flags', 'int24'],
-			['sampleSize', 'int32'],
-			['entries', '[int32]int32'],
-		],
 	},
 
 	chunkOffset: {

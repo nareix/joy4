@@ -55,6 +55,7 @@ func (self *Demuxer) probe() (err error) {
 
 		if cc4 == "moov" {
 			if moov, err = atom.ReadMovie(ar); err != nil {
+				err = fmt.Errorf("mp4: moov invalid")
 				return
 			}
 		}
