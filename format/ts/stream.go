@@ -9,21 +9,18 @@ import (
 type Stream struct {
 	av.CodecData
 
-	pid    uint
-	buf    bytes.Buffer
+	buf bytes.Buffer
 	peshdr *PESHeader
 	tshdr  TSHeader
 
 	demuxer *Demuxer
 	muxer   *Muxer
 
+	pid    uint
 	streamId   uint
 	streamType uint
 
 	tsw       *TSWriter
-	dataBuf   *iovec
-	cacheSize int
-
 	idx  int
 }
 

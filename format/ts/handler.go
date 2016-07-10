@@ -12,7 +12,7 @@ func Handler(h *avutil.RegisterHandler) {
 		return &Demuxer{R: r}
 	}
 	h.WriterMuxer = func(w io.Writer) av.Muxer {
-		return &Muxer{W: w}
+		return NewMuxer(w)
 	}
 }
 
