@@ -15,12 +15,14 @@ import (
 
 type Muxer struct {
 	pw *pio.Writer
+	bw *bufio.Writer
 	streams []av.CodecData
 }
 
 func NewMuxer(w io.Writer) *Muxer {
 	self := &Muxer{}
-	self.pw = pio.NewWriter(bufio.NewWriterSize(w, pio.RecommendBufioSize))
+	self.bw = bufio.NewWriterSize(w, pio.RecommendBufioSize)
+	self.pw = pio.NewWriter(self.bw)
 	return self
 }
 
@@ -103,6 +105,9 @@ func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
 }
 
 func (self *Muxer) WriteTrailer() (err error) {
+	if err = self.bw.Flush(); err != nil {
+		return
+	}
 	return
 }
 
