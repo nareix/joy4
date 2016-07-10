@@ -12,7 +12,7 @@ import (
 )
 
 type Muxer struct {
-	W                        io.Writer
+	w                        *bufio.Writer
 	streams                  []*Stream
 	PaddingToMakeCounterCont bool
 
@@ -59,7 +59,7 @@ func (self *Muxer) writePaddingTSPackets(tsw *TSWriter) (err error) {
 			PID:               tsw.PID,
 			ContinuityCounter: tsw.ContinuityCounter,
 		}
-		if _, err = WriteTSHeader(self.W, header, 0); err != nil {
+		if _, err = WriteTSHeader(self.w, header, 0); err != nil {
 			return
 		}
 		tsw.ContinuityCounter++
@@ -69,6 +69,10 @@ func (self *Muxer) writePaddingTSPackets(tsw *TSWriter) (err error) {
 */
 
 func (self *Muxer) WriteTrailer() (err error) {
+	if err = self.w.Flush(); err != nil {
+		return
+	}
+
 	/*
 	if self.PaddingToMakeCounterCont {
 		for _, stream := range self.streams {
@@ -83,7 +87,7 @@ func (self *Muxer) WriteTrailer() (err error) {
 
 func NewMuxer(w io.Writer) *Muxer {
 	return &Muxer{
-		W: bufio.NewWriterSize(w, pio.RecommendBufioSize),
+		w: bufio.NewWriterSize(w, pio.RecommendBufioSize),
 		peshdr: make([]byte, MaxPESHeaderLength),
 		tshdr: make([]byte, MaxTSHeaderLength),
 		adtshdr: make([]byte, aacparser.ADTSHeaderLength),
@@ -121,10 +125,10 @@ func (self *Muxer) WritePATPMT() (err error) {
 
 	self.tswPMT = NewTSWriter(0x1000)
 	self.tswPAT = NewTSWriter(0)
-	if err = self.tswPAT.WritePackets(self.W, [][]byte{bufPAT.Bytes()}, 0, false, true); err != nil {
+	if err = self.tswPAT.WritePackets(self.w, [][]byte{bufPAT.Bytes()}, 0, false, true); err != nil {
 		return
 	}
-	if err = self.tswPMT.WritePackets(self.W, [][]byte{bufPMT.Bytes()}, 0, false, true); err != nil {
+	if err = self.tswPMT.WritePackets(self.w, [][]byte{bufPMT.Bytes()}, 0, false, true); err != nil {
 		return
 	}
 
@@ -282,7 +286,7 @@ func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
 		self.datav[1] = self.adtshdr
 		self.datav[2] = pkt.Data
 
-		if err = stream.tsw.WritePackets(self.W, self.datav[:3], timeToPCR(pkt.Time), true, false); err != nil {
+		if err = stream.tsw.WritePackets(self.w, self.datav[:3], timeToPCR(pkt.Time), true, false); err != nil {
 			return
 		}
 
@@ -309,7 +313,7 @@ func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
 		n := FillPESHeader(self.peshdr, StreamIdH264, -1, pts, dts)
 		datav[0] = self.peshdr[:n]
 
-		if err = stream.tsw.WritePackets(self.W, datav, timeToPCR(pkt.Time), pkt.IsKeyFrame, false); err != nil {
+		if err = stream.tsw.WritePackets(self.w, datav, timeToPCR(pkt.Time), pkt.IsKeyFrame, false); err != nil {
 			return
 		}
 	}
