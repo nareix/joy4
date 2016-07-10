@@ -322,8 +322,8 @@ const (
 	// TypeFlagsAudio    UB[1] Audio tags are present
 	// TypeFlagsReserved UB[1] Must be 0
 	// TypeFlagsVideo    UB[1] Video tags are present
-	FILE_HAS_VIDEO = 0x4
-	FILE_HAS_AUDIO = 0x1
+	FILE_HAS_AUDIO = 0x4
+	FILE_HAS_VIDEO = 0x1
 )
 
 func ReadFileHeader(r *pio.Reader) (flags uint8, err error) {

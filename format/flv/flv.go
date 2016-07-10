@@ -20,7 +20,7 @@ type Muxer struct {
 
 func NewMuxer(w io.Writer) *Muxer {
 	self := &Muxer{}
-	self.pw = pio.NewWriter(w)
+	self.pw = pio.NewWriter(bufio.NewWriterSize(w, pio.RecommendBufioSize))
 	return self
 }
 
@@ -123,7 +123,7 @@ type Demuxer struct {
 
 func NewDemuxer(r io.Reader) *Demuxer {
 	return &Demuxer{
-		pr: pio.NewReader(bufio.NewReaderSize(r, 128)),
+		pr: pio.NewReader(bufio.NewReaderSize(r, pio.RecommendBufioSize)),
 	}
 }
 
