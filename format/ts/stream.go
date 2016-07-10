@@ -15,6 +15,7 @@ type Stream struct {
 
 	demuxer *Demuxer
 	muxer   *Muxer
+	iskeyframe bool
 
 	pid    uint
 	streamId   uint

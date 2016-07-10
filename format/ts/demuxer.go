@@ -1,8 +1,9 @@
 package ts
 
 import (
+	"bufio"
 	"bytes"
-	_"fmt"
+	"fmt"
 	"time"
 	"github.com/nareix/pio"
 	"github.com/nareix/joy4/av"
@@ -12,7 +13,7 @@ import (
 )
 
 type Demuxer struct {
-	R io.Reader
+	r *bufio.Reader
 
 	pktidx int
 	pkts []av.Packet
@@ -20,8 +21,16 @@ type Demuxer struct {
 	pat     PAT
 	pmt     *PMT
 	streams []*Stream
+	tshdr []byte
 
 	probed bool
+}
+
+func NewDemuxer(r io.Reader) *Demuxer {
+	return &Demuxer{
+		tshdr: make([]byte, 188),
+		r: bufio.NewReaderSize(r, pio.RecommendBufioSize),
+	}
 }
 
 func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
@@ -78,7 +87,7 @@ func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
 
 func (self *Demuxer) poll() (err error) {
 	self.pktidx = 0
-	self.pkts = self.pkts[0:0]
+	self.pkts = self.pkts[:0]
 	for {
 		if err = self.readTSPacket(); err != nil {
 			return
@@ -90,18 +99,39 @@ func (self *Demuxer) poll() (err error) {
 	return
 }
 
-func (self *Demuxer) readTSPacket() (err error) {
-	var header TSHeader
-	var n int
-	var data [188]byte
-
-	if header, n, err = ReadTSPacket(self.R, data[:]); err != nil {
+func ParseTSHeader(tshdr []byte) (pid uint, start bool, iskeyframe bool, hdrlen int, err error) {
+	// https://en.wikipedia.org/wiki/MPEG_transport_stream
+	if tshdr[0] != 0x47 {
+		err = fmt.Errorf("tshdr sync invalid")
 		return
 	}
-	payload := data[:n]
+	pid = uint((tshdr[1]&0x1f))<<8|uint(tshdr[2])
+	start = tshdr[1]&0x40 != 0
+	hdrlen += 4
+	if tshdr[3]&0x20 != 0 {
+		hdrlen += int(tshdr[4])+1
+		iskeyframe = tshdr[5]&0x40 != 0
+	}
+	return
+}
 
-	if header.PID == 0 {
+func (self *Demuxer) readTSPacket() (err error) {
+	var hdrlen int
+	var pid uint
+	var start bool
+	var iskeyframe bool
+
+	if _, err = io.ReadFull(self.r, self.tshdr); err != nil {
+		return
+	}
+	if pid, start, iskeyframe, hdrlen, err = ParseTSHeader(self.tshdr); err != nil {
+		return
+	}
+	payload := self.tshdr[hdrlen:]
+
+	if pid == 0 {
 		if self.pat, err = ReadPAT(bytes.NewReader(payload)); err != nil {
+			err = fmt.Errorf("ts: invalid pat")
 			return
 		}
 	} else {
@@ -109,7 +139,7 @@ func (self *Demuxer) readTSPacket() (err error) {
 			self.streams = []*Stream{}
 
 			for _, entry := range self.pat.Entries {
-				if entry.ProgramMapPID == header.PID {
+				if entry.ProgramMapPID == pid {
 					self.pmt = new(PMT)
 					if *self.pmt, err = ReadPMT(bytes.NewReader(payload)); err != nil {
 						return
@@ -132,8 +162,8 @@ func (self *Demuxer) readTSPacket() (err error) {
 
 		} else {
 			for _, stream := range self.streams {
-				if header.PID == stream.pid {
-					if err = stream.handleTSPacket(header, payload); err != nil {
+				if pid == stream.pid {
+					if err = stream.handleTSPacket(start, iskeyframe, payload); err != nil {
 						return
 					}
 				}
@@ -155,7 +185,7 @@ func (self *Stream) addPacket(payload []byte, timedelta time.Duration) {
 	demuxer := self.demuxer
 	pkt := av.Packet{
 		Idx: int8(self.idx),
-		IsKeyFrame: self.tshdr.RandomAccessIndicator,
+		IsKeyFrame: self.iskeyframe,
 		Time: time.Duration(dts)*time.Second / time.Duration(PTS_HZ) + timedelta,
 		Data:       payload,
 	}
@@ -219,22 +249,22 @@ func (self *Stream) payloadEnd() (err error) {
 	return
 }
 
-func (self *Stream) handleTSPacket(header TSHeader, tspacket []byte) (err error) {
-	r := bytes.NewReader(tspacket)
-	lr := &io.LimitedReader{R: r, N: int64(len(tspacket))}
+func (self *Stream) handleTSPacket(start bool, iskeyframe bool, payload []byte) (err error) {
+	r := bytes.NewReader(payload)
+	lr := &io.LimitedReader{R: r, N: int64(len(payload))}
 
-	if header.PayloadUnitStart && self.peshdr != nil && self.peshdr.DataLength == 0 {
+	if start && self.peshdr != nil && self.peshdr.DataLength == 0 {
 		if err = self.payloadEnd(); err != nil {
 			return
 		}
 	}
 
-	if header.PayloadUnitStart {
+	if start {
 		self.buf = bytes.Buffer{}
 		if self.peshdr, err = ReadPESHeader(lr); err != nil {
 			return
 		}
-		self.tshdr = header
+		self.iskeyframe = iskeyframe
 	}
 
 	if _, err = io.CopyN(&self.buf, lr, lr.N); err != nil {
