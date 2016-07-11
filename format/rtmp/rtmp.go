@@ -56,9 +56,10 @@ func DialTimeout(uri string, timeout time.Duration) (conn *Conn, err error) {
 	return
 }
 
+var	Debug bool
+var DebugConn bool
+
 type Server struct {
-	Debug bool
-	DebugConn bool
 	Addr string
 	HandlePublish func(*Conn)
 	HandlePlay func(*Conn)
@@ -102,7 +103,7 @@ func (self *Server) ListenAndServe() (err error) {
 		return
 	}
 
-	if self.Debug {
+	if Debug {
 		fmt.Println("rtmp: server: listening on", addr)
 	}
 
@@ -112,16 +113,15 @@ func (self *Server) ListenAndServe() (err error) {
 			return
 		}
 
-		if self.Debug {
+		if Debug {
 			fmt.Println("rtmp: server: accepted")
 		}
 
 		conn := NewConn(netconn)
-		conn.Debug = self.DebugConn
 		conn.isserver = true
 		go func() {
 			err = self.handleConn(conn)
-			if self.Debug {
+			if Debug {
 				fmt.Println("rtmp: server: client closed err:", err)
 			}
 		}()
@@ -370,7 +370,7 @@ func (self *Conn) recvConnect() (err error) {
 
 			// < publish("path")
 			case "publish":
-				if self.Debug {
+				if Debug {
 					fmt.Println("rtmp: < publish")
 				}
 
@@ -402,7 +402,7 @@ func (self *Conn) recvConnect() (err error) {
 
 			// < play("path")
 			case "play":
-				if self.Debug {
+				if Debug {
 					fmt.Println("rtmp: < play")
 				}
 
@@ -580,7 +580,7 @@ func (self *Conn) probe() (err error) {
 
 func (self *Conn) connect(path string) (err error) {
 	// > connect("app")
-	if self.Debug {
+	if Debug {
 		fmt.Printf("rtmp: > connect('%s') host=%s\n", path, self.Host)
 	}
 	w := self.writeCommandMsgStart()
@@ -613,7 +613,7 @@ func (self *Conn) connect(path string) (err error) {
 					err = fmt.Errorf("rtmp: command connect failed: %s", errmsg)
 					return
 				}
-				if self.Debug {
+				if Debug {
 					fmt.Printf("rtmp: < _result() of connect\n")
 				}
 				break
@@ -640,7 +640,7 @@ func (self *Conn) connectPublish() (err error) {
 	transid := 2
 
 	// > createStream()
-	if self.Debug {
+	if Debug {
 		fmt.Printf("rtmp: > createStream()\n")
 	}
 	w := self.writeCommandMsgStart()
@@ -670,7 +670,7 @@ func (self *Conn) connectPublish() (err error) {
 	}
 
 	// > publish('app')
-	if self.Debug {
+	if Debug {
 		fmt.Printf("rtmp: > publish('%s')\n", publishpath)
 	}
 	w = self.writeCommandMsgStart()
@@ -697,7 +697,7 @@ func (self *Conn) connectPlay() (err error) {
 	}
 
 	// > createStream()
-	if self.Debug {
+	if Debug {
 		fmt.Printf("rtmp: > createStream()\n")
 	}
 	w := self.writeCommandMsgStart()
@@ -731,7 +731,7 @@ func (self *Conn) connectPlay() (err error) {
 	}
 
 	// > play('app')
-	if self.Debug {
+	if Debug {
 		fmt.Printf("rtmp: > play('%s')\n", playpath)
 	}
 	w = self.writeCommandMsgStart()
@@ -862,7 +862,7 @@ func (self *Conn) WritePacket(pkt av.Packet) (err error) {
 	stream := self.streams[pkt.Idx]
 	ts := timeToTs(pkt.Time)
 
-	if self.Debug {
+	if Debug {
 		fmt.Println("rtmp: WritePacket", pkt.Idx, pkt.Time, pkt.CompositionTime, ts)
 	}
 
@@ -1205,7 +1205,7 @@ func (self *Conn) writeChunks(csid uint32, timestamp uint32, msgtypeid uint8, ms
 		}
 	}
 
-	if self.Debug {
+	if Debug {
 		fmt.Printf("rtmp: write chunk msgdatalen=%d msgsid=%d\n", msgdatalen, msgsid)
 		b := []byte{}
 		for _, a := range msgdatav {
@@ -1395,13 +1395,13 @@ func (self *Conn) readChunk() (err error) {
 	}
 	cs.msgdataleft -= uint32(size)
 
-	if self.Debug {
+	if Debug {
 		fmt.Printf("rtmp: chunk msgsid=%d msgtypeid=%d msghdrtype=%d len=%d left=%d\n",
 			cs.msgsid, cs.msgtypeid, cs.msghdrtype, cs.msgdatalen, cs.msgdataleft)
 	}
 
 	if cs.msgdataleft == 0 {
-		if self.Debug {
+		if Debug {
 			fmt.Println("rtmp: chunk data")
 			fmt.Print(hex.Dump(cs.msgdata))
 		}
@@ -1615,7 +1615,7 @@ func (self *Conn) handshakeClient() (err error) {
 		return
 	}
 
-	if self.Debug {
+	if Debug {
 		fmt.Println("rtmp: handshakeClient: server version", S1[4],S1[5],S1[6],S1[7])
 	}
 
