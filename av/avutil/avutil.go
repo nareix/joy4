@@ -50,6 +50,8 @@ type RegisterHandler struct {
 	UrlDemuxer func(string)(bool,av.DemuxCloser,error)
 	UrlReader func(string)(bool,io.ReadCloser,error)
 	Probe func([]byte)bool
+	AudioEncoder func(av.CodecType)(av.AudioEncoder,error)
+	AudioDecoder func(av.CodecData)(av.AudioDecoder,error)
 }
 
 type Handlers struct {
@@ -81,6 +83,30 @@ func (self *Handlers) openUrl(u *url.URL, uri string) (r io.ReadCloser, err erro
 
 func (self *Handlers) createUrl(u *url.URL, uri string) (w io.WriteCloser, err error) {
 	w, err = os.Create(uri)
+	return
+}
+
+func (self *Handlers) NewAudioEncoder(typ av.CodecType) (enc av.AudioEncoder, err error) {
+	for _, handler := range self.handlers {
+		if handler.AudioEncoder != nil {
+			if enc, _ = handler.AudioEncoder(typ); enc != nil {
+				return
+			}
+		}
+	}
+	err = fmt.Errorf("avutil: encoder", typ, "not found")
+	return
+}
+
+func (self *Handlers) NewAudioDecoder(codec av.CodecData) (dec av.AudioDecoder, err error) {
+	for _, handler := range self.handlers {
+		if handler.AudioDecoder != nil {
+			if dec, _ = handler.AudioDecoder(codec); dec != nil {
+				return
+			}
+		}
+	}
+	err = fmt.Errorf("avutil: decoder", codec.Type(), "not found")
 	return
 }
 
@@ -173,10 +199,6 @@ func (self *Handlers) Create(uri string) (muxer av.MuxCloser, err error) {
 }
 
 var DefaultHandlers = &Handlers{}
-
-func AddHandler(fn func(*RegisterHandler)) {
-	DefaultHandlers.Add(fn)
-}
 
 func Open(url string) (demuxer av.DemuxCloser, err error) {
 	return DefaultHandlers.Open(url)
