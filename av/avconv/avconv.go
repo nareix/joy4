@@ -11,22 +11,6 @@ import (
 
 var Debug bool
 
-func Open(filename string) (demuxer av.DemuxCloser, err error) {
-	if demuxer, err = avutil.Open(filename); err != nil {
-		err = fmt.Errorf("avconv: open input `%s` failed: %s", filename, err)
-		return
-	}
-	return
-}
-
-func Create(filename string) (muxer av.MuxCloser, err error) {
-	if muxer, err = avutil.Create(filename); err != nil {
-		err = fmt.Errorf("avconv: create output `%s` failed: %s", filename, err)
-		return
-	}
-	return
-}
-
 type Option struct {
 	Transcode bool
 	Args []string
@@ -178,12 +162,12 @@ func ConvertCmdline(args []string) (err error) {
 	var demuxer av.DemuxCloser
 	var muxer av.MuxCloser
 
-	if demuxer, err = Open(input); err != nil {
+	if demuxer, err = avutil.Open(input); err != nil {
 		return
 	}
 	defer demuxer.Close()
 
-	if muxer, err = Create(output); err != nil {
+	if muxer, err = avutil.Create(output); err != nil {
 		return
 	}
 	defer muxer.Close()

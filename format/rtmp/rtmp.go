@@ -25,7 +25,13 @@ import (
 
 var MaxProbePacketCount = 6
 
-func ParseURL(uri string) (u *url.URL) {
+func ParseURL(uri string) (u *url.URL, err error) {
+	if u, err = url.Parse(uri); err != nil {
+		return
+	}
+	if _, _, serr := net.SplitHostPort(u.Host); serr != nil {
+		u.Host += ":1935"
+	}
 	return
 }
 
@@ -35,12 +41,8 @@ func Dial(uri string) (conn *Conn, err error) {
 
 func DialTimeout(uri string, timeout time.Duration) (conn *Conn, err error) {
 	var u *url.URL
-
-	if u, err = url.Parse(uri); err != nil {
+	if u, err = ParseURL(uri); err != nil {
 		return
-	}
-	if _, _, serr := net.SplitHostPort(u.Host); serr != nil {
-		u.Host += ":1935"
 	}
 
 	dailer := net.Dialer{Timeout: timeout}
@@ -301,7 +303,7 @@ func createURL(tcurl, app, play string) (u *url.URL) {
 			out = append(out, s)
 		}
 	}
-	path := strings.Join(out, "/")
+	path := "/"+strings.Join(out, "/")
 	u, _ = url.ParseRequestURI(path)
 
 	if tcurl != "" {
@@ -1740,6 +1742,16 @@ func (self *Conn) handshakeServer() (err error) {
 	return
 }
 
+type closeConn struct {
+	*Conn
+	waitclose chan bool
+}
+
+func (self closeConn) Close() error {
+	self.waitclose <- true
+	return nil
+}
+
 func Handler(h *avutil.RegisterHandler) {
 	h.UrlDemuxer = func(uri string) (ok bool, demuxer av.DemuxCloser, err error) {
 		if !strings.HasPrefix(uri, "rtmp://") {
@@ -1747,6 +1759,88 @@ func Handler(h *avutil.RegisterHandler) {
 		}
 		ok = true
 		demuxer, err = Dial(uri)
+		return
+	}
+
+	h.ServerMuxer = func(uri string) (ok bool, muxer av.MuxCloser, err error) {
+		if !strings.HasPrefix(uri, "rtmp://") {
+			return
+		}
+		ok = true
+
+		var u *url.URL
+		if u, err = ParseURL(uri); err != nil {
+			return
+		}
+		server := &Server{
+			Addr: u.Host,
+		}
+
+		waitstart := make(chan error)
+		waitconn := make(chan *Conn)
+		waitclose := make(chan bool)
+
+		server.HandlePlay = func(conn *Conn) {
+			waitconn <- conn
+			<-waitclose
+		}
+
+		go func() {
+			waitstart <- server.ListenAndServe()
+		}()
+
+		select {
+		case err = <-waitstart:
+			if err != nil {
+				return
+			}
+
+		case conn := <-waitconn:
+			muxer = closeConn{Conn: conn, waitclose: waitclose}
+			return
+		}
+
+		return
+	}
+
+	h.ServerDemuxer = func(uri string) (ok bool, demuxer av.DemuxCloser, err error) {
+		if !strings.HasPrefix(uri, "rtmp://") {
+			return
+		}
+		ok = true
+
+		var u *url.URL
+		if u, err = ParseURL(uri); err != nil {
+			return
+		}
+		server := &Server{
+			Addr: u.Host,
+		}
+
+		waitstart := make(chan error)
+		waitconn := make(chan *Conn)
+		waitclose := make(chan bool)
+
+		server.HandlePublish = func(conn *Conn) {
+			waitconn <- conn
+			<-waitclose
+		}
+
+		go func() {
+			waitstart <- server.ListenAndServe()
+		}()
+
+		select {
+		case err = <-waitstart:
+			if err != nil {
+				return
+			}
+
+		case conn := <-waitconn:
+			demuxer = closeConn{Conn: conn, waitclose: waitclose}
+			return
+		}
+
 		return
 	}
 }

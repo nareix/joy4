@@ -2,6 +2,7 @@ package avutil
 
 import (
 	"io"
+	"strings"
 	"fmt"
 	"bytes"
 	"github.com/nareix/joy4/av"
@@ -52,6 +53,8 @@ type RegisterHandler struct {
 	Probe func([]byte)bool
 	AudioEncoder func(av.CodecType)(av.AudioEncoder,error)
 	AudioDecoder func(av.AudioCodecData)(av.AudioDecoder,error)
+	ServerDemuxer func(string)(bool,av.DemuxCloser,error)
+	ServerMuxer func(string)(bool,av.MuxCloser,error)
 }
 
 type Handlers struct {
@@ -111,11 +114,26 @@ func (self *Handlers) NewAudioDecoder(codec av.AudioCodecData) (dec av.AudioDeco
 }
 
 func (self *Handlers) Open(uri string) (demuxer av.DemuxCloser, err error) {
+	listen := false
+	if strings.HasPrefix(uri, "listen:") {
+		uri = uri[len("listen:"):]
+		listen = true
+	}
+
 	for _, handler := range self.handlers {
-		if handler.UrlDemuxer != nil {
-			var ok bool
-			if ok, demuxer, err = handler.UrlDemuxer(uri); ok {
-				return
+		if listen {
+			if handler.ServerDemuxer != nil {
+				var ok bool
+				if ok, demuxer, err = handler.ServerDemuxer(uri); ok {
+					return
+				}
+			}
+		} else {
+			if handler.UrlDemuxer != nil {
+				var ok bool
+				if ok, demuxer, err = handler.UrlDemuxer(uri); ok {
+					return
+				}
 			}
 		}
 	}
@@ -170,6 +188,23 @@ func (self *Handlers) Open(uri string) (demuxer av.DemuxCloser, err error) {
 }
 
 func (self *Handlers) Create(uri string) (muxer av.MuxCloser, err error) {
+	listen := false
+	if strings.HasPrefix(uri, "listen:") {
+		uri = uri[len("listen:"):]
+		listen = true
+	}
+
+	for _, handler := range self.handlers {
+		if listen {
+			if handler.ServerMuxer != nil {
+				var ok bool
+				if ok, muxer, err = handler.ServerMuxer(uri); ok {
+					return
+				}
+			}
+		}
+	}
+
 	var ext string
 	var u *url.URL
 	if u, _ = url.Parse(uri); u != nil && u.Scheme != "" {
