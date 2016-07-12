@@ -17,22 +17,26 @@ type tStream struct {
 	adec av.AudioDecoder
 }
 
-type Transcoder struct {
+type Options struct {
 	FindAudioDecoderEncoder func(codec av.AudioCodecData, i int) (ok bool, err error, dec av.AudioDecoder, enc av.AudioEncoder)
+}
+
+type Transcoder struct {
 	streams                 []*tStream
 }
 
-func (self *Transcoder) Setup(streams []av.CodecData) (err error) {
+func NewTranscoder(streams []av.CodecData, options Options) (_self *Transcoder, err error) {
+	self := &Transcoder{}
 	self.streams = []*tStream{}
 
 	for i, stream := range streams {
 		ts := &tStream{codec: stream}
 		if stream.Type().IsAudio() {
-			if self.FindAudioDecoderEncoder != nil {
+			if options.FindAudioDecoderEncoder != nil {
 				var ok bool
 				var enc av.AudioEncoder
 				var dec av.AudioDecoder
-				ok, err, dec, enc = self.FindAudioDecoderEncoder(stream.(av.AudioCodecData), i)
+				ok, err, dec, enc = options.FindAudioDecoderEncoder(stream.(av.AudioCodecData), i)
 				if ok {
 					if err != nil {
 						return
@@ -48,6 +52,8 @@ func (self *Transcoder) Setup(streams []av.CodecData) (err error) {
 		}
 		self.streams = append(self.streams, ts)
 	}
+
+	_self = self
 	return
 }
 
@@ -113,7 +119,7 @@ func (self *Transcoder) Streams() (streams []av.CodecData, err error) {
 	return
 }
 
-func (self *Transcoder) Close() {
+func (self *Transcoder) Close() (err error) {
 	for _, stream := range self.streams {
 		if stream.aenc != nil {
 			stream.aenc.Close()
@@ -124,20 +130,22 @@ func (self *Transcoder) Close() {
 			stream.adec = nil
 		}
 	}
-	self.streams = []*tStream{}
+	self.streams = nil
+	return
 }
 
 type Muxer struct {
-	Muxer      av.Muxer
-	Transcoder *Transcoder
+	av.Muxer
+	transcoder *Transcoder
+	Options
 }
 
 func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
-	if err = self.Transcoder.Setup(streams); err != nil {
+	if self.transcoder, err = NewTranscoder(streams, self.Options); err != nil {
 		return
 	}
 	var newstreams []av.CodecData
-	if newstreams, err = self.Transcoder.Streams(); err != nil {
+	if newstreams, err = self.transcoder.Streams(); err != nil {
 		return
 	}
 	if err = self.Muxer.WriteHeader(newstreams); err != nil {
@@ -148,7 +156,7 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 
 func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
 	var outpkts []av.Packet
-	if outpkts, err = self.Transcoder.Do(pkt); err != nil {
+	if outpkts, err = self.transcoder.Do(pkt); err != nil {
 		return
 	}
 	for _, pkt := range outpkts {
@@ -159,32 +167,34 @@ func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
 	return
 }
 
-func (self *Muxer) WriteTrailer() (err error) {
-	// TODO: do flush
-	if err = self.Muxer.WriteTrailer(); err != nil {
-		return
-	}
-	return
+func (self *Muxer) Close() (err error) {
+	return self.transcoder.Close()
 }
 
 type Demuxer struct {
-	Demuxer    av.Demuxer
-	Transcoder *Transcoder
+	av.Demuxer
+	transcoder *Transcoder
 	outpkts []av.Packet
+	Options
 }
 
-func (self *Demuxer) Setup() (err error) {
-	var streams []av.CodecData
-	if streams, err = self.Demuxer.Streams(); err != nil {
-		return
-	}
-	if err = self.Transcoder.Setup(streams); err != nil {
-		return
+func (self *Demuxer) prepare() (err error) {
+	if self.transcoder == nil {
+		var streams []av.CodecData
+		if streams, err = self.Demuxer.Streams(); err != nil {
+			return
+		}
+		if self.transcoder, err = NewTranscoder(streams, self.Options); err != nil {
+			return
+		}
 	}
 	return
 }
 
 func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
+	if err = self.prepare(); err != nil {
+		return
+	}
 	for {
 		if len(self.outpkts) > 0 {
 			pkt = self.outpkts[0]
@@ -195,17 +205,20 @@ func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
 		if rpkt, err = self.Demuxer.ReadPacket(); err != nil {
 			return
 		}
-		if self.outpkts, err = self.Transcoder.Do(rpkt); err != nil {
+		if self.outpkts, err = self.transcoder.Do(rpkt); err != nil {
 			return
 		}
 	}
 	return
 }
 
-func (self *Demuxer) Streams() ([]av.CodecData, error) {
-	return self.Transcoder.Streams()
+func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
+	if err = self.prepare(); err != nil {
+		return
+	}
+	return self.transcoder.Streams()
 }
 
-func (self *Demuxer) Close() {
-	self.Transcoder.Close()
+func (self *Demuxer) Close() (err error) {
+	return self.transcoder.Close()
 }
