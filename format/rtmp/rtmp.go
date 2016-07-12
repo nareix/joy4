@@ -285,6 +285,13 @@ func splitPath(s string) (app, play string) {
 	return
 }
 
+func getTcUrl(u *url.URL) string {
+	nu := *u
+	app, _ := splitPath(nu.Path)
+	nu.Path = "/"+app
+	return nu.String()
+}
+
 func createURL(tcurl, app, play string) (u *url.URL) {
 	ps := strings.Split(app+"/"+play, "/")
 	out := []string{""}
@@ -616,7 +623,7 @@ func (self *Conn) connect(path string) (err error) {
 	flvio.WriteAMF0Val(w, flvio.AMFMap{
 		"app": path,
 		"flashVer": "MAC 22,0,0,192",
-		"tcUrl": self.URL.String(),
+		"tcUrl": getTcUrl(self.URL),
 		"fpad": false,
 		"capabilities": 15,
 		"audioCodecs": 4071,
