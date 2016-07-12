@@ -25,16 +25,7 @@ import (
 
 var MaxProbePacketCount = 6
 
-func ParseURL(uri string) (host string, path string) {
-	var u *url.URL
-	if u, _ = url.Parse(uri); u == nil {
-		return
-	}
-	host = u.Host
-	if _, _, err := net.SplitHostPort(u.Host); err != nil {
-		host += ":1935"
-	}
-	path = u.Path
+func ParseURL(uri string) (u *url.URL) {
 	return
 }
 
@@ -43,16 +34,23 @@ func Dial(uri string) (conn *Conn, err error) {
 }
 
 func DialTimeout(uri string, timeout time.Duration) (conn *Conn, err error) {
-	host, path := ParseURL(uri)
+	var u *url.URL
+
+	if u, err = url.Parse(uri); err != nil {
+		return
+	}
+	if _, _, serr := net.SplitHostPort(u.Host); serr != nil {
+		u.Host += ":1935"
+	}
+
 	dailer := net.Dialer{Timeout: timeout}
 	var netconn net.Conn
-	if netconn, err = dailer.Dial("tcp", host); err != nil {
+	if netconn, err = dailer.Dial("tcp", u.Host); err != nil {
 		return
 	}
 
 	conn = NewConn(netconn)
-	conn.Host = host
-	conn.Path = path
+	conn.URL = u
 	return
 }
 
@@ -151,9 +149,7 @@ const (
 )
 
 type Conn struct {
-	Host string
-	Path string
-	Debug bool
+	URL *url.URL
 
 	streams []*stream
 	videostreamidx, audiostreamidx int
@@ -289,7 +285,7 @@ func splitPath(s string) (app, play string) {
 	return
 }
 
-func formatPath(app, play string) string {
+func createURL(tcurl, app, play string) (u *url.URL) {
 	ps := strings.Split(app+"/"+play, "/")
 	out := []string{""}
 	for _, s := range ps {
@@ -297,7 +293,18 @@ func formatPath(app, play string) string {
 			out = append(out, s)
 		}
 	}
-	return strings.Join(out, "/")
+	path := strings.Join(out, "/")
+	u, _ = url.ParseRequestURI(path)
+
+	if tcurl != "" {
+		tu, _ := url.Parse(tcurl)
+		if tu != nil {
+			u.Host = tu.Host
+			u.Scheme = tu.Scheme
+		}
+	}
+
+	return
 }
 
 func (self *Conn) recvConnect() (err error) {
@@ -311,9 +318,25 @@ func (self *Conn) recvConnect() (err error) {
 		err = fmt.Errorf("rtmp: first command is not connect")
 		return
 	}
-	if self.commandobj != nil {
-		app := self.commandobj["app"]
-		connectpath, _ = app.(string)
+	if self.commandobj == nil {
+		err = fmt.Errorf("rtmp: connect command params invalid")
+		return
+	}
+
+	var ok bool
+	var _app, _tcurl interface{}
+	if _app, ok = self.commandobj["app"]; !ok {
+		err = fmt.Errorf("rtmp: `connect` params missing `app`")
+		return
+	}
+	connectpath, _ = _app.(string)
+
+	var tcurl string
+	if _tcurl, ok = self.commandobj["tcUrl"]; !ok {
+		_tcurl, ok = self.commandobj["tcurl"]
+	}
+	if ok {
+		tcurl, _ = _tcurl.(string)
 	}
 
 	// > WindowAckSize
@@ -394,7 +417,7 @@ func (self *Conn) recvConnect() (err error) {
 					return
 				}
 
-				self.Path = formatPath(connectpath, publishpath)
+				self.URL = createURL(tcurl, connectpath, publishpath)
 				self.publishing = true
 				self.reading = true
 				self.stage++
@@ -440,7 +463,7 @@ func (self *Conn) recvConnect() (err error) {
 					return
 				}
 
-				self.Path = formatPath(connectpath, playpath)
+				self.URL = createURL(tcurl, connectpath, playpath)
 				self.playing = true
 				self.writing = true
 				self.stage++
@@ -581,7 +604,7 @@ func (self *Conn) probe() (err error) {
 func (self *Conn) connect(path string) (err error) {
 	// > connect("app")
 	if Debug {
-		fmt.Printf("rtmp: > connect('%s') host=%s\n", path, self.Host)
+		fmt.Printf("rtmp: > connect('%s') host=%s\n", path, self.URL.Host)
 	}
 	w := self.writeCommandMsgStart()
 	flvio.WriteAMF0Val(w, "connect")
@@ -589,7 +612,7 @@ func (self *Conn) connect(path string) (err error) {
 	flvio.WriteAMF0Val(w, flvio.AMFMap{
 		"app": path,
 		"flashVer": "MAC 22,0,0,192",
-		"tcUrl": fmt.Sprintf("rtmp://%s/%s", self.Host, path),
+		"tcUrl": self.URL.String(),
 		"fpad": false,
 		"capabilities": 15,
 		"audioCodecs": 4071,
@@ -631,7 +654,7 @@ func (self *Conn) connect(path string) (err error) {
 }
 
 func (self *Conn) connectPublish() (err error) {
-	connectpath, publishpath := splitPath(self.Path)
+	connectpath, publishpath := splitPath(self.URL.Path)
 
 	if err = self.connect(connectpath); err != nil {
 		return
@@ -690,7 +713,7 @@ func (self *Conn) connectPublish() (err error) {
 }
 
 func (self *Conn) connectPlay() (err error) {
-	connectpath, playpath := splitPath(self.Path)
+	connectpath, playpath := splitPath(self.URL.Path)
 
 	if err = self.connect(connectpath); err != nil {
 		return
