@@ -7,7 +7,7 @@ import (
 	"github.com/nareix/joy4/av/pktque"
 )
 
-const debug = true
+var Debug bool
 
 type tStream struct {
 	codec av.CodecData
@@ -75,7 +75,7 @@ func (self *tStream) audioDecodeAndEncode(inpkt av.Packet) (outpkts []av.Packet,
 		return
 	}
 
-	if debug {
+	if Debug {
 		fmt.Println("transcode: push", inpkt.Time, dur)
 	}
 	self.timeline.Push(inpkt.Time, dur)
@@ -92,7 +92,7 @@ func (self *tStream) audioDecodeAndEncode(inpkt av.Packet) (outpkts []av.Packet,
 		outpkt := av.Packet{Idx: inpkt.Idx, Data: _outpkt}
 		outpkt.Time = self.timeline.Pop(dur)
 
-		if debug {
+		if Debug {
 			fmt.Println("transcode: pop", outpkt.Time, dur)
 		}
 
