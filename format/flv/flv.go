@@ -27,7 +27,7 @@ func NewMuxer(w io.Writer) *Muxer {
 }
 
 func (self *Muxer) SupportedCodecTypes() []av.CodecType {
-	return []av.CodecType{av.H264, av.AAC}
+	return []av.CodecType{av.H264, av.AAC, av.NELLYMOSER}
 }
 
 func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
@@ -56,6 +56,8 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 				Data: h264.AVCDecoderConfRecordBytes(),
 			}
 			_tag = tag
+
+		case av.NELLYMOSER:
 
 		case av.AAC:
 			aac := stream.(aacparser.CodecData)
@@ -99,6 +101,13 @@ func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
 	case av.AAC:
 		tag := flvio.MakeAACAudiodata(stream.(av.AudioCodecData), pkt.Data)
 		_tag = &tag
+
+	case av.NELLYMOSER:
+		tag := &flvio.Audiodata{
+			SoundFormat: flvio.SOUND_NELLYMOSER,
+			Data: pkt.Data,
+		}
+		_tag = tag
 	}
 
 	if err = flvio.WriteTag(self.pw, _tag, timeToTs(pkt.Time)); err != nil {

@@ -173,16 +173,19 @@ func (self Audiodata) Marshal(w *pio.Writer) (err error) {
 		return
 	}
 
-	if self.SoundFormat == SOUND_AAC {
+	switch self.SoundFormat {
+	case SOUND_AAC:
 		if err = w.WriteU8(self.AACPacketType); err != nil {
 			return
 		}
 		if _, err = w.Write(self.Data); err != nil {
 			return
 		}
-	} else {
-		err = fmt.Errorf("flvio: Audiodata.Marshal: unsupported SoundFormat=%d", self.SoundFormat)
-		return
+
+	default:
+		if _, err = w.Write(self.Data); err != nil {
+			return
+		}
 	}
 	return
 }
