@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"time"
 	"github.com/nareix/joy4/av"
+	"github.com/nareix/joy4/av/avutil"
 	"github.com/nareix/joy4/codec/aacparser"
 )
 
@@ -277,11 +278,7 @@ func (self *AudioEncoder) Setup() (err error) {
 	return
 }
 
-func (self *AudioEncoder) CodecData() (codec av.AudioCodecData) {
-	return self.codecData
-}
-
-func (self *AudioEncoder) encodeOne(frame av.AudioFrame) (gotpkt bool, pkt []byte, err error) {
+func (self *AudioEncoder) prepare() (err error) {
 	ff := &self.ff.ff
 
 	if ff.frame == nil {
@@ -289,6 +286,20 @@ func (self *AudioEncoder) encodeOne(frame av.AudioFrame) (gotpkt bool, pkt []byt
 			return
 		}
 	}
+
+	return
+}
+
+func (self *AudioEncoder) CodecData() (codec av.AudioCodecData) {
+	return self.codecData
+}
+
+func (self *AudioEncoder) encodeOne(frame av.AudioFrame) (gotpkt bool, pkt []byte, err error) {
+	if err = self.prepare(); err != nil {
+		return
+	}
+
+	ff := &self.ff.ff
 
 	cpkt := C.AVPacket{}
 	cgotpkt := C.int(0)
@@ -668,5 +679,14 @@ func (self audioCodecData) PacketDuration(data []byte) (dur time.Duration, err e
 	// TODO: implement it
 	err = fmt.Errorf("ffmpeg: cannot get packet duration")
 	return
+}
+
+func AudioCodecHandler(h *avutil.RegisterHandler) {
+	h.AudioDecoder = func(codec av.AudioCodecData) (av.AudioDecoder, error) {
+		return NewAudioDecoder(codec)
+	}
+	h.AudioEncoder = func(typ av.CodecType) (av.AudioEncoder, error) {
+		return NewAudioEncoderByCodecType(typ)
+	}
 }
 
