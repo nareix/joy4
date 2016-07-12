@@ -24,6 +24,10 @@ func NewMuxer(w io.Writer) *Muxer {
 	}
 }
 
+func (self *Muxer) SupportedCodecTypes() []av.CodecType {
+	return []av.CodecType{av.AAC}
+}
+
 func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 	if len(streams) > 1 || streams[0].Type() != av.AAC {
 		err = fmt.Errorf("aac: must be only one aac stream")

@@ -11,11 +11,11 @@ import (
 )
 
 func RegisterAll() {
-	avutil.AddHandler(mp4.Handler)
-	avutil.AddHandler(ts.Handler)
-	avutil.AddHandler(rtmp.Handler)
-	avutil.AddHandler(rtsp.Handler)
-	avutil.AddHandler(flv.Handler)
-	avutil.AddHandler(aac.Handler)
+	avutil.DefaultHandlers.Add(mp4.Handler)
+	avutil.DefaultHandlers.Add(ts.Handler)
+	avutil.DefaultHandlers.Add(rtmp.Handler)
+	avutil.DefaultHandlers.Add(rtsp.Handler)
+	avutil.DefaultHandlers.Add(flv.Handler)
+	avutil.DefaultHandlers.Add(aac.Handler)
 }
 

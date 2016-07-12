@@ -28,6 +28,10 @@ type Muxer struct {
 
 var supportedCodecTypes = []av.CodecType{av.H264, av.AAC}
 
+func (self Muxer) SupportedCodecTypes() []av.CodecType {
+	return supportedCodecTypes
+}
+
 func (self *Muxer) newStream(codec av.CodecData) (err error) {
 	ok := false
 	for _, c := range supportedCodecTypes {

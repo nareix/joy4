@@ -13,10 +13,14 @@ import (
 )
 
 type Demuxer struct {
-	R io.ReadSeeker
+	r io.ReadSeeker
 
 	streams   []*Stream
 	movieAtom *atom.Movie
+}
+
+func NewDemuxer(r io.ReadSeeker) *Demuxer {
+	return &Demuxer{r: r}
 }
 
 func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
@@ -37,14 +41,14 @@ func (self *Demuxer) probe() (err error) {
 	var N int64
 	var moov *atom.Movie
 
-	if N, err = self.R.Seek(0, 2); err != nil {
+	if N, err = self.r.Seek(0, 2); err != nil {
 		return
 	}
-	if _, err = self.R.Seek(0, 0); err != nil {
+	if _, err = self.r.Seek(0, 0); err != nil {
 		return
 	}
 
-	lr := &io.LimitedReader{R: self.R, N: N}
+	lr := &io.LimitedReader{R: self.r, N: N}
 	for lr.N > 0 {
 		var ar *io.LimitedReader
 
@@ -74,7 +78,7 @@ func (self *Demuxer) probe() (err error) {
 	for i, atrack := range moov.Tracks {
 		stream := &Stream{
 			trackAtom: atrack,
-			r:         self.R,
+			r:         self.r,
 			idx:       i,
 		}
 		if atrack.Media != nil && atrack.Media.Info != nil && atrack.Media.Info.Sample != nil {

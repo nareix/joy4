@@ -26,6 +26,10 @@ func NewMuxer(w io.Writer) *Muxer {
 	return self
 }
 
+func (self *Muxer) SupportedCodecTypes() []av.CodecType {
+	return []av.CodecType{av.H264, av.AAC}
+}
+
 func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 	var flags uint8
 	for _, stream := range streams {

@@ -307,6 +307,10 @@ func createURL(tcurl, app, play string) (u *url.URL) {
 	return
 }
 
+func (self *Conn) SupportedCodecTypes() []av.CodecType {
+	return []av.CodecType{av.H264, av.AAC}
+}
+
 func (self *Conn) recvConnect() (err error) {
 	var connectpath string
 

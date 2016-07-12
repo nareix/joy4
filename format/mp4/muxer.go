@@ -13,26 +13,27 @@ import (
 )
 
 type Muxer struct {
-	W          io.WriteSeeker
+	w          io.WriteSeeker
 	streams    []*Stream
 	mdatWriter *atom.Writer
 }
 
-func (self *Muxer) isCodecSupported(codec av.CodecData) bool {
-	switch codec.Type() {
-	case av.H264, av.AAC:
-		return true
-	default:
-		return false
-	}
+func NewMuxer(w io.WriteSeeker) *Muxer {
+	return &Muxer{w: w}
+}
+
+func (self *Muxer) SupportedCodecTypes() []av.CodecType {
+	return []av.CodecType{av.H264, av.AAC}
 }
 
 func (self *Muxer) newStream(codec av.CodecData) (err error) {
-	if !self.isCodecSupported(codec) {
+	switch codec.Type() {
+	case av.H264, av.AAC:
+
+	default:
 		err = fmt.Errorf("mp4: codec type=%v is not supported", codec.Type())
 		return
 	}
-
 	stream := &Stream{CodecData: codec}
 
 	stream.sample = &atom.SampleTable{
@@ -155,7 +156,7 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 		}
 	}
 
-	if self.mdatWriter, err = atom.WriteAtomHeader(self.W, "mdat"); err != nil {
+	if self.mdatWriter, err = atom.WriteAtomHeader(self.w, "mdat"); err != nil {
 		return
 	}
 	for _, stream := range self.streams {
@@ -261,7 +262,7 @@ func (self *Muxer) WriteTrailer() (err error) {
 	if err = self.mdatWriter.Close(); err != nil {
 		return
 	}
-	if err = atom.WriteMovie(self.W, moov); err != nil {
+	if err = atom.WriteMovie(self.w, moov); err != nil {
 		return
 	}
 
