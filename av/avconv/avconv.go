@@ -33,6 +33,7 @@ type Option struct {
 }
 
 type Options struct {
+	OutputCodecTypes []av.CodecType
 }
 
 type Demuxer struct {
@@ -40,7 +41,6 @@ type Demuxer struct {
 	streams []av.CodecData
 	Options
 	Demuxer av.Demuxer
-	Muxer av.Muxer
 }
 
 func (self *Demuxer) Close() (err error) {
@@ -77,7 +77,7 @@ func (self *Demuxer) prepare() (err error) {
 	}
 	*/
 
-	supports := self.Muxer.SupportedCodecTypes()
+	supports := self.Options.OutputCodecTypes
 
 	transopts := transcode.Options{}
 	transopts.FindAudioDecoderEncoder = func(codec av.AudioCodecData, i int) (ok bool, err error, dec av.AudioDecoder, enc av.AudioEncoder) {
@@ -188,10 +188,10 @@ func ConvertCmdline(args []string) (err error) {
 	}
 	defer muxer.Close()
 
+	options.OutputCodecTypes = muxer.SupportedCodecTypes()
 	convdemux := &Demuxer{
 		Options: options,
 		Demuxer: demuxer,
-		Muxer: muxer,
 	}
 	defer convdemux.Close()
 
