@@ -51,7 +51,7 @@ type RegisterHandler struct {
 	UrlReader func(string)(bool,io.ReadCloser,error)
 	Probe func([]byte)bool
 	AudioEncoder func(av.CodecType)(av.AudioEncoder,error)
-	AudioDecoder func(av.CodecData)(av.AudioDecoder,error)
+	AudioDecoder func(av.AudioCodecData)(av.AudioDecoder,error)
 }
 
 type Handlers struct {
@@ -98,7 +98,7 @@ func (self *Handlers) NewAudioEncoder(typ av.CodecType) (enc av.AudioEncoder, er
 	return
 }
 
-func (self *Handlers) NewAudioDecoder(codec av.CodecData) (dec av.AudioDecoder, err error) {
+func (self *Handlers) NewAudioDecoder(codec av.AudioCodecData) (dec av.AudioDecoder, err error) {
 	for _, handler := range self.handlers {
 		if handler.AudioDecoder != nil {
 			if dec, _ = handler.AudioDecoder(codec); dec != nil {

@@ -290,8 +290,12 @@ func (self *AudioEncoder) prepare() (err error) {
 	return
 }
 
-func (self *AudioEncoder) CodecData() (codec av.AudioCodecData) {
-	return self.codecData
+func (self *AudioEncoder) CodecData() (codec av.AudioCodecData, err error) {
+	if err = self.prepare(); err != nil {
+		return
+	}
+	codec = self.codecData
+	return
 }
 
 func (self *AudioEncoder) encodeOne(frame av.AudioFrame) (gotpkt bool, pkt []byte, err error) {

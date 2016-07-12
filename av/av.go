@@ -263,7 +263,7 @@ func (self AudioFrame) Concat(in AudioFrame) (out AudioFrame) {
 }
 
 type AudioEncoder interface {
-	CodecData() AudioCodecData
+	CodecData() (AudioCodecData, error)
 	Encode(AudioFrame) ([][]byte, error)
 	//Flush() ([]Packet, error)
 	Close()

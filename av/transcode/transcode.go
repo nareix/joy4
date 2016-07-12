@@ -42,7 +42,9 @@ func NewTranscoder(streams []av.CodecData, options Options) (_self *Transcoder, 
 						return
 					}
 					ts.timeline = &pktque.Timeline{}
-					ts.codec = enc.CodecData()
+					if ts.codec, err = enc.CodecData(); err != nil {
+						return
+					}
 					ts.aencodec = ts.codec.(av.AudioCodecData)
 					ts.adecodec = stream.(av.AudioCodecData)
 					ts.aenc = enc
@@ -168,7 +170,10 @@ func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
 }
 
 func (self *Muxer) Close() (err error) {
-	return self.transcoder.Close()
+	if self.transcoder != nil {
+		return self.transcoder.Close()
+	}
+	return
 }
 
 type Demuxer struct {
@@ -220,5 +225,8 @@ func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
 }
 
 func (self *Demuxer) Close() (err error) {
-	return self.transcoder.Close()
+	if self.transcoder != nil {
+		return self.transcoder.Close()
+	}
+	return
 }
