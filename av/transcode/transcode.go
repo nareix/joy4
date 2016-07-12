@@ -18,21 +18,21 @@ type tStream struct {
 }
 
 type Transcoder struct {
-	FindAudioDecoderEncoder func(codec av.AudioCodecData) (ok bool, err error, dec av.AudioDecoder, enc av.AudioEncoder)
+	FindAudioDecoderEncoder func(codec av.AudioCodecData, i int) (ok bool, err error, dec av.AudioDecoder, enc av.AudioEncoder)
 	streams                 []*tStream
 }
 
 func (self *Transcoder) Setup(streams []av.CodecData) (err error) {
 	self.streams = []*tStream{}
 
-	for _, stream := range streams {
+	for i, stream := range streams {
 		ts := &tStream{codec: stream}
 		if stream.Type().IsAudio() {
 			if self.FindAudioDecoderEncoder != nil {
 				var ok bool
 				var enc av.AudioEncoder
 				var dec av.AudioDecoder
-				ok, err, dec, enc = self.FindAudioDecoderEncoder(stream.(av.AudioCodecData))
+				ok, err, dec, enc = self.FindAudioDecoderEncoder(stream.(av.AudioCodecData), i)
 				if ok {
 					if err != nil {
 						return
