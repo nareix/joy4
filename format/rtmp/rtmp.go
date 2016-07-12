@@ -55,7 +55,6 @@ func DialTimeout(uri string, timeout time.Duration) (conn *Conn, err error) {
 }
 
 var	Debug bool
-var DebugConn bool
 
 type Server struct {
 	Addr string
@@ -204,6 +203,8 @@ func NewConn(netconn net.Conn) *Conn {
 	conn.br = pio.NewReader(conn.bufr)
 	conn.bw = pio.NewWriter(conn.bufw)
 	conn.intw = pio.NewWriter(nil)
+	conn.videostreamidx = -1
+	conn.audiostreamidx = -1
 	return conn
 }
 
@@ -534,7 +535,7 @@ func (self *Conn) probe() (err error) {
 			tag := self.videodata
 			switch tag.CodecID {
 			case flvio.VIDEO_H264:
-				if tag.AVCPacketType == flvio.AVC_SEQHDR {
+				if tag.AVCPacketType == flvio.AVC_SEQHDR && self.videostreamidx == -1 {
 					var h264 h264parser.CodecData
 					if h264, err = h264parser.NewCodecDataFromAVCDecoderConfRecord(tag.Data); err != nil {
 						err = fmt.Errorf("rtmp: h264 codec data invalid")
@@ -556,7 +557,7 @@ func (self *Conn) probe() (err error) {
 			tag := self.audiodata
 			switch tag.SoundFormat {
 			case flvio.SOUND_AAC:
-				if tag.AACPacketType == flvio.AAC_SEQHDR {
+				if tag.AACPacketType == flvio.AAC_SEQHDR && self.audiostreamidx == -1 {
 					var aac aacparser.CodecData
 					if aac, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(tag.Data); err != nil {
 						err = fmt.Errorf("rtmp: aac codec data invalid")
@@ -569,27 +570,35 @@ func (self *Conn) probe() (err error) {
 				}
 
 			case flvio.SOUND_NELLYMOSER, flvio.SOUND_NELLYMOSER_16KHZ_MONO, flvio.SOUND_NELLYMOSER_8KHZ_MONO:
-				stream := codec.NewNellyMoserCodecData()
-				self.audiostreamidx = len(self.streams)
-				self.streams = append(self.streams, newStream(stream))
+				if self.audiostreamidx == -1 {
+					stream := codec.NewNellyMoserCodecData()
+					self.audiostreamidx = len(self.streams)
+					self.streams = append(self.streams, newStream(stream))
+				}
 				self.probepkts = append(self.probepkts, tag)
 
 			case flvio.SOUND_ALAW:
-				stream := codec.NewPCMAlawCodecData()
-				self.audiostreamidx = len(self.streams)
-				self.streams = append(self.streams, newStream(stream))
+				if self.audiostreamidx == -1 {
+					stream := codec.NewPCMAlawCodecData()
+					self.audiostreamidx = len(self.streams)
+					self.streams = append(self.streams, newStream(stream))
+				}
 				self.probepkts = append(self.probepkts, tag)
 
 			case flvio.SOUND_MULAW:
-				stream := codec.NewPCMMulawCodecData()
-				self.audiostreamidx = len(self.streams)
-				self.streams = append(self.streams, newStream(stream))
+				if self.audiostreamidx == -1 {
+					stream := codec.NewPCMMulawCodecData()
+					self.audiostreamidx = len(self.streams)
+					self.streams = append(self.streams, newStream(stream))
+				}
 				self.probepkts = append(self.probepkts, tag)
 
 			case flvio.SOUND_SPEEX:
-				stream := codec.NewSpeexCodecData()
-				self.audiostreamidx = len(self.streams)
-				self.streams = append(self.streams, newStream(stream))
+				if self.audiostreamidx == -1 {
+					stream := codec.NewSpeexCodecData()
+					self.audiostreamidx = len(self.streams)
+					self.streams = append(self.streams, newStream(stream))
+				}
 				self.probepkts = append(self.probepkts, tag)
 
 			default:
