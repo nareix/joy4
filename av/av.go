@@ -190,6 +190,7 @@ type Muxer interface {
 	PacketWriter
 	WriteHeader([]CodecData) error
 	WriteTrailer() error
+	SupportedCodecTypes() []CodecType
 }
 
 type MuxCloser interface {
@@ -264,14 +265,18 @@ func (self AudioFrame) Concat(in AudioFrame) (out AudioFrame) {
 type AudioEncoder interface {
 	CodecData() AudioCodecData
 	Encode(AudioFrame) ([][]byte, error)
-	Close()
 	//Flush() ([]Packet, error)
+	Close()
+	SetSampleRate(int) (error)
+	SetChannelLayout(ChannelLayout) (error)
+	SetSampleFormat(SampleFormat) (error)
+	SetOption(string) (error)
 }
 
 type AudioDecoder interface {
 	Decode([]byte) (bool, AudioFrame, error)
-	Close()
 	//Flush() (AudioFrame, error)
+	Close()
 }
 
 type AudioResampler interface {
