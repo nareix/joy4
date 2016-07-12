@@ -208,6 +208,25 @@ func sampleFormatFF2AV(ffsamplefmt int32) (sampleFormat av.SampleFormat) {
 	return
 }
 
+func (self *AudioEncoder) SetSampleFormat(fmt av.SampleFormat) (err error) {
+	self.SampleFormat = fmt
+	return
+}
+
+func (self *AudioEncoder) SetSampleRate(rate int) (err error) {
+	self.SampleRate = rate
+	return
+}
+
+func (self *AudioEncoder) SetChannelLayout(ch av.ChannelLayout) (err error) {
+	self.ChannelLayout = ch
+	return
+}
+
+func (self *AudioEncoder) SetOption(opt string) (err error) {
+	return
+}
+
 func (self *AudioEncoder) Setup() (err error) {
 	ff := &self.ff.ff
 
