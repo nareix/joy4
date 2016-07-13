@@ -301,7 +301,10 @@ func createURL(tcurl, app, play string) (u *url.URL) {
 			out = append(out, s)
 		}
 	}
-	path := "/"+strings.Join(out, "/")
+	if len(out) < 2 {
+		out = append(out, "")
+	}
+	path := strings.Join(out, "/")
 	u, _ = url.ParseRequestURI(path)
 
 	if tcurl != "" {
@@ -311,7 +314,6 @@ func createURL(tcurl, app, play string) (u *url.URL) {
 			u.Scheme = tu.Scheme
 		}
 	}
-
 	return
 }
 
@@ -875,6 +877,7 @@ func (self *Conn) WriteHeader(streams []av.CodecData) (err error) {
 		}
 	}
 
+	self.streams = streams
 	self.stage++
 	return
 }
