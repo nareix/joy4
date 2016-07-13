@@ -26,22 +26,18 @@ type Muxer struct {
 	tswPMT *TSWriter
 }
 
-var supportedCodecTypes = []av.CodecType{av.H264, av.AAC}
-
-func (self Muxer) SupportedCodecTypes() []av.CodecType {
-	return supportedCodecTypes
-}
+var CodecTypes = []av.CodecType{av.H264, av.AAC}
 
 func (self *Muxer) newStream(codec av.CodecData) (err error) {
 	ok := false
-	for _, c := range supportedCodecTypes {
+	for _, c := range CodecTypes {
 		if codec.Type() == c {
 			ok = true
 			break
 		}
 	}
 	if !ok {
-		err = fmt.Errorf("codec type=%x is not supported", codec.Type())
+		err = fmt.Errorf("ts: codec type=%s is not supported", codec.Type())
 		return
 	}
 

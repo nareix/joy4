@@ -11,22 +11,22 @@ import (
 	"path"
 )
 
-type handlerDemuxer struct {
+type HandlerDemuxer struct {
 	av.Demuxer
 	r io.ReadCloser
 }
 
-func (self *handlerDemuxer) Close() error {
+func (self *HandlerDemuxer) Close() error {
 	return self.r.Close()
 }
 
-type handlerMuxer struct {
+type HandlerMuxer struct {
 	av.Muxer
 	w io.WriteCloser
 	stage int
 }
 
-func (self *handlerMuxer) WriteHeader(streams []av.CodecData) (err error) {
+func (self *HandlerMuxer) WriteHeader(streams []av.CodecData) (err error) {
 	if self.stage == 0 {
 		if err = self.Muxer.WriteHeader(streams); err != nil {
 			return
@@ -36,7 +36,7 @@ func (self *handlerMuxer) WriteHeader(streams []av.CodecData) (err error) {
 	return
 }
 
-func (self *handlerMuxer) WriteTrailer() (err error) {
+func (self *HandlerMuxer) WriteTrailer() (err error) {
 	if self.stage == 1 {
 		if err = self.Muxer.WriteTrailer(); err != nil {
 			return
@@ -46,7 +46,7 @@ func (self *handlerMuxer) WriteTrailer() (err error) {
 	return
 }
 
-func (self *handlerMuxer) Close() (err error) {
+func (self *HandlerMuxer) Close() (err error) {
 	if err = self.WriteTrailer(); err != nil {
 		return
 	}
@@ -64,6 +64,7 @@ type RegisterHandler struct {
 	AudioDecoder func(av.AudioCodecData)(av.AudioDecoder,error)
 	ServerDemuxer func(string)(bool,av.DemuxCloser,error)
 	ServerMuxer func(string)(bool,av.MuxCloser,error)
+	CodecTypes []av.CodecType
 }
 
 type Handlers struct {
@@ -163,7 +164,7 @@ func (self *Handlers) Open(uri string) (demuxer av.DemuxCloser, err error) {
 					if r, err = self.openUrl(u, uri); err != nil {
 						return
 					}
-					demuxer = &handlerDemuxer{
+					demuxer = &HandlerDemuxer{
 						Demuxer: handler.ReaderDemuxer(r),
 						r: r,
 					}
@@ -183,7 +184,7 @@ func (self *Handlers) Open(uri string) (demuxer av.DemuxCloser, err error) {
 
 	for _, handler := range self.handlers {
 		if handler.Probe != nil && handler.Probe(probebuf[:]) && handler.ReaderDemuxer != nil {
-			demuxer = &handlerDemuxer{
+			demuxer = &HandlerDemuxer{
 				Demuxer: handler.ReaderDemuxer(io.MultiReader(bytes.NewReader(probebuf[:]), r)),
 				r: r,
 			}
@@ -197,13 +198,18 @@ func (self *Handlers) Open(uri string) (demuxer av.DemuxCloser, err error) {
 }
 
 func (self *Handlers) Create(uri string) (muxer av.MuxCloser, err error) {
+	_, muxer, err = self.FindCreate(uri)
+	return
+}
+
+func (self *Handlers) FindCreate(uri string) (handler RegisterHandler, muxer av.MuxCloser, err error) {
 	listen := false
 	if strings.HasPrefix(uri, "listen:") {
 		uri = uri[len("listen:"):]
 		listen = true
 	}
 
-	for _, handler := range self.handlers {
+	for _, handler = range self.handlers {
 		if listen {
 			if handler.ServerMuxer != nil {
 				var ok bool
@@ -223,13 +229,13 @@ func (self *Handlers) Create(uri string) (muxer av.MuxCloser, err error) {
 	}
 
 	if ext != "" {
-		for _, handler := range self.handlers {
+		for _, handler = range self.handlers {
 			if handler.Ext == ext && handler.WriterMuxer != nil {
 				var w io.WriteCloser
 				if w, err = self.createUrl(u, uri); err != nil {
 					return
 				}
-				muxer = &handlerMuxer{
+				muxer = &HandlerMuxer{
 					Muxer: handler.WriterMuxer(w),
 					w: w,
 				}

@@ -22,10 +22,6 @@ func NewMuxer(w io.WriteSeeker) *Muxer {
 	return &Muxer{w: w}
 }
 
-func (self *Muxer) SupportedCodecTypes() []av.CodecType {
-	return []av.CodecType{av.H264, av.AAC}
-}
-
 func (self *Muxer) newStream(codec av.CodecData) (err error) {
 	switch codec.Type() {
 	case av.H264, av.AAC:

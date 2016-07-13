@@ -171,17 +171,13 @@ func ConvertCmdline(args []string) (err error) {
 	}
 	defer demuxer.Close()
 
-	if muxer, err = avutil.Create(output); err != nil {
+	var handler avutil.RegisterHandler
+	if handler, muxer, err = avutil.DefaultHandlers.FindCreate(output); err != nil {
 		return
 	}
 	defer muxer.Close()
 
-	type intf interface {
-		SupportedCodecTypes() []av.CodecType
-	}
-	if fn, ok := muxer.(intf); ok {
-		options.OutputCodecTypes = fn.SupportedCodecTypes()
-	}
+	options.OutputCodecTypes = handler.CodecTypes
 
 	convdemux := &Demuxer{
 		Options: options,

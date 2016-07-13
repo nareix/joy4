@@ -1,25 +1,13 @@
 package ts
 
 import (
-	"fmt"
-	"os"
+	"io"
 )
 
 const (
 	ElementaryStreamTypeH264    = 0x1B
 	ElementaryStreamTypeAdtsAAC = 0x0F
 )
-
-type TSHeader struct {
-	PID                    uint
-	PCR                    uint64
-	OPCR                   uint64
-	ContinuityCounter      uint
-	PayloadUnitStart       bool
-	DiscontinuityIndicator bool
-	RandomAccessIndicator  bool
-	HeaderLength           uint
-}
 
 type PATEntry struct {
 	ProgramNumber uint
@@ -96,27 +84,9 @@ func PCRToUInt(pcr uint64) uint64 {
 	return base<<15 | 0x3f<<9 | ext
 }
 
-var DebugOutput = os.Stdout
-var DebugReader = false
-var DebugWriter = false
-
-type FieldsDumper struct {
-	Fields []struct {
-		Length int
-		Desc   string
-	}
-	Val    uint
-	Length uint
+type TSWriter struct {
+	w   io.Writer
+	ContinuityCounter uint
+	tshdr []byte
 }
 
-func (self FieldsDumper) String() (res string) {
-	pos := uint(self.Length)
-	for _, field := range self.Fields {
-		pos -= uint(field.Length)
-		val := (self.Val >> pos) & (1<<uint(field.Length) - 1)
-		if val != 0 {
-			res += fmt.Sprintf("%s=%x ", field.Desc, val)
-		}
-	}
-	return
-}

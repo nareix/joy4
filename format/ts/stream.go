@@ -11,7 +11,6 @@ type Stream struct {
 
 	buf bytes.Buffer
 	peshdr *PESHeader
-	tshdr  TSHeader
 
 	demuxer *Demuxer
 	muxer   *Muxer

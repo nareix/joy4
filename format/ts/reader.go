@@ -39,174 +39,12 @@ func ReadUInt64(r io.Reader, n int) (res uint64, err error) {
 	return
 }
 
-func ReadTSHeader(r io.Reader) (self TSHeader, err error) {
-	var flags uint
-
-	// sync(8)
-	// transport_error_indicator(1)
-	// payload_unit_start_indicator(1)
-	// transport_priority(1)
-	// pid(13)
-	// Scrambling control(2)
-	// Adaptation field flag(1)
-	// Continuity counter(4)
-	if flags, err = ReadUInt(r, 4); err != nil {
-		return
-	}
-
-	if DebugReader {
-		fmt.Fprintf(DebugOutput, "ts: flags %s\n", FieldsDumper{
-			Fields: []struct {
-				Length int
-				Desc   string
-			}{
-				{8, "sync"},
-				{1, "transport_error_indicator"},
-				{1, "payload_unit_start_indicator"},
-				{1, "transport_priority"},
-				{13, "pid"},
-				{2, "scrambling_control"},
-				{1, "adaptation_field_flag"},
-				{1, "payload_flag"},
-				{4, "continuity_counter"},
-			},
-			Val:    flags,
-			Length: 32,
-		})
-	}
-
-	if flags&0x400000 != 0 {
-		//  When set to '1' it indicates that this TS packet contains the first PES packet.
-		self.PayloadUnitStart = true
-	}
-
-	if (flags&0xff000000)>>24 != 0x47 {
-		err = fmt.Errorf("invalid sync")
-		return
-	}
-
-	self.PID = (flags & 0x1fff00) >> 8
-	self.ContinuityCounter = flags & 0xf
-
-	if flags&0x20 != 0 {
-		var flags, length uint
-		if length, err = ReadUInt(r, 1); err != nil {
-			return
-		}
-		if length > 0 {
-			lr := &io.LimitedReader{R: r, N: int64(length)}
-			if flags, err = ReadUInt(lr, 1); err != nil {
-				return
-			}
-
-			if DebugReader {
-				fmt.Fprintf(DebugOutput, "ts: ext_flags %s\n", FieldsDumper{
-					Fields: []struct {
-						Length int
-						Desc   string
-					}{
-						{1, "discontinuity_indicator"},
-						{1, "random_access_indicator"},
-						{1, "elementary_stream_priority_indicator"},
-						{1, "pcr_flag"},
-						{1, "opcr_flag"},
-						{1, "splicing_point_flag"},
-						{1, "transport_private_data_flag"},
-						{1, "adaptation_field_extension_flag"},
-					},
-					Val:    flags,
-					Length: 8,
-				})
-			}
-
-			// random_access_indicator
-			if flags&0x40 != 0 {
-				self.RandomAccessIndicator = true
-			}
-
-			// PCR
-			if flags&0x10 != 0 {
-				var v uint64
-				if v, err = ReadUInt64(lr, 6); err != nil {
-					return
-				}
-				// clock is 27MHz
-				self.PCR = UIntToPCR(v)
-				if DebugReader {
-					fmt.Fprintf(DebugOutput, "ts: PCR %d %f\n", self.PCR, float32(self.PCR)/PCR_HZ)
-				}
-			}
-
-			// OPCR
-			if flags&0x08 != 0 {
-				var v uint64
-				if v, err = ReadUInt64(lr, 6); err != nil {
-					return
-				}
-				self.OPCR = UIntToPCR(v)
-			}
-
-			// Splice countdown
-			if flags&0x04 != 0 {
-				if _, err = ReadUInt(lr, 1); err != nil {
-					return
-				}
-			}
-
-			// Transport private data
-			if flags&0x02 != 0 {
-				var length uint
-				if length, err = ReadUInt(lr, 1); err != nil {
-					return
-				}
-
-				b := make([]byte, length)
-				if _, err = lr.Read(b); err != nil {
-					return
-				}
-			}
-
-			// Adaptation extension
-			if lr.N > 0 {
-				if DebugReader {
-					// rubish
-					fmt.Fprintln(DebugOutput, "ts: skip", lr.N)
-				}
-
-				if err = ReadDummy(lr, int(lr.N)); err != nil {
-					return
-				}
-			}
-		}
-	}
-
-	return
-}
-
-func ReadTSPacket(r io.Reader, data []byte) (self TSHeader, n int, err error) {
-	lr := &io.LimitedReader{R: r, N: 188}
-	if self, err = ReadTSHeader(lr); err != nil {
-		return
-	}
-	if DebugReader {
-		fmt.Fprintln(DebugOutput, "ts: data len", lr.N)
-	}
-	if n, err = lr.Read(data[:lr.N]); err != nil {
-		return
-	}
-	return
-}
-
 func ReadPSI(r io.Reader) (self PSI, lr *io.LimitedReader, cr *Crc32Reader, err error) {
 	var flags, pointer, length uint
 
 	// pointer field
 	if pointer, err = ReadUInt(r, 1); err != nil {
 		return
-	}
-
-	if DebugReader {
-		fmt.Fprintf(DebugOutput, "psi: pointer=%d\n", pointer)
 	}
 
 	if pointer != 0 {
@@ -229,10 +67,6 @@ func ReadPSI(r io.Reader) (self PSI, lr *io.LimitedReader, cr *Crc32Reader, err 
 	}
 	length = flags & 0x3FF
 
-	if DebugReader {
-		fmt.Fprintf(DebugOutput, "psi: tableid=%d len=%d\n", self.TableId, length)
-	}
-
 	lr = &io.LimitedReader{R: cr, N: int64(length)}
 
 	// Table ID extension(16)
@@ -247,21 +81,6 @@ func ReadPSI(r io.Reader) (self PSI, lr *io.LimitedReader, cr *Crc32Reader, err 
 		return
 	}
 
-	if DebugReader {
-		fmt.Fprintf(DebugOutput, "psi: %s\n", FieldsDumper{
-			Fields: []struct {
-				Length int
-				Desc   string
-			}{
-				{2, "resverd"},
-				{5, "version"},
-				{1, "current_next_indicator"},
-			},
-			Val:    flags,
-			Length: 8,
-		})
-	}
-
 	// section_number(8)
 	if self.SecNum, err = ReadUInt(lr, 1); err != nil {
 		return
@@ -270,15 +89,6 @@ func ReadPSI(r io.Reader) (self PSI, lr *io.LimitedReader, cr *Crc32Reader, err 
 	// last_section_number(8)
 	if self.LastSecNum, err = ReadUInt(lr, 1); err != nil {
 		return
-	}
-
-	if DebugReader {
-		fmt.Fprintf(DebugOutput, "psi: table_id=%x table_extension=%x secnum=%x lastsecnum=%x\n",
-			self.TableId,
-			self.TableIdExtension,
-			self.SecNum,
-			self.LastSecNum,
-		)
 	}
 
 	lr.N -= 4
@@ -322,20 +132,6 @@ func ReadPMT(r io.Reader) (self PMT, err error) {
 	}
 	self.PCRPID = flags & 0x1fff
 
-	if DebugReader {
-		fmt.Fprintf(DebugOutput, "pmt: %s\n", FieldsDumper{
-			Fields: []struct {
-				Length int
-				Desc   string
-			}{
-				{3, "reserved"},
-				{13, "pcrpid"},
-			},
-			Val:    flags,
-			Length: 16,
-		})
-	}
-
 	// Reserved(4)=0xf
 	// Reserved(2)=0x0
 	// Program info length(10)
@@ -343,10 +139,6 @@ func ReadPMT(r io.Reader) (self PMT, err error) {
 		return
 	}
 	length = flags & 0x3ff
-
-	if DebugReader {
-		fmt.Fprintf(DebugOutput, "pmt: ProgramDescriptorsLen=%d\n", length)
-	}
 
 	if length > 0 {
 		lr := &io.LimitedReader{R: lr, N: int64(length)}
@@ -368,40 +160,12 @@ func ReadPMT(r io.Reader) (self PMT, err error) {
 		}
 		info.ElementaryPID = flags & 0x1fff
 
-		if DebugReader {
-			fmt.Fprintf(DebugOutput, "pmt: info1 %s\n", FieldsDumper{
-				Fields: []struct {
-					Length int
-					Desc   string
-				}{
-					{3, "reserved"},
-					{13, "elementary_pid"},
-				},
-				Val:    flags,
-				Length: 16,
-			})
-		}
-
 		// Reserved(6)
 		// ES Info length(10)
 		if flags, err = ReadUInt(lr, 2); err != nil {
 			return
 		}
 		length = flags & 0x3ff
-
-		if DebugReader {
-			fmt.Fprintf(DebugOutput, "pmt: info2 %s\n", FieldsDumper{
-				Fields: []struct {
-					Length int
-					Desc   string
-				}{
-					{6, "reserved"},
-					{10, "es_info_length"},
-				},
-				Val:    flags,
-				Length: 16,
-			})
-		}
 
 		if length > 0 {
 			lr := &io.LimitedReader{R: lr, N: int64(length)}
@@ -412,15 +176,7 @@ func ReadPMT(r io.Reader) (self PMT, err error) {
 		self.ElementaryStreamInfos = append(self.ElementaryStreamInfos, info)
 	}
 
-	if DebugReader {
-		fmt.Fprintf(DebugOutput, "pmt: ProgramDescriptors %v\n", self.ProgramDescriptors)
-		fmt.Fprintf(DebugOutput, "pmt: ElementaryStreamInfos %v\n", self.ElementaryStreamInfos)
-	}
-
 	if err = cr.ReadCrc32UIntAndCheck(); err != nil {
-		if DebugReader {
-			fmt.Fprintf(DebugOutput, "pmt: %s\n", err)
-		}
 		return
 	}
 
@@ -456,14 +212,7 @@ func ReadPAT(r io.Reader) (self PAT, err error) {
 	}
 
 	if err = cr.ReadCrc32UIntAndCheck(); err != nil {
-		if DebugReader {
-			fmt.Fprintf(DebugOutput, "pat: %s\n", err)
-		}
 		return
-	}
-
-	if DebugReader {
-		fmt.Fprintf(DebugOutput, "pat: %v\n", self)
 	}
 
 	return
@@ -491,9 +240,6 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 	if length, err = ReadUInt(r, 2); err != nil {
 		return
 	}
-	if DebugReader {
-		fmt.Fprintf(DebugOutput, "pes: StreamId=%x length=%d\n", self.StreamId, length)
-	}
 
 	if length == 0 {
 		length = 1 << 31
@@ -511,23 +257,6 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 		return
 	}
 
-	if DebugReader {
-		fmt.Fprintf(DebugOutput, "pes: %s\n", FieldsDumper{
-			Fields: []struct {
-				Length int
-				Desc   string
-			}{
-				{2, "scrambling_control"},
-				{1, "priority"},
-				{1, "data_alignment_indicator"},
-				{1, "copyright"},
-				{1, "original_or_copy"},
-			},
-			Val:    flags,
-			Length: 6,
-		})
-	}
-
 	// PTS DTS flags(2)
 	// ESCR flag(1)
 	// ES rate flag(1)
@@ -537,25 +266,6 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 	// PES extension flag(1)
 	if flags, err = ReadUInt(lr, 1); err != nil {
 		return
-	}
-
-	if DebugReader {
-		fmt.Fprintf(DebugOutput, "pes: %s\n", FieldsDumper{
-			Fields: []struct {
-				Length int
-				Desc   string
-			}{
-				{2, "pts_dts_flags"},
-				{1, "escr_flag"},
-				{1, "es_rate_flag"},
-				{1, "dsm_trick_mode_flag"},
-				{1, "additional_copy_info_flag"},
-				{1, "pes_crc_flag"},
-				{1, "pes_extension_flag"},
-			},
-			Val:    flags,
-			Length: 8,
-		})
 	}
 
 	// PES header data length(8)
@@ -570,10 +280,6 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 			return
 		}
 		self.PTS = PESUIntToTs(v)
-
-		if DebugReader {
-			fmt.Fprintf(DebugOutput, "pes: pts %d %f\n", self.PTS, float32(self.PTS)/float32(PTS_HZ))
-		}
 	}
 
 	if flags&0x40 != 0 && flags&0x80 != 0 {
@@ -582,9 +288,6 @@ func ReadPESHeader(r io.Reader) (res *PESHeader, err error) {
 			return
 		}
 		self.DTS = PESUIntToTs(v)
-		if DebugReader {
-			fmt.Fprintf(DebugOutput, "pes: dts %d %f\n", self.DTS, float32(self.DTS)/float32(PTS_HZ))
-		}
 	}
 
 	// ESCR flag

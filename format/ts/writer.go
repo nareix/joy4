@@ -2,7 +2,6 @@ package ts
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 )
 
@@ -20,12 +19,6 @@ func WriteUInt64(w io.Writer, val uint64, n int) (err error) {
 
 func WriteUInt(w io.Writer, val uint, n int) (err error) {
 	return WriteUInt64(w, uint64(val), n)
-}
-
-type TSWriter struct {
-	w   io.Writer
-	ContinuityCounter uint
-	tshdr []byte
 }
 
 func WritePSI(w io.Writer, self PSI, data []byte) (err error) {
@@ -57,10 +50,6 @@ func WritePSI(w io.Writer, self PSI, data []byte) (err error) {
 	flags = 0xa<<12 | length
 	if err = WriteUInt(cw, flags, 2); err != nil {
 		return
-	}
-
-	if DebugWriter {
-		fmt.Fprintf(DebugOutput, "psiw: length=%d\n", length)
 	}
 
 	// Table ID extension(16)

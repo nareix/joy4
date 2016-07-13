@@ -21,6 +21,8 @@ import (
 	"crypto/rand"
 )
 
+var	Debug bool
+
 func ParseURL(uri string) (u *url.URL, err error) {
 	if u, err = url.Parse(uri); err != nil {
 		return
@@ -51,8 +53,6 @@ func DialTimeout(uri string, timeout time.Duration) (conn *Conn, err error) {
 	conn.URL = u
 	return
 }
-
-var	Debug bool
 
 type Server struct {
 	Addr string
@@ -317,9 +317,7 @@ func createURL(tcurl, app, play string) (u *url.URL) {
 	return
 }
 
-func (self *Conn) SupportedCodecTypes() []av.CodecType {
-	return flv.SupportedCodecTypes
-}
+var CodecTypes = flv.CodecTypes
 
 func (self *Conn) recvConnect() (err error) {
 	var connectpath string
@@ -1707,5 +1705,7 @@ func Handler(h *avutil.RegisterHandler) {
 
 		return
 	}
+
+	h.CodecTypes = CodecTypes
 }
 
