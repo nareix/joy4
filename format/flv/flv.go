@@ -382,12 +382,6 @@ func (self *Demuxer) prepare() (err error) {
 	return
 }
 
-func dumptag(_tag flvio.Tag, timestamp int32) {
-	if tag, ok := _tag.(*flvio.Videodata); ok {
-		fmt.Printf("video ts=%d cts=%d FrameType=%d AVCPacketType=%d\n", timestamp, tag.CompositionTime, tag.FrameType, tag.AVCPacketType)
-	}
-}
-
 func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
 	if err = self.prepare(); err != nil {
 		return
