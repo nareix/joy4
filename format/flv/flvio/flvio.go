@@ -1,11 +1,19 @@
 package flvio
 
 import (
+	"io"
+	"time"
 	"fmt"
 	"github.com/nareix/pio"
-	"github.com/nareix/joy4/av"
-	"io"
 )
+
+func TsToTime(ts int32) time.Duration {
+	return time.Millisecond*time.Duration(ts)
+}
+
+func TimeToTs(tm time.Duration) int32 {
+	return int32(tm / time.Millisecond)
+}
 
 const (
 	TAG_AUDIO      = 8
@@ -40,8 +48,7 @@ func (self Scriptdata) Len() int {
 }
 
 func (self *Scriptdata) Unmarshal(r *pio.Reader) (err error) {
-	self.Data = make([]byte, r.N)
-	if _, err = io.ReadFull(r, self.Data); err != nil {
+	if self.Data, err = r.ReadBytes(int(r.N)); err != nil {
 		return
 	}
 	return
@@ -71,28 +78,6 @@ const (
 	AAC_SEQHDR = 0
 	AAC_RAW    = 1
 )
-
-func MakeAACAudiodata(codec av.AudioCodecData, data []byte) Audiodata {
-	tag := Audiodata{
-		SoundFormat: SOUND_AAC,
-		SoundRate: SOUND_44Khz,
-		AACPacketType: AAC_RAW,
-		Data: data,
-	}
-	switch codec.SampleFormat().BytesPerSample() {
-	case 1:
-		tag.SoundSize = SOUND_8BIT
-	default:
-		tag.SoundSize = SOUND_16BIT
-	}
-	switch codec.ChannelLayout().Count() {
-	case 1:
-		tag.SoundType = SOUND_MONO
-	case 2:
-		tag.SoundType = SOUND_STEREO
-	}
-	return tag
-}
 
 type Audiodata struct {
 	/*
@@ -160,7 +145,11 @@ func (self Audiodata) Type() uint8 {
 }
 
 func (self Audiodata) Len() int {
-	return 2 + len(self.Data)
+	if self.SoundFormat == SOUND_AAC {
+		return 2 + len(self.Data)
+	} else {
+		return 1 + len(self.Data)
+	}
 }
 
 func (self Audiodata) Marshal(w *pio.Writer) (err error) {
@@ -205,14 +194,12 @@ func (self *Audiodata) Unmarshal(r *pio.Reader) (err error) {
 		if self.AACPacketType, err = r.ReadU8(); err != nil {
 			return
 		}
-		self.Data = make([]byte, r.N)
-		if _, err = io.ReadFull(r, self.Data); err != nil {
+		if self.Data, err = r.ReadBytes(int(r.N)); err != nil {
 			return
 		}
 
 	default:
-		self.Data = make([]byte, r.N)
-		if _, err = io.ReadFull(r, self.Data); err != nil {
+		if self.Data, err = r.ReadBytes(int(r.N)); err != nil {
 			return
 		}
 	}
@@ -287,8 +274,7 @@ func (self *Videodata) Unmarshal(r *pio.Reader) (err error) {
 	}
 	switch self.AVCPacketType {
 	case AVC_SEQHDR, AVC_NALU:
-		self.Data = make([]byte, r.N)
-		if _, err = io.ReadFull(r, self.Data); err != nil {
+		if self.Data, err = r.ReadBytes(int(r.N)); err != nil {
 			return
 		}
 	}
@@ -402,11 +388,16 @@ func ReadTag(r *pio.Reader) (tag Tag, timestamp int32, err error) {
 		return
 	}
 
-	r.LimitOn(int64(datasize))
-	if err = tag.Unmarshal(r); err != nil {
+	b := make([]byte, datasize)
+	if _, err = io.ReadFull(r, b); err != nil {
 		return
 	}
-	r.LimitOff()
+	br := pio.NewReaderBytes(b)
+	br.LimitOn(int64(datasize))
+	if err = tag.Unmarshal(br); err != nil {
+		return
+	}
+	br.LimitOff()
 
 	if _, err = r.ReadI32BE(); err != nil {
 		return

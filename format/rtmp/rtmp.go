@@ -12,18 +12,14 @@ import (
 	"encoding/hex"
 	"io"
 	"github.com/nareix/pio"
+	"github.com/nareix/joy4/format/flv"
 	"github.com/nareix/joy4/format/flv/flvio"
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/av/avutil"
-	"github.com/nareix/joy4/codec"
-	"github.com/nareix/joy4/codec/h264parser"
-	"github.com/nareix/joy4/codec/aacparser"
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/rand"
 )
-
-var MaxProbePacketCount = 6
 
 func ParseURL(uri string) (u *url.URL, err error) {
 	if u, err = url.Parse(uri); err != nil {
@@ -127,17 +123,6 @@ func (self *Server) ListenAndServe() (err error) {
 	}
 }
 
-type stream struct {
-	codec av.CodecData
-	lasttime time.Duration
-}
-
-func newStream(codec av.CodecData) *stream {
-	return &stream{
-		codec: codec,
-	}
-}
-
 const (
 	stageHandshakeDone = iota+1
 	stageCommandDone
@@ -152,10 +137,8 @@ const (
 type Conn struct {
 	URL *url.URL
 
-	streams []*stream
-	videostreamidx, audiostreamidx int
-
-	probepkts []flvio.Tag
+	prober *flv.Prober
+	streams []av.CodecData
 
 	br *pio.Reader
 	bw *pio.Writer
@@ -195,6 +178,7 @@ type Conn struct {
 
 func NewConn(netconn net.Conn) *Conn {
 	conn := &Conn{}
+	conn.prober = &flv.Prober{}
 	conn.netconn = netconn
 	conn.readcsmap = make(map[uint32]*chunkStream)
 	conn.writecsmap = make(map[uint32]*chunkStream)
@@ -205,8 +189,6 @@ func NewConn(netconn net.Conn) *Conn {
 	conn.br = pio.NewReader(conn.bufr)
 	conn.bw = pio.NewWriter(conn.bufw)
 	conn.intw = pio.NewWriter(nil)
-	conn.videostreamidx = -1
-	conn.audiostreamidx = -1
 	return conn
 }
 
@@ -256,6 +238,22 @@ func (self *Conn) pollCommand() (err error) {
 			return
 		}
 		if self.gotcommand {
+			return
+		}
+	}
+}
+
+func (self *Conn) pollAVTag() (tag flvio.Tag, err error) {
+	for {
+		if err = self.pollMsg(); err != nil {
+			return
+		}
+		switch self.msgtypeid {
+		case msgtypeidVideoMsg:
+			tag = self.videodata
+			return
+		case msgtypeidAudioMsg:
+			tag = self.audiodata
 			return
 		}
 	}
@@ -526,99 +524,17 @@ func (self *Conn) checkCreateStreamResult() (ok bool, avmsgsid uint32) {
 }
 
 func (self *Conn) probe() (err error) {
-	for i := 0; i < MaxProbePacketCount; {
-		if err = self.pollMsg(); err != nil {
+	for !self.prober.Probed() {
+		var tag flvio.Tag
+		if tag, err = self.pollAVTag(); err != nil {
 			return
 		}
-
-		switch self.msgtypeid {
-		case msgtypeidVideoMsg:
-			i++
-			tag := self.videodata
-			switch tag.CodecID {
-			case flvio.VIDEO_H264:
-				if tag.AVCPacketType == flvio.AVC_SEQHDR && self.videostreamidx == -1 {
-					var h264 h264parser.CodecData
-					if h264, err = h264parser.NewCodecDataFromAVCDecoderConfRecord(tag.Data); err != nil {
-						err = fmt.Errorf("rtmp: h264 codec data invalid")
-						return
-					}
-					self.videostreamidx = len(self.streams)
-					self.streams = append(self.streams, newStream(h264))
-				} else {
-					self.probepkts = append(self.probepkts, tag)
-				}
-
-			default:
-				err = fmt.Errorf("rtmp: video CodecID=%d not supported", tag.CodecID)
-				return
-			}
-
-		case msgtypeidAudioMsg:
-			i++
-			tag := self.audiodata
-			switch tag.SoundFormat {
-			case flvio.SOUND_AAC:
-				if tag.AACPacketType == flvio.AAC_SEQHDR && self.audiostreamidx == -1 {
-					var aac aacparser.CodecData
-					if aac, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(tag.Data); err != nil {
-						err = fmt.Errorf("rtmp: aac codec data invalid")
-						return
-					}
-					self.audiostreamidx = len(self.streams)
-					self.streams = append(self.streams, newStream(aac))
-				} else {
-					self.probepkts = append(self.probepkts, tag)
-				}
-
-			case flvio.SOUND_NELLYMOSER, flvio.SOUND_NELLYMOSER_16KHZ_MONO, flvio.SOUND_NELLYMOSER_8KHZ_MONO:
-				if self.audiostreamidx == -1 {
-					stream := codec.NewNellyMoserCodecData()
-					self.audiostreamidx = len(self.streams)
-					self.streams = append(self.streams, newStream(stream))
-				}
-				self.probepkts = append(self.probepkts, tag)
-
-			case flvio.SOUND_ALAW:
-				if self.audiostreamidx == -1 {
-					stream := codec.NewPCMAlawCodecData()
-					self.audiostreamidx = len(self.streams)
-					self.streams = append(self.streams, newStream(stream))
-				}
-				self.probepkts = append(self.probepkts, tag)
-
-			case flvio.SOUND_MULAW:
-				if self.audiostreamidx == -1 {
-					stream := codec.NewPCMMulawCodecData()
-					self.audiostreamidx = len(self.streams)
-					self.streams = append(self.streams, newStream(stream))
-				}
-				self.probepkts = append(self.probepkts, tag)
-
-			case flvio.SOUND_SPEEX:
-				if self.audiostreamidx == -1 {
-					stream := codec.NewSpeexCodecData()
-					self.audiostreamidx = len(self.streams)
-					self.streams = append(self.streams, newStream(stream))
-				}
-				self.probepkts = append(self.probepkts, tag)
-
-			default:
-				err = fmt.Errorf("rtmp: audio SoundFormat=%d not supported", tag.SoundFormat)
-				return
-			}
-		}
-
-		if len(self.streams) == 2 {
-			break
+		if err = self.prober.PushTag(tag, int32(self.timestamp)); err != nil {
+			return
 		}
 	}
 
-	if len(self.streams) == 0 {
-		err = fmt.Errorf("rtmp: probe failed")
-		return
-	}
-
+	self.streams = self.prober.Streams
 	self.stage++
 	return
 }
@@ -799,40 +715,25 @@ func (self *Conn) ReadPacket() (pkt av.Packet, err error) {
 		return
 	}
 
-	poll: for {
-		var _tag flvio.Tag
+	/*
+	if !self.prober.Empty() {
+		pkt = self.prober.PopPacket()
+		return
+	}
+	*/
 
-		if len(self.probepkts) > 0 {
-			_tag = self.probepkts[0]
-			self.probepkts = self.probepkts[1:]
-		} else {
-			if err = self.pollMsg(); err != nil {
-				return
-			}
-			switch self.msgtypeid {
-			case msgtypeidVideoMsg:
-				_tag = self.videodata
-			case msgtypeidAudioMsg:
-				_tag = self.audiodata
-			}
+	for {
+		var tag flvio.Tag
+		if tag, err = self.pollAVTag(); err != nil {
+			return
 		}
 
-		switch tag := _tag.(type) {
-		case *flvio.Videodata:
-			pkt.CompositionTime = tsToTime(uint32(tag.CompositionTime))
-			pkt.Data = tag.Data
-			pkt.IsKeyFrame = tag.FrameType == flvio.FRAME_KEY
-			pkt.Idx = int8(self.videostreamidx)
-			break poll
-
-		case *flvio.Audiodata:
-			pkt.Data = tag.Data
-			pkt.Idx = int8(self.audiostreamidx)
-			break poll
+		var ok bool
+		if pkt, ok = self.prober.TagToPacket(tag, int32(self.timestamp)); ok {
+			return
 		}
 	}
 
-	pkt.Time = tsToTime(self.timestamp)
 	return
 }
 
@@ -885,18 +786,8 @@ func (self *Conn) Streams() (streams []av.CodecData, err error) {
 	if err = self.prepare(stageCodecDataDone, prepareReading); err != nil {
 		return
 	}
-	for _, stream := range self.streams {
-		streams = append(streams, stream.codec)
-	}
+	streams = self.streams
 	return
-}
-
-func timeToTs(tm time.Duration) uint32 {
-	return uint32(tm / time.Millisecond)
-}
-
-func tsToTime(ts uint32) time.Duration {
-	return time.Duration(ts)*time.Millisecond
 }
 
 func (self *Conn) WritePacket(pkt av.Packet) (err error) {
@@ -905,30 +796,14 @@ func (self *Conn) WritePacket(pkt av.Packet) (err error) {
 	}
 
 	stream := self.streams[pkt.Idx]
-	ts := timeToTs(pkt.Time)
+	tag, timestamp := flv.PacketToTag(pkt, stream)
 
 	if Debug {
-		fmt.Println("rtmp: WritePacket", pkt.Idx, pkt.Time, pkt.CompositionTime, ts)
+		fmt.Println("rtmp: WritePacket", pkt.Idx, pkt.Time, pkt.CompositionTime)
 	}
 
-	codec := stream.codec
-	switch codec.Type() {
-	case av.AAC:
-		audiodata := self.makeAACAudiodata(codec.(av.AudioCodecData), flvio.AAC_RAW, pkt.Data)
-		w := self.writeAudioDataStart()
-		audiodata.Marshal(w)
-		if err = self.writeAudioDataEnd(ts); err != nil {
-			return
-		}
-
-	case av.H264:
-		videodata := self.makeH264Videodata(flvio.AVC_NALU, pkt.IsKeyFrame, pkt.Data)
-		videodata.CompositionTime = int32(timeToTs(pkt.CompositionTime))
-		w := self.writeVideoDataStart()
-		videodata.Marshal(w)
-		if err = self.writeVideoDataEnd(ts); err != nil {
-			return
-		}
+	if err = self.writeAVTag(tag, uint32(timestamp)); err != nil {
+		return
 	}
 
 	return
@@ -990,51 +865,20 @@ func (self *Conn) WriteHeader(streams []av.CodecData) (err error) {
 	// > Videodata(decoder config)
 	// > Audiodata(decoder config)
 	for _, stream := range streams {
-		switch stream.Type() {
-		case av.H264:
-			h264 := stream.(h264parser.CodecData)
-			videodata := self.makeH264Videodata(flvio.AVC_SEQHDR, true, h264.AVCDecoderConfRecordBytes())
-			w := self.writeVideoDataStart()
-			videodata.Marshal(w)
-			if err = self.writeVideoDataEnd(0); err != nil {
+		var ok bool
+		var tag flvio.Tag
+		if tag, ok, err = flv.CodecDataToTag(stream); err != nil {
+			return
+		}
+		if ok {
+			if err = self.writeAVTag(tag, 0); err != nil {
 				return
 			}
-			self.streams = append(self.streams, newStream(stream))
-
-		case av.AAC:
-			aac := stream.(aacparser.CodecData)
-			audiodata := self.makeAACAudiodata(aac, flvio.AAC_SEQHDR, aac.MPEG4AudioConfigBytes())
-			w := self.writeAudioDataStart()
-			audiodata.Marshal(w)
-			if err = self.writeAudioDataEnd(0); err != nil {
-				return
-			}
-			self.streams = append(self.streams, newStream(stream))
 		}
 	}
 
 	self.stage++
 	return
-}
-
-func (self *Conn) makeH264Videodata(pkttype uint8, iskeyframe bool, data []byte) flvio.Videodata {
-	videodata := flvio.Videodata{
-		CodecID: flvio.VIDEO_H264,
-		AVCPacketType: pkttype,
-		Data: data,
-	}
-	if iskeyframe {
-		videodata.FrameType = flvio.FRAME_KEY
-	} else {
-		videodata.FrameType = flvio.FRAME_INTER
-	}
-	return videodata
-}
-
-func (self *Conn) makeAACAudiodata(stream av.AudioCodecData, pkttype uint8, data []byte) flvio.Audiodata {
-	tag := flvio.MakeAACAudiodata(stream, data)
-	tag.AACPacketType = pkttype
-	return tag
 }
 
 func (self *Conn) writeSetChunkSize(size uint32) (err error) {
@@ -1084,6 +928,25 @@ func (self *Conn) writeDataMsgStart() *pio.Writer {
 func (self *Conn) writeDataMsgEnd(csid uint32, msgsid uint32) (err error) {
 	msgdatav := self.intw.SaveToVecOff()
 	return self.writeChunks(csid, 0, msgtypeidDataMsgAMF0, msgsid, msgdatav)
+}
+
+func (self *Conn) writeAVTag(tag flvio.Tag, timestamp uint32) (err error) {
+	switch tag.(type) {
+	case *flvio.Audiodata:
+		w := self.writeAudioDataStart()
+		tag.Marshal(w)
+		if err = self.writeAudioDataEnd(timestamp); err != nil {
+			return
+		}
+
+	case *flvio.Videodata:
+		w := self.writeVideoDataStart()
+		tag.Marshal(w)
+		if err = self.writeVideoDataEnd(timestamp); err != nil {
+			return
+		}
+	}
+	return
 }
 
 func (self *Conn) writeVideoDataStart() *pio.Writer {

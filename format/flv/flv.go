@@ -1,17 +1,266 @@
 package flv
 
 import (
-	"time"
 	"fmt"
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/av/avutil"
 	"github.com/nareix/joy4/codec/h264parser"
+	"github.com/nareix/joy4/codec"
 	"github.com/nareix/joy4/codec/aacparser"
 	"github.com/nareix/pio"
 	"github.com/nareix/joy4/format/flv/flvio"
 	"io"
 	"bufio"
 )
+
+var MaxProbePacketCount = 20
+
+type Prober struct {
+	HasAudio, HasVideo bool
+	GotAudio, GotVideo bool
+	VideoStreamIdx, AudioStreamIdx int
+	PushedCount int
+	Streams []av.CodecData
+	CachedPkts []av.Packet
+}
+
+func (self *Prober) CacheTag(_tag flvio.Tag, timestamp int32) {
+	pkt, _ := self.TagToPacket(_tag, timestamp)
+	self.CachedPkts = append(self.CachedPkts, pkt)
+}
+
+func (self *Prober) PushTag(_tag flvio.Tag, timestamp int32) (err error) {
+	self.PushedCount++
+
+	if self.PushedCount > MaxProbePacketCount {
+		err = fmt.Errorf("flv: max probe packet count reached")
+		return
+	}
+
+	switch tag := _tag.(type) {
+	case *flvio.Videodata:
+		switch tag.AVCPacketType {
+		case flvio.AVC_SEQHDR:
+			if !self.GotVideo {
+				var stream h264parser.CodecData
+				if stream, err = h264parser.NewCodecDataFromAVCDecoderConfRecord(tag.Data); err != nil {
+					err = fmt.Errorf("flv: h264 seqhdr invalid")
+					return
+				}
+				self.VideoStreamIdx = len(self.Streams)
+				self.Streams = append(self.Streams, stream)
+				self.GotVideo = true
+			}
+
+		case flvio.AVC_NALU:
+			self.CacheTag(tag, timestamp)
+		}
+
+	case *flvio.Audiodata:
+		switch tag.SoundFormat {
+		case flvio.SOUND_AAC:
+			switch tag.AACPacketType {
+			case flvio.AAC_SEQHDR:
+				if !self.GotAudio {
+					var stream aacparser.CodecData
+					if stream, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(tag.Data); err != nil {
+						err = fmt.Errorf("flv: aac seqhdr invalid")
+						return
+					}
+					self.AudioStreamIdx = len(self.Streams)
+					self.Streams = append(self.Streams, stream)
+					self.GotAudio = true
+				}
+
+			case flvio.AAC_RAW:
+				self.CacheTag(tag, timestamp)
+			}
+
+		case flvio.SOUND_SPEEX:
+			if !self.GotAudio {
+				stream := codec.NewSpeexCodecData()
+				self.AudioStreamIdx = len(self.Streams)
+				self.Streams = append(self.Streams, stream)
+				self.GotAudio = true
+				self.CacheTag(tag, timestamp)
+			}
+
+		case flvio.SOUND_NELLYMOSER:
+			if !self.GotAudio {
+				stream := codec.NewNellyMoserCodecData()
+				self.AudioStreamIdx = len(self.Streams)
+				self.Streams = append(self.Streams, stream)
+				self.GotAudio = true
+				self.CacheTag(tag, timestamp)
+			}
+
+		}
+	}
+
+	return
+}
+
+func (self *Prober) Probed() (ok bool) {
+	if self.HasAudio || self.HasVideo {
+		if self.HasAudio == self.GotAudio && self.HasVideo == self.GotVideo {
+			return true
+		}
+	} else {
+		if self.PushedCount == MaxProbePacketCount {
+			return true
+		}
+	}
+	return
+}
+
+func (self *Prober) TagToPacket(_tag flvio.Tag, timestamp int32) (pkt av.Packet, ok bool) {
+	switch tag := _tag.(type) {
+	case *flvio.Videodata:
+		pkt.Idx = int8(self.VideoStreamIdx)
+		switch tag.AVCPacketType {
+		case flvio.AVC_NALU:
+			ok = true
+			pkt.Data = tag.Data
+			pkt.CompositionTime = flvio.TsToTime(tag.CompositionTime)
+			pkt.IsKeyFrame = tag.FrameType == flvio.FRAME_KEY
+		}
+
+	case *flvio.Audiodata:
+		pkt.Idx = int8(self.AudioStreamIdx)
+		switch tag.SoundFormat {
+		case flvio.SOUND_AAC:
+			switch tag.AACPacketType {
+			case flvio.AAC_RAW:
+				ok = true
+				pkt.Data = tag.Data
+			}
+
+		case flvio.SOUND_SPEEX:
+			ok = true
+			pkt.Data = tag.Data
+
+		case flvio.SOUND_NELLYMOSER:
+			ok = true
+			pkt.Data = tag.Data
+		}
+	}
+
+	pkt.Time = flvio.TsToTime(timestamp)
+	return
+}
+
+func (self *Prober) Empty() bool {
+	return len(self.CachedPkts) == 0
+}
+
+func (self *Prober) PopPacket() av.Packet {
+	pkt := self.CachedPkts[0]
+	self.CachedPkts = self.CachedPkts[1:]
+	return pkt
+}
+
+func CodecDataToTag(stream av.CodecData) (_tag flvio.Tag, ok bool, err error) {
+	switch stream.Type() {
+	case av.H264:
+		h264 := stream.(h264parser.CodecData)
+		tag := &flvio.Videodata{
+			AVCPacketType: flvio.AVC_SEQHDR,
+			CodecID: flvio.VIDEO_H264,
+			Data: h264.AVCDecoderConfRecordBytes(),
+			FrameType: flvio.FRAME_KEY,
+		}
+		ok = true
+		_tag = tag
+
+	case av.NELLYMOSER:
+	case av.SPEEX:
+
+	case av.AAC:
+		aac := stream.(aacparser.CodecData)
+		tag := &flvio.Audiodata{
+			SoundFormat: flvio.SOUND_AAC,
+			SoundRate: flvio.SOUND_44Khz,
+			AACPacketType: flvio.AAC_SEQHDR,
+			Data: aac.MPEG4AudioConfigBytes(),
+		}
+		switch aac.SampleFormat().BytesPerSample() {
+		case 1:
+			tag.SoundSize = flvio.SOUND_8BIT
+		default:
+			tag.SoundSize = flvio.SOUND_16BIT
+		}
+		switch aac.ChannelLayout().Count() {
+		case 1:
+			tag.SoundType = flvio.SOUND_MONO
+		case 2:
+			tag.SoundType = flvio.SOUND_STEREO
+		}
+		ok = true
+		_tag = tag
+
+	default:
+		err = fmt.Errorf("flv: unspported codecType=%v", stream.Type())
+		return
+	}
+	return
+}
+
+func PacketToTag(pkt av.Packet, stream av.CodecData) (_tag flvio.Tag, timestamp int32) {
+	switch stream.Type() {
+	case av.H264:
+		tag := &flvio.Videodata{
+			AVCPacketType: flvio.AVC_NALU,
+			CodecID: flvio.VIDEO_H264,
+			Data: pkt.Data,
+			CompositionTime: flvio.TimeToTs(pkt.CompositionTime),
+		}
+		if pkt.IsKeyFrame {
+			tag.FrameType = flvio.FRAME_KEY
+		} else {
+			tag.FrameType = flvio.FRAME_INTER
+		}
+		_tag = tag
+
+	case av.AAC:
+		tag := &flvio.Audiodata{
+			SoundFormat: flvio.SOUND_AAC,
+			SoundRate: flvio.SOUND_44Khz,
+			AACPacketType: flvio.AAC_RAW,
+			Data: pkt.Data,
+		}
+		astream := stream.(av.AudioCodecData)
+		switch astream.SampleFormat().BytesPerSample() {
+		case 1:
+			tag.SoundSize = flvio.SOUND_8BIT
+		default:
+			tag.SoundSize = flvio.SOUND_16BIT
+		}
+		switch astream.ChannelLayout().Count() {
+		case 1:
+			tag.SoundType = flvio.SOUND_MONO
+		case 2:
+			tag.SoundType = flvio.SOUND_STEREO
+		}
+		_tag = tag
+
+	case av.SPEEX:
+		tag := &flvio.Audiodata{
+			SoundFormat: flvio.SOUND_SPEEX,
+			Data: pkt.Data,
+		}
+		_tag = tag
+
+	case av.NELLYMOSER:
+		tag := &flvio.Audiodata{
+			SoundFormat: flvio.SOUND_NELLYMOSER,
+			Data: pkt.Data,
+		}
+		_tag = tag
+	}
+
+	timestamp = flvio.TimeToTs(pkt.Time)
+	return
+}
 
 type Muxer struct {
 	pw *pio.Writer
@@ -27,7 +276,7 @@ func NewMuxer(w io.Writer) *Muxer {
 }
 
 func (self *Muxer) SupportedCodecTypes() []av.CodecType {
-	return []av.CodecType{av.H264, av.AAC, av.NELLYMOSER}
+	return []av.CodecType{av.H264, av.AAC, av.NELLYMOSER, av.SPEEX}
 }
 
 func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
@@ -45,33 +294,15 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 	}
 
 	for _, stream := range streams {
-		var _tag flvio.Tag
-
-		switch stream.Type() {
-		case av.H264:
-			h264 := stream.(h264parser.CodecData)
-			tag := &flvio.Videodata{
-				AVCPacketType: flvio.AVC_SEQHDR,
-				CodecID: flvio.VIDEO_H264,
-				Data: h264.AVCDecoderConfRecordBytes(),
-			}
-			_tag = tag
-
-		case av.NELLYMOSER:
-
-		case av.AAC:
-			aac := stream.(aacparser.CodecData)
-			tag := flvio.MakeAACAudiodata(aac, aac.MPEG4AudioConfigBytes())
-			tag.AACPacketType = flvio.AAC_SEQHDR
-			_tag = &tag
-
-		default:
-			err = fmt.Errorf("flv: unspported codecType=%v", stream.Type())
+		var tag flvio.Tag
+		var ok bool
+		if tag, ok, err = CodecDataToTag(stream); err != nil {
 			return
 		}
-
-		if err = flvio.WriteTag(self.pw, _tag, 0); err != nil {
-			return
+		if ok {
+			if err = flvio.WriteTag(self.pw, tag, 0); err != nil {
+				return
+			}
 		}
 	}
 
@@ -81,36 +312,9 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 
 func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
 	stream := self.streams[pkt.Idx]
-	var _tag flvio.Tag
+	tag, ts := PacketToTag(pkt, stream)
 
-	switch stream.Type() {
-	case av.H264:
-		tag := &flvio.Videodata{
-			AVCPacketType: flvio.AVC_NALU,
-			CodecID: flvio.VIDEO_H264,
-			Data: pkt.Data,
-			CompositionTime: timeToTs(pkt.CompositionTime),
-		}
-		if pkt.IsKeyFrame {
-			tag.FrameType = flvio.FRAME_KEY
-		} else {
-			tag.FrameType = flvio.FRAME_INTER
-		}
-		_tag = tag
-
-	case av.AAC:
-		tag := flvio.MakeAACAudiodata(stream.(av.AudioCodecData), pkt.Data)
-		_tag = &tag
-
-	case av.NELLYMOSER:
-		tag := &flvio.Audiodata{
-			SoundFormat: flvio.SOUND_NELLYMOSER,
-			Data: pkt.Data,
-		}
-		_tag = tag
-	}
-
-	if err = flvio.WriteTag(self.pw, _tag, timeToTs(pkt.Time)); err != nil {
+	if err = flvio.WriteTag(self.pw, tag, ts); err != nil {
 		return
 	}
 
@@ -124,167 +328,82 @@ func (self *Muxer) WriteTrailer() (err error) {
 	return
 }
 
-type flvStream struct {
-	av.CodecData
-	lastts int32
-	tm time.Duration
-}
-
 type Demuxer struct {
-	streams []*flvStream
-	videostreamidx int
-	audiostreamidx int
+	prober *Prober
 	pr *pio.Reader
-	probepkts []flvio.Tag
-	probed bool
+	stage int
 }
 
 func NewDemuxer(r io.Reader) *Demuxer {
 	return &Demuxer{
 		pr: pio.NewReader(bufio.NewReaderSize(r, pio.RecommendBufioSize)),
+		prober: &Prober{},
 	}
 }
 
-func (self *Demuxer) probe() (err error) {
-	if self.probed {
-		return
-	}
-
-	var flags, got uint8
-	if flags, err = flvio.ReadFileHeader(self.pr); err != nil {
-		return
-	}
-	flags &= flvio.FILE_HAS_AUDIO|flvio.FILE_HAS_VIDEO
-
-	for {
-		var _tag flvio.Tag
-		if _tag, _, err = flvio.ReadTag(self.pr); err != nil {
-			return
-		}
-
-		switch tag := _tag.(type) {
-		case *flvio.Videodata:
-			switch tag.CodecID {
-			case flvio.VIDEO_H264:
-				switch tag.AVCPacketType {
-				case flvio.AVC_SEQHDR:
-					var codec h264parser.CodecData
-					if codec, err = h264parser.NewCodecDataFromAVCDecoderConfRecord(tag.Data); err != nil {
-						err = fmt.Errorf("flv: h264 seqhdr invalid")
-						return
-					}
-					self.videostreamidx = len(self.streams)
-					self.streams = append(self.streams, &flvStream{CodecData: codec})
-					got |= flvio.FILE_HAS_VIDEO
-
-				case flvio.AVC_NALU:
-					self.probepkts = append(self.probepkts, tag)
-				}
-
-			default:
-				err = fmt.Errorf("flv: unspported video CodecID=%d", tag.CodecID)
+func (self *Demuxer) prepare() (err error) {
+	for self.stage < 2 {
+		switch self.stage {
+		case 0:
+			var flags uint8
+			if flags, err = flvio.ReadFileHeader(self.pr); err != nil {
 				return
 			}
-
-		case *flvio.Audiodata:
-			switch tag.SoundFormat {
-			case flvio.SOUND_AAC:
-				switch tag.AACPacketType {
-				case flvio.AAC_SEQHDR:
-					var codec aacparser.CodecData
-					if codec, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(tag.Data); err != nil {
-						err = fmt.Errorf("flv: aac seqhdr invalid")
-						return
-					}
-					self.audiostreamidx = len(self.streams)
-					self.streams = append(self.streams, &flvStream{CodecData: codec})
-					got |= flvio.FILE_HAS_AUDIO
-
-				case flvio.AAC_RAW:
-					self.probepkts = append(self.probepkts, tag)
-				}
-
-			default:
-				err = fmt.Errorf("flv: unspported audio SoundFormat=%d", tag.SoundFormat)
-				return
+			if flags & flvio.FILE_HAS_AUDIO != 0 {
+				self.prober.HasAudio = true
 			}
-		}
+			if flags & flvio.FILE_HAS_VIDEO != 0 {
+				self.prober.HasVideo = true
+			}
+			self.stage++
 
-		if got == flags {
-			break
+		case 1:
+			for !self.prober.Probed() {
+				var tag flvio.Tag
+				var timestamp int32
+				if tag, _, err = flvio.ReadTag(self.pr); err != nil {
+					return
+				}
+				if err = self.prober.PushTag(tag, timestamp); err != nil {
+					return
+				}
+			}
+			self.stage++
 		}
 	}
-
-	self.probed = true
 	return
 }
 
 func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
-	if err = self.probe(); err != nil {
+	if err = self.prepare(); err != nil {
 		return
 	}
-	for _, stream := range self.streams {
-		streams = append(streams, stream.CodecData)
-	}
+	streams = self.prober.Streams
 	return
 }
 
-func tsToTime(ts int32) time.Duration {
-	return time.Millisecond*time.Duration(ts)
-}
-
-func timeToTs(tm time.Duration) int32 {
-	return int32(tm / time.Millisecond)
-}
-
 func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
-	if err = self.probe(); err != nil {
+	if err = self.prepare(); err != nil {
 		return
 	}
 
-	var timestamp int32
-	var stream *flvStream
-
-	loop: for {
-		var _tag flvio.Tag
-		if len(self.probepkts) > 0 {
-			_tag = self.probepkts[0]
-			self.probepkts = self.probepkts[1:]
-		} else {
-			if _tag, timestamp, err = flvio.ReadTag(self.pr); err != nil {
-				return
-			}
-		}
-
-		switch tag := _tag.(type) {
-		case *flvio.Videodata:
-			if tag.AVCPacketType == flvio.AVC_NALU {
-				stream = self.streams[self.videostreamidx]
-				pkt.Idx = int8(self.videostreamidx)
-				pkt.CompositionTime = tsToTime(tag.CompositionTime)
-				pkt.IsKeyFrame = tag.FrameType == flvio.FRAME_KEY
-				pkt.Data = tag.Data
-				break loop
-			}
-
-		case *flvio.Audiodata:
-			if tag.AACPacketType == flvio.AAC_RAW {
-				stream = self.streams[self.audiostreamidx]
-				pkt.Idx = int8(self.audiostreamidx)
-				pkt.Data = tag.Data
-				break loop
-			}
-		}
+	if !self.prober.Empty() {
+		pkt = self.prober.PopPacket()
+		return
 	}
 
-	if stream.lastts == 0 {
-		stream.tm = tsToTime(timestamp)
-	} else {
-		diff := timestamp - stream.lastts
-		stream.tm += tsToTime(diff)
+	for {
+		var tag flvio.Tag
+		var timestamp int32
+		if tag, timestamp, err = flvio.ReadTag(self.pr); err != nil {
+			return
+		}
+
+		var ok bool
+		if pkt, ok = self.prober.TagToPacket(tag, timestamp); ok {
+			return
+		}
 	}
-	stream.lastts = timestamp
-	pkt.Time = stream.tm
 
 	return
 }
