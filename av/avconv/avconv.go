@@ -65,6 +65,10 @@ func (self *Demuxer) prepare() (err error) {
 
 	transopts := transcode.Options{}
 	transopts.FindAudioDecoderEncoder = func(codec av.AudioCodecData, i int) (ok bool, err error, dec av.AudioDecoder, enc av.AudioEncoder) {
+		if len(supports) == 0 {
+			return
+		}
+
 		support := false
 		for _, typ := range supports {
 			if typ == codec.Type() {
@@ -172,7 +176,13 @@ func ConvertCmdline(args []string) (err error) {
 	}
 	defer muxer.Close()
 
-	options.OutputCodecTypes = muxer.SupportedCodecTypes()
+	type intf interface {
+		SupportedCodecTypes() []av.CodecType
+	}
+	if fn, ok := muxer.(intf); ok {
+		options.OutputCodecTypes = fn.SupportedCodecTypes()
+	}
+
 	convdemux := &Demuxer{
 		Options: options,
 		Demuxer: demuxer,
@@ -214,7 +224,7 @@ func ConvertCmdline(args []string) (err error) {
 			return
 		}
 		if flagv {
-			fmt.Println(pkt.Idx, pkt.Time, len(pkt.Data))
+			fmt.Println(pkt.Idx, pkt.Time, len(pkt.Data), pkt.IsKeyFrame)
 		}
 		if duration != 0 && pkt.Time > duration {
 			break

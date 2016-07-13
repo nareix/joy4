@@ -190,7 +190,6 @@ type Muxer interface {
 	PacketWriter
 	WriteHeader([]CodecData) error
 	WriteTrailer() error
-	SupportedCodecTypes() []CodecType
 }
 
 type MuxCloser interface {
