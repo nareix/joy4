@@ -312,9 +312,9 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 
 func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
 	stream := self.streams[pkt.Idx]
-	tag, ts := PacketToTag(pkt, stream)
+	tag, timestamp := PacketToTag(pkt, stream)
 
-	if err = flvio.WriteTag(self.pw, tag, ts); err != nil {
+	if err = flvio.WriteTag(self.pw, tag, timestamp); err != nil {
 		return
 	}
 
@@ -361,7 +361,7 @@ func (self *Demuxer) prepare() (err error) {
 			for !self.prober.Probed() {
 				var tag flvio.Tag
 				var timestamp int32
-				if tag, _, err = flvio.ReadTag(self.pr); err != nil {
+				if tag, timestamp, err = flvio.ReadTag(self.pr); err != nil {
 					return
 				}
 				if err = self.prober.PushTag(tag, timestamp); err != nil {
@@ -372,6 +372,12 @@ func (self *Demuxer) prepare() (err error) {
 		}
 	}
 	return
+}
+
+func dumptag(_tag flvio.Tag, timestamp int32) {
+	if tag, ok := _tag.(*flvio.Videodata); ok {
+		fmt.Printf("video ts=%d cts=%d FrameType=%d AVCPacketType=%d\n", timestamp, tag.CompositionTime, tag.FrameType, tag.AVCPacketType)
+	}
 }
 
 func (self *Demuxer) Streams() (streams []av.CodecData, err error) {

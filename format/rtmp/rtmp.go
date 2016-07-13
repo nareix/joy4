@@ -715,12 +715,10 @@ func (self *Conn) ReadPacket() (pkt av.Packet, err error) {
 		return
 	}
 
-	/*
 	if !self.prober.Empty() {
 		pkt = self.prober.PopPacket()
 		return
 	}
-	*/
 
 	for {
 		var tag flvio.Tag
