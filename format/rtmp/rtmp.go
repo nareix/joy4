@@ -275,20 +275,20 @@ func (self *Conn) pollMsg() (err error) {
 	}
 }
 
-func splitPath(s string) (app, play string) {
-	pathsegs := strings.Split(s, "/")
+func splitPath(u *url.URL) (app, url string) {
+	pathsegs := strings.SplitN(u.RequestURI(), "/", 3)
 	if len(pathsegs) > 1 {
 		app = pathsegs[1]
 	}
 	if len(pathsegs) > 2 {
-		play = pathsegs[2]
+		url = pathsegs[2]
 	}
 	return
 }
 
 func getTcUrl(u *url.URL) string {
+	app, _ := splitPath(u)
 	nu := *u
-	app, _ := splitPath(nu.Path)
 	nu.Path = "/"+app
 	return nu.String()
 }
@@ -594,7 +594,7 @@ func (self *Conn) connect(path string) (err error) {
 }
 
 func (self *Conn) connectPublish() (err error) {
-	connectpath, publishpath := splitPath(self.URL.Path)
+	connectpath, publishpath := splitPath(self.URL)
 
 	if err = self.connect(connectpath); err != nil {
 		return
@@ -653,7 +653,7 @@ func (self *Conn) connectPublish() (err error) {
 }
 
 func (self *Conn) connectPlay() (err error) {
-	connectpath, playpath := splitPath(self.URL.Path)
+	connectpath, playpath := splitPath(self.URL)
 
 	if err = self.connect(connectpath); err != nil {
 		return
