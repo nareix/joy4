@@ -14,7 +14,7 @@ type Stream struct {
 	r         io.ReadSeeker
 	idx       int
 
-	lasttime time.Duration
+	lastpkt *av.Packet
 
 	timeScale int64
 	duration  int64

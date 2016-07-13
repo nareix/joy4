@@ -169,22 +169,20 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 
 func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
 	stream := self.streams[pkt.Idx]
-	if err = stream.writePacket(pkt); err != nil {
-		return
+	if stream.lastpkt != nil {
+		if err = stream.writePacket(*stream.lastpkt, pkt.Time-stream.lastpkt.Time); err != nil {
+			return
+		}
 	}
+	stream.lastpkt = &pkt
 	return
 }
 
-func (self *Stream) writePacket(pkt av.Packet) (err error) {
-	if self.lasttime == 0 {
-		self.lasttime = pkt.Time
-	}
-	rawdur := pkt.Time - self.lasttime
+func (self *Stream) writePacket(pkt av.Packet, rawdur time.Duration) (err error) {
 	if rawdur < 0 {
-		err = fmt.Errorf("mp4: stream#%d time=%v < lasttime=%v", pkt.Idx, pkt.Time, self.lasttime)
+		err = fmt.Errorf("mp4: stream#%d time=%v < lasttime=%v", pkt.Idx, pkt.Time, self.lastpkt.Time)
 		return
 	}
-	self.lasttime = pkt.Time
 
 	var filePos int64
 	var sampleSize int
@@ -235,6 +233,15 @@ func (self *Stream) writePacket(pkt av.Packet) (err error) {
 }
 
 func (self *Muxer) WriteTrailer() (err error) {
+	for _, stream := range self.streams {
+		if stream.lastpkt != nil {
+			if err = stream.writePacket(*stream.lastpkt, 0); err != nil {
+				return
+			}
+			stream.lastpkt = nil
+		}
+	}
+
 	moov := &atom.Movie{}
 	moov.Header = &atom.MovieHeader{
 		PreferredRate:   atom.IntToFixed(1),
