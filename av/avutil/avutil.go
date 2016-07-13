@@ -23,17 +23,26 @@ func (self *handlerDemuxer) Close() error {
 type handlerMuxer struct {
 	av.Muxer
 	w io.WriteCloser
-	trailerwritten bool
+	stage int
+}
+
+func (self *handlerMuxer) WriteHeader(streams []av.CodecData) (err error) {
+	if self.stage == 0 {
+		if err = self.Muxer.WriteHeader(streams); err != nil {
+			return
+		}
+		self.stage++
+	}
+	return
 }
 
 func (self *handlerMuxer) WriteTrailer() (err error) {
-	if self.trailerwritten {
-		return
+	if self.stage == 1 {
+		if err = self.Muxer.WriteTrailer(); err != nil {
+			return
+		}
+		self.stage++
 	}
-	if err = self.Muxer.WriteTrailer(); err != nil {
-		return
-	}
-	self.trailerwritten = true
 	return
 }
 
