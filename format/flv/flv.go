@@ -6,6 +6,7 @@ import (
 	"github.com/nareix/joy4/av/avutil"
 	"github.com/nareix/joy4/codec/h264parser"
 	"github.com/nareix/joy4/codec"
+	"github.com/nareix/joy4/codec/fake"
 	"github.com/nareix/joy4/codec/aacparser"
 	"github.com/nareix/pio"
 	"github.com/nareix/joy4/format/flv/flvio"
@@ -78,7 +79,7 @@ func (self *Prober) PushTag(_tag flvio.Tag, timestamp int32) (err error) {
 
 		case flvio.SOUND_SPEEX:
 			if !self.GotAudio {
-				stream := codec.NewSpeexCodecData()
+				stream := codec.NewSpeexCodecData(16000, tag.ChannelLayout())
 				self.AudioStreamIdx = len(self.Streams)
 				self.Streams = append(self.Streams, stream)
 				self.GotAudio = true
@@ -87,7 +88,12 @@ func (self *Prober) PushTag(_tag flvio.Tag, timestamp int32) (err error) {
 
 		case flvio.SOUND_NELLYMOSER:
 			if !self.GotAudio {
-				stream := codec.NewNellyMoserCodecData()
+				stream := fake.CodecData{
+					CodecType_: av.NELLYMOSER,
+					SampleRate_: 16000,
+					SampleFormat_: av.S16,
+					ChannelLayout_: tag.ChannelLayout(),
+				}
 				self.AudioStreamIdx = len(self.Streams)
 				self.Streams = append(self.Streams, stream)
 				self.GotAudio = true
@@ -275,8 +281,10 @@ func NewMuxer(w io.Writer) *Muxer {
 	return self
 }
 
+var SupportedCodecTypes = []av.CodecType{av.H264, av.AAC, av.SPEEX}
+
 func (self *Muxer) SupportedCodecTypes() []av.CodecType {
-	return []av.CodecType{av.H264, av.AAC, av.NELLYMOSER, av.SPEEX}
+	return SupportedCodecTypes
 }
 
 func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {

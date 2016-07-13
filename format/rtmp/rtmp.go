@@ -316,7 +316,7 @@ func createURL(tcurl, app, play string) (u *url.URL) {
 }
 
 func (self *Conn) SupportedCodecTypes() []av.CodecType {
-	return []av.CodecType{av.H264, av.AAC}
+	return flv.SupportedCodecTypes
 }
 
 func (self *Conn) recvConnect() (err error) {

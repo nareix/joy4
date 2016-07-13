@@ -5,6 +5,7 @@ import (
 	"time"
 	"fmt"
 	"github.com/nareix/pio"
+	"github.com/nareix/joy4/av"
 )
 
 func TsToTime(ts int32) time.Duration {
@@ -142,6 +143,14 @@ type Audiodata struct {
 
 func (self Audiodata) Type() uint8 {
 	return TAG_AUDIO
+}
+
+func (self Audiodata) ChannelLayout() av.ChannelLayout {
+	if self.SoundType == SOUND_MONO {
+		return av.CH_MONO
+	} else {
+		return av.CH_STEREO
+	}
 }
 
 func (self Audiodata) Len() int {

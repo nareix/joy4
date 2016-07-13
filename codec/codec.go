@@ -2,6 +2,7 @@ package codec
 
 import (
 	"github.com/nareix/joy4/av"
+	"github.com/nareix/joy4/codec/fake"
 	"time"
 )
 
@@ -41,11 +42,23 @@ func NewPCMAlawCodecData() av.AudioCodecData {
 	}
 }
 
-func NewNellyMoserCodecData() av.AudioCodecData {
-	return PCMUCodecData{typ: av.NELLYMOSER}
+type SpeexCodecData struct {
+	fake.CodecData
 }
 
-func NewSpeexCodecData() av.AudioCodecData {
-	return PCMUCodecData{typ: av.SPEEX}
+func (self SpeexCodecData) PacketDuration(data []byte) (time.Duration, error) {
+	// libavcodec/libspeexdec.c
+	// samples = samplerate/50
+	// duration = 0.02s
+	return time.Millisecond*20, nil
+}
+
+func NewSpeexCodecData(sr int, cl av.ChannelLayout) SpeexCodecData {
+	codec := SpeexCodecData{}
+	codec.CodecType_ = av.SPEEX
+	codec.SampleFormat_ = av.S16
+	codec.SampleRate_ = sr
+	codec.ChannelLayout_ = cl
+	return codec
 }
 

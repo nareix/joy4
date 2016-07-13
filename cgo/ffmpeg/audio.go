@@ -617,6 +617,9 @@ func NewAudioDecoder(codec av.AudioCodecData) (dec *AudioDecoder, err error) {
 			return
 		}
 
+	case av.SPEEX:
+		id = C.AV_CODEC_ID_SPEEX
+
 	case av.PCM_MULAW:
 		id = C.AV_CODEC_ID_PCM_MULAW
 
@@ -680,17 +683,25 @@ func (self audioCodecData) ChannelLayout() av.ChannelLayout {
 }
 
 func (self audioCodecData) PacketDuration(data []byte) (dur time.Duration, err error) {
-	// TODO: implement it
+	// TODO: implement it: ffmpeg get_audio_frame_duration
 	err = fmt.Errorf("ffmpeg: cannot get packet duration")
 	return
 }
 
 func AudioCodecHandler(h *avutil.RegisterHandler) {
 	h.AudioDecoder = func(codec av.AudioCodecData) (av.AudioDecoder, error) {
-		return NewAudioDecoder(codec)
+		if dec, err := NewAudioDecoder(codec); err != nil {
+			return nil, nil
+		} else {
+			return dec, err
+		}
 	}
 	h.AudioEncoder = func(typ av.CodecType) (av.AudioEncoder, error) {
-		return NewAudioEncoderByCodecType(typ)
+		if enc, err := NewAudioEncoderByCodecType(typ); err != nil {
+			return nil, nil
+		} else {
+			return enc, err
+		}
 	}
 }
 
