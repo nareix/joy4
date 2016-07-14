@@ -24,6 +24,7 @@ type Stream struct {
 	iskeyframe bool
 	pts, dts time.Duration
 	data []byte
+	datalen int
 }
 
 func timeToPesTs(tm time.Duration) uint64 {

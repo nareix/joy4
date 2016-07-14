@@ -2,6 +2,7 @@ package ts
 
 import (
 	"bufio"
+	"fmt"
 	"time"
 	"github.com/nareix/pio"
 	"github.com/nareix/joy4/av"
@@ -207,6 +208,11 @@ func (self *Stream) payloadEnd() (n int, err error) {
 	if payload == nil {
 		return
 	}
+	if self.datalen != 0 && len(payload) != self.datalen {
+		err = fmt.Errorf("ts: packet size mismatch size=%d correct=%d", len(payload), self.datalen)
+		return
+	}
+	self.data = nil
 
 	switch self.streamType {
 	case ElementaryStreamTypeAdtsAAC:
@@ -258,8 +264,6 @@ func (self *Stream) payloadEnd() (n int, err error) {
 		}
 	}
 
-	self.data = nil
-
 	return
 }
 
@@ -269,15 +273,14 @@ func (self *Stream) handleTSPacket(start bool, iskeyframe bool, payload []byte) 
 			return
 		}
 		var hdrlen int
-		var datalen int
-		if hdrlen, _, datalen, self.pts, self.dts, err = tsio.ParsePESHeader(payload); err != nil {
+		if hdrlen, _, self.datalen, self.pts, self.dts, err = tsio.ParsePESHeader(payload); err != nil {
 			return
 		}
 		self.iskeyframe = iskeyframe
-		if datalen == 0 {
-			self.data = make([]byte, 0, 16000)
+		if self.datalen == 0 {
+			self.data = make([]byte, 0, 4096)
 		} else {
-			self.data = make([]byte, 0, datalen)
+			self.data = make([]byte, 0, self.datalen)
 		}
 		self.data = append(self.data, payload[hdrlen:]...)
 	} else {
