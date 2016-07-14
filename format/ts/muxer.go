@@ -41,7 +41,7 @@ func (self *Muxer) newStream(codec av.CodecData) (err error) {
 		return
 	}
 
-	pid := uint(len(self.streams) + 0x100)
+	pid := uint16(len(self.streams) + 0x100)
 	stream := &Stream{
 		muxer:     self,
 		CodecData: codec,
@@ -111,9 +111,9 @@ func (self *Muxer) WritePATPMT() (err error) {
 	for _, stream := range self.streams {
 		switch stream.Type() {
 		case av.AAC:
-			elemStreams = append(elemStreams, ElementaryStreamInfo{StreamType: ElementaryStreamTypeAdtsAAC, ElementaryPID: stream.pid})
+			elemStreams = append(elemStreams, ElementaryStreamInfo{StreamType: ElementaryStreamTypeAdtsAAC, ElementaryPID: uint(stream.pid)})
 		case av.H264:
-			elemStreams = append(elemStreams, ElementaryStreamInfo{StreamType: ElementaryStreamTypeH264, ElementaryPID: stream.pid})
+			elemStreams = append(elemStreams, ElementaryStreamInfo{StreamType: ElementaryStreamTypeH264, ElementaryPID: uint(stream.pid)})
 		}
 	}
 

@@ -2,11 +2,10 @@ package ts
 
 import (
 	"bufio"
-	"bytes"
-	"fmt"
 	"time"
 	"github.com/nareix/pio"
 	"github.com/nareix/joy4/av"
+	"github.com/nareix/joy4/format/ts/tsio"
 	"github.com/nareix/joy4/codec/aacparser"
 	"github.com/nareix/joy4/codec/h264parser"
 	"io"
@@ -15,15 +14,14 @@ import (
 type Demuxer struct {
 	r *bufio.Reader
 
-	pktidx int
 	pkts []av.Packet
 
-	pat     PAT
-	pmt     *PMT
+	pat     *tsio.PAT
+	pmt     *tsio.PMT
 	streams []*Stream
-	tshdr []byte
+	tshdr   []byte
 
-	probed bool
+	stage int
 }
 
 func NewDemuxer(r io.Reader) *Demuxer {
@@ -44,26 +42,25 @@ func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
 }
 
 func (self *Demuxer) probe() (err error) {
-	if self.probed {
-		return
-	}
-	for {
-		if self.pmt != nil {
-			n := 0
-			for _, stream := range self.streams {
-				if stream.CodecData != nil {
-					n++
+	if self.stage == 0 {
+		for {
+			if self.pmt != nil {
+				n := 0
+				for _, stream := range self.streams {
+					if stream.CodecData != nil {
+						n++
+					}
+				}
+				if n == len(self.streams) {
+					break
 				}
 			}
-			if n == len(self.streams) {
-				break
+			if err = self.poll(); err != nil {
+				return
 			}
 		}
-		if err = self.poll(); err != nil {
-			return
-		}
+		self.stage++
 	}
-	self.probed = true
 	return
 }
 
@@ -72,103 +69,113 @@ func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
 		return
 	}
 
-	for self.pktidx == len(self.pkts) {
+	for len(self.pkts) == 0 {
 		if err = self.poll(); err != nil {
 			return
 		}
 	}
-	if self.pktidx < len(self.pkts) {
-		pkt = self.pkts[self.pktidx]
-		self.pktidx++
-	}
 
+	pkt = self.pkts[0]
+	self.pkts = self.pkts[1:]
 	return
 }
 
 func (self *Demuxer) poll() (err error) {
-	self.pktidx = 0
-	self.pkts = self.pkts[:0]
-	for {
-		if err = self.readTSPacket(); err != nil {
+	if err = self.readTSPacket(); err == io.EOF {
+		var n int
+		if n, err = self.payloadEnd(); err != nil {
 			return
 		}
-		if len(self.pkts) > 0 {
-			break
+		if n == 0 {
+			err = io.EOF
 		}
 	}
 	return
 }
 
-func ParseTSHeader(tshdr []byte) (pid uint, start bool, iskeyframe bool, hdrlen int, err error) {
-	// https://en.wikipedia.org/wiki/MPEG_transport_stream
-	if tshdr[0] != 0x47 {
-		err = fmt.Errorf("tshdr sync invalid")
+func (self *Demuxer) initPMT(payload []byte) (err error) {
+	var psihdrlen int
+	var datalen int
+	if _, _, psihdrlen, datalen, err = tsio.ParsePSI(payload); err != nil {
 		return
 	}
-	pid = uint((tshdr[1]&0x1f))<<8|uint(tshdr[2])
-	start = tshdr[1]&0x40 != 0
-	hdrlen += 4
-	if tshdr[3]&0x20 != 0 {
-		hdrlen += int(tshdr[4])+1
-		iskeyframe = tshdr[5]&0x40 != 0
+	self.pmt = &tsio.PMT{}
+	if _, err = self.pmt.Unmarshal(payload[psihdrlen:psihdrlen+datalen]); err != nil {
+		return
+	}
+
+	self.streams = []*Stream{}
+	for i, info := range self.pmt.ElementaryStreamInfos {
+		stream := &Stream{}
+		stream.idx = i
+		stream.demuxer = self
+		stream.pid = info.ElementaryPID
+		stream.streamType = info.StreamType
+		switch info.StreamType {
+		case ElementaryStreamTypeH264:
+			self.streams = append(self.streams, stream)
+		case ElementaryStreamTypeAdtsAAC:
+			self.streams = append(self.streams, stream)
+		}
+	}
+	return
+}
+
+func (self *Demuxer) payloadEnd() (n int, err error) {
+	for _, stream := range self.streams {
+		var i int
+		if i, err = stream.payloadEnd(); err != nil {
+			return
+		}
+		n += i
 	}
 	return
 }
 
 func (self *Demuxer) readTSPacket() (err error) {
 	var hdrlen int
-	var pid uint
+	var pid uint16
 	var start bool
 	var iskeyframe bool
 
 	if _, err = io.ReadFull(self.r, self.tshdr); err != nil {
 		return
 	}
-	if pid, start, iskeyframe, hdrlen, err = ParseTSHeader(self.tshdr); err != nil {
+
+	if pid, start, iskeyframe, hdrlen, err = tsio.ParseTSHeader(self.tshdr); err != nil {
 		return
 	}
 	payload := self.tshdr[hdrlen:]
 
-	if pid == 0 {
-		if self.pat, err = ReadPAT(bytes.NewReader(payload)); err != nil {
-			err = fmt.Errorf("ts: invalid pat")
-			return
+	if self.pat == nil {
+		if pid == 0 {
+			var psihdrlen int
+			var datalen int
+			if _, _, psihdrlen, datalen, err = tsio.ParsePSI(payload); err != nil {
+				return
+			}
+			self.pat = &tsio.PAT{}
+			if _, err = self.pat.Unmarshal(payload[psihdrlen:psihdrlen+datalen]); err != nil {
+				return
+			}
+		}
+	} else if self.pmt == nil {
+		for _, entry := range self.pat.Entries {
+			if entry.ProgramMapPID == pid {
+				if err = self.initPMT(payload); err != nil {
+					return
+				}
+				break
+			}
 		}
 	} else {
-		if self.pmt == nil {
-			self.streams = []*Stream{}
-
-			for _, entry := range self.pat.Entries {
-				if entry.ProgramMapPID == pid {
-					self.pmt = new(PMT)
-					if *self.pmt, err = ReadPMT(bytes.NewReader(payload)); err != nil {
-						return
-					}
-					for i, info := range self.pmt.ElementaryStreamInfos {
-						stream := &Stream{}
-						stream.idx = i
-						stream.demuxer = self
-						stream.pid = info.ElementaryPID
-						stream.streamType = info.StreamType
-						switch info.StreamType {
-						case ElementaryStreamTypeH264:
-							self.streams = append(self.streams, stream)
-						case ElementaryStreamTypeAdtsAAC:
-							self.streams = append(self.streams, stream)
-						}
-					}
+		for _, stream := range self.streams {
+			if pid == stream.pid {
+				if err = stream.handleTSPacket(start, iskeyframe, payload); err != nil {
+					return
 				}
+				break
 			}
-
-		} else {
-			for _, stream := range self.streams {
-				if pid == stream.pid {
-					if err = stream.handleTSPacket(start, iskeyframe, payload); err != nil {
-						return
-					}
-				}
-			}
-
 		}
 	}
 
@@ -176,8 +183,8 @@ func (self *Demuxer) readTSPacket() (err error) {
 }
 
 func (self *Stream) addPacket(payload []byte, timedelta time.Duration) {
-	dts := self.peshdr.DTS
-	pts := self.peshdr.PTS
+	dts := self.dts
+	pts := self.pts
 	if dts == 0 {
 		dts = pts
 	}
@@ -186,17 +193,20 @@ func (self *Stream) addPacket(payload []byte, timedelta time.Duration) {
 	pkt := av.Packet{
 		Idx: int8(self.idx),
 		IsKeyFrame: self.iskeyframe,
-		Time: time.Duration(dts)*time.Second / time.Duration(PTS_HZ) + timedelta,
-		Data:       payload,
+		Time: dts+timedelta,
+		Data: payload,
 	}
 	if pts != dts {
-		pkt.CompositionTime = time.Duration(pts-dts)*time.Second / time.Duration(PTS_HZ)
+		pkt.CompositionTime = pts-dts
 	}
 	demuxer.pkts = append(demuxer.pkts, pkt)
 }
 
-func (self *Stream) payloadEnd() (err error) {
-	payload := self.buf.Bytes()
+func (self *Stream) payloadEnd() (n int, err error) {
+	payload := self.data
+	if payload == nil {
+		return
+	}
 
 	switch self.streamType {
 	case ElementaryStreamTypeAdtsAAC:
@@ -214,6 +224,7 @@ func (self *Stream) payloadEnd() (err error) {
 				}
 			}
 			self.addPacket(payload[hdrlen:framelen], delta)
+			n++
 			delta += time.Duration(samples) * time.Second / time.Duration(config.SampleRate)
 			payload = payload[framelen:]
 		}
@@ -235,6 +246,7 @@ func (self *Stream) payloadEnd() (err error) {
 					pio.PutU32BE(b[0:4], uint32(len(nalu)))
 					copy(b[4:], nalu)
 					self.addPacket(b, time.Duration(0))
+					n++
 				}
 			}
 		}
@@ -246,36 +258,30 @@ func (self *Stream) payloadEnd() (err error) {
 		}
 	}
 
+	self.data = nil
+
 	return
 }
 
 func (self *Stream) handleTSPacket(start bool, iskeyframe bool, payload []byte) (err error) {
-	r := bytes.NewReader(payload)
-	lr := &io.LimitedReader{R: r, N: int64(len(payload))}
-
-	if start && self.peshdr != nil && self.peshdr.DataLength == 0 {
-		if err = self.payloadEnd(); err != nil {
+	if start {
+		if _, err = self.payloadEnd(); err != nil {
 			return
 		}
-	}
-
-	if start {
-		self.buf = bytes.Buffer{}
-		if self.peshdr, err = ReadPESHeader(lr); err != nil {
+		var hdrlen int
+		var datalen int
+		if hdrlen, _, datalen, self.pts, self.dts, err = tsio.ParsePESHeader(payload); err != nil {
 			return
 		}
 		self.iskeyframe = iskeyframe
-	}
-
-	if _, err = io.CopyN(&self.buf, lr, lr.N); err != nil {
-		return
-	}
-
-	if self.buf.Len() == int(self.peshdr.DataLength) {
-		if err = self.payloadEnd(); err != nil {
-			return
+		if datalen == 0 {
+			self.data = make([]byte, 0, 16000)
+		} else {
+			self.data = make([]byte, 0, datalen)
 		}
+		self.data = append(self.data, payload[hdrlen:]...)
+	} else {
+		self.data = append(self.data, payload...)
 	}
-
 	return
 }

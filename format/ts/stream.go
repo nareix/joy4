@@ -10,18 +10,20 @@ type Stream struct {
 	av.CodecData
 
 	buf bytes.Buffer
-	peshdr *PESHeader
 
 	demuxer *Demuxer
 	muxer   *Muxer
-	iskeyframe bool
 
-	pid    uint
-	streamId   uint
-	streamType uint
+	pid    uint16
+	streamId   uint8
+	streamType uint8
 
 	tsw       *TSWriter
 	idx  int
+
+	iskeyframe bool
+	pts, dts time.Duration
+	data []byte
 }
 
 func timeToPesTs(tm time.Duration) uint64 {
