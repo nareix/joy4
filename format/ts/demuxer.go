@@ -113,9 +113,9 @@ func (self *Demuxer) initPMT(payload []byte) (err error) {
 		stream.pid = info.ElementaryPID
 		stream.streamType = info.StreamType
 		switch info.StreamType {
-		case ElementaryStreamTypeH264:
+		case tsio.ElementaryStreamTypeH264:
 			self.streams = append(self.streams, stream)
-		case ElementaryStreamTypeAdtsAAC:
+		case tsio.ElementaryStreamTypeAdtsAAC:
 			self.streams = append(self.streams, stream)
 		}
 	}
@@ -215,7 +215,7 @@ func (self *Stream) payloadEnd() (n int, err error) {
 	self.data = nil
 
 	switch self.streamType {
-	case ElementaryStreamTypeAdtsAAC:
+	case tsio.ElementaryStreamTypeAdtsAAC:
 		var config aacparser.MPEG4AudioConfig
 
 		delta := time.Duration(0)
@@ -235,7 +235,7 @@ func (self *Stream) payloadEnd() (n int, err error) {
 			payload = payload[framelen:]
 		}
 
-	case ElementaryStreamTypeH264:
+	case tsio.ElementaryStreamTypeH264:
 		nalus, _ := h264parser.SplitNALUs(payload)
 		var sps, pps []byte
 		for _, nalu := range nalus {

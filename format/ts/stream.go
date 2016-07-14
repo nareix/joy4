@@ -2,14 +2,12 @@ package ts
 
 import (
 	"time"
-	"bytes"
 	"github.com/nareix/joy4/av"
+	"github.com/nareix/joy4/format/ts/tsio"
 )
 
 type Stream struct {
 	av.CodecData
-
-	buf bytes.Buffer
 
 	demuxer *Demuxer
 	muxer   *Muxer
@@ -18,7 +16,7 @@ type Stream struct {
 	streamId   uint8
 	streamType uint8
 
-	tsw       *TSWriter
+	tsw       *tsio.TSWriter
 	idx  int
 
 	iskeyframe bool
@@ -27,10 +25,3 @@ type Stream struct {
 	datalen int
 }
 
-func timeToPesTs(tm time.Duration) uint64 {
-	return uint64(tm*PTS_HZ/time.Second) + PTS_HZ
-}
-
-func timeToPCR(tm time.Duration) uint64 {
-	return uint64(tm*PCR_HZ/time.Second) + PCR_HZ
-}

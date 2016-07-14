@@ -15,6 +15,7 @@ const (
 
 const (
 	PAT_PID = 0
+	PMT_PID = 0x1000
 )
 
 const TableIdPMT = 2
@@ -326,6 +327,8 @@ func ParsePSI(h []byte) (tableid uint8, tableext uint16, hdrlen int, datalen int
 
 	return
 }
+
+const PSIHeaderLength = 9
 
 func FillPSI(h []byte, tableid uint8, tableext uint16, data []byte) (n int) {
 	// pointer(8)
