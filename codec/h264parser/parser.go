@@ -4,7 +4,7 @@ package h264parser
 import (
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/bits"
-	"io"
+	"github.com/nareix/pio"
 	"fmt"
 	"bytes"
 )
@@ -199,26 +199,8 @@ Additionally, there is a new variable called NALULengthSizeMinusOne. This confus
 An advantage to this format is the ability to configure the decoder at the start and jump into the middle of a stream. This is a common use case where the media is available on a random access medium such as a hard drive, and is therefore used in common container formats such as MP4 and MKV.
 */
 
-func WalkNALUsAnnexb(nalus [][]byte, write func([]byte)) {
-	for i, nalu := range(nalus) {
-		if i == 0 {
-			write([]byte{0,0,0,1,0x9,0xf0,0,0,0,1}) // AUD
-		} else {
-			write([]byte{0,0,1})
-		}
-		write(nalu)
-	}
-	return
-}
-
-func WalkNALUsAVCC(nalus [][]byte, write func([]byte)) {
-	for _, nalu := range(nalus) {
-		var b [4]byte
-		bits.PutUIntBE(b[:], uint(len(nalu)), 32)
-		write(b[:])
-		write(nalu)
-	}
-}
+var StartCodeBytes = []byte{0,0,1}
+var AUDBytes = []byte{0,0,0,1,0x9,0xf0,0,0,0,1} // AUD
 
 func CheckNALUsType(b []byte) (typ int) {
 	_, typ = SplitNALUs(b)
@@ -236,11 +218,11 @@ func SplitNALUs(b []byte) (nalus [][]byte, typ int) {
 		return [][]byte{b}, NALU_RAW
 	}
 
-	val3 := bits.GetUIntBE(b, 24)
-	val4 := bits.GetUIntBE(b, 32)
+	val3 := pio.U24BE(b)
+	val4 := pio.U32BE(b)
 
 	// maybe AVCC
-	if val4 <= uint(len(b)) {
+	if val4 <= uint32(len(b)) {
 		_val4 := val4
 		_b := b[4:]
 		nalus := [][]byte{}
@@ -250,9 +232,9 @@ func SplitNALUs(b []byte) (nalus [][]byte, typ int) {
 			if len(_b) < 4 {
 				break
 			}
-			_val4 = bits.GetUIntBE(_b, 32)
+			_val4 = pio.U32BE(_b)
 			_b = _b[4:]
-			if _val4 > uint(len(_b)) {
+			if _val4 > uint32(len(_b)) {
 				break
 			}
 		}
@@ -284,10 +266,10 @@ func SplitNALUs(b []byte) (nalus [][]byte, typ int) {
 			_val4 = 0
 			for pos < len(b) {
 				if pos+2 < len(b) && b[pos] == 0 {
-					_val3 = bits.GetUIntBE(b[pos:], 24)
+					_val3 = pio.U24BE(b[pos:])
 					if _val3 == 0 {
 						if pos+3 < len(b) {
-							_val4 = uint(b[pos+3])
+							_val4 = uint32(b[pos+3])
 							if _val4 == 1 {
 								break
 							}
@@ -516,50 +498,6 @@ func ParseSPS(data []byte) (self SPSInfo, err error) {
 	return
 }
 
-func WriteAVCDecoderConfRecord(w io.Writer, self AVCDecoderConfRecord) (err error) {
-	if err = bits.WriteUIntBE(w, 1, 8); err != nil {
-		return
-	}
-	if err = bits.WriteUIntBE(w, uint(self.AVCProfileIndication), 8); err != nil {
-		return
-	}
-	if err = bits.WriteUIntBE(w, uint(self.ProfileCompatibility), 8); err != nil {
-		return
-	}
-	if err = bits.WriteUIntBE(w, uint(self.AVCLevelIndication), 8); err != nil {
-		return
-	}
-	if err = bits.WriteUIntBE(w, uint(self.LengthSizeMinusOne|0xfc), 8); err != nil {
-		return
-	}
-
-	if err = bits.WriteUIntBE(w, uint(len(self.SPS)|0xe0), 8); err != nil {
-		return
-	}
-	for _, data := range self.SPS {
-		if err = bits.WriteUIntBE(w, uint(len(data)), 16); err != nil {
-			return
-		}
-		if err = bits.WriteBytes(w, data, len(data)); err != nil {
-			return
-		}
-	}
-
-	if err = bits.WriteUIntBE(w, uint(len(self.PPS)), 8); err != nil {
-		return
-	}
-	for _, data := range self.PPS {
-		if err = bits.WriteUIntBE(w, uint(len(data)), 16); err != nil {
-			return
-		}
-		if err = bits.WriteBytes(w, data, len(data)); err != nil {
-			return
-		}
-	}
-
-	return
-}
-
 type CodecData struct {
 	Record []byte
 	RecordInfo AVCDecoderConfRecord
@@ -592,7 +530,7 @@ func (self CodecData) Height() int {
 
 func NewCodecDataFromAVCDecoderConfRecord(record []byte) (self CodecData, err error) {
 	self.Record = record
-	if self.RecordInfo, err = ParseAVCDecoderConfRecord(record); err != nil {
+	if _, err = (&self.RecordInfo).Unmarshal(record); err != nil {
 		return
 	}
 	if len(self.RecordInfo.SPS) == 0 {
@@ -612,18 +550,19 @@ func NewCodecDataFromAVCDecoderConfRecord(record []byte) (self CodecData, err er
 
 func NewCodecDataFromSPSAndPPS(sps, pps []byte) (self CodecData, err error) {
 	recordinfo := AVCDecoderConfRecord{}
-	recordinfo.AVCProfileIndication = uint(sps[1])
-	recordinfo.ProfileCompatibility = uint(sps[2])
-	recordinfo.AVCLevelIndication = uint(sps[3])
+	recordinfo.AVCProfileIndication = sps[1]
+	recordinfo.ProfileCompatibility = sps[2]
+	recordinfo.AVCLevelIndication = sps[3]
 	recordinfo.SPS = [][]byte{sps}
 	recordinfo.PPS = [][]byte{pps}
 	recordinfo.LengthSizeMinusOne = 3
-	buf := &bytes.Buffer{}
-	if err = WriteAVCDecoderConfRecord(buf, recordinfo); err != nil {
-		return
-	}
+
+	buf := make([]byte, recordinfo.Len())
+	recordinfo.Marshal(buf)
+
 	self.RecordInfo = recordinfo
-	self.Record = buf.Bytes()
+	self.Record = buf
+
 	if self.SPSInfo, err = ParseSPS(sps); err != nil {
 		return
 	}
@@ -631,66 +570,106 @@ func NewCodecDataFromSPSAndPPS(sps, pps []byte) (self CodecData, err error) {
 }
 
 type AVCDecoderConfRecord struct {
-	AVCProfileIndication uint
-	ProfileCompatibility uint
-	AVCLevelIndication   uint
-	LengthSizeMinusOne   uint
+	AVCProfileIndication uint8
+	ProfileCompatibility uint8
+	AVCLevelIndication   uint8
+	LengthSizeMinusOne   uint8
 	SPS                  [][]byte
 	PPS                  [][]byte
 }
 
-func ParseAVCDecoderConfRecord(config []byte) (self AVCDecoderConfRecord, err error) {
-	r := bytes.NewReader(config)
+var ErrDecconfInvalid = fmt.Errorf("h264parser: AVCDecoderConfRecord invalid")
 
-	if _, err = bits.ReadUIntBE(r, 8); err != nil {
+func (self *AVCDecoderConfRecord) Unmarshal(b []byte) (n int, err error) {
+	if len(b) < 7 {
+		err = ErrDecconfInvalid
 		return
-	}
-	if self.AVCProfileIndication, err = bits.ReadUIntBE(r, 8); err != nil {
-		return
-	}
-	if self.ProfileCompatibility, err = bits.ReadUIntBE(r, 8); err != nil {
-		return
-	}
-	if self.AVCLevelIndication, err = bits.ReadUIntBE(r, 8); err != nil {
-		return
-	}
-	if self.LengthSizeMinusOne, err = bits.ReadUIntBE(r, 8); err != nil {
-		return
-	}
-	self.LengthSizeMinusOne &= 0x03
-
-	var u uint
-	var n, length int
-	var data []byte
-
-	if u, err = bits.ReadUIntBE(r, 8); err != nil {
-		return
-	}
-	n = int(u&0x1f)
-	for i := 0; i < n; i++ {
-		if u, err = bits.ReadUIntBE(r, 16); err != nil {
-			return
-		}
-		length = int(u)
-		if data, err = bits.ReadBytes(r, length); err != nil {
-			return
-		}
-		self.SPS = append(self.SPS, data)
 	}
 
-	if u, err = bits.ReadUIntBE(r, 8); err != nil {
+	self.AVCProfileIndication = b[1]
+	self.ProfileCompatibility = b[2]
+	self.AVCLevelIndication = b[3]
+	self.LengthSizeMinusOne = b[4]&0x03
+	spscount := int(b[5]&0x1f)
+	n += 6
+
+	for i := 0; i < spscount; i++ {
+		if len(b) < n+2 {
+			err = ErrDecconfInvalid
+			return
+		}
+		spslen := int(pio.U16BE(b[n:]))
+		n += 2
+
+		if len(b) < n+spslen {
+			err = ErrDecconfInvalid
+			return
+		}
+		self.SPS = append(self.SPS, b[n:n+spslen])
+		n += spslen
+	}
+
+	if len(b) < n+1 {
+		err = ErrDecconfInvalid
 		return
 	}
-	n = int(u)
-	for i := 0; i < n; i++ {
-		if u, err = bits.ReadUIntBE(r, 16); err != nil {
+	ppscount := int(b[n])
+	n++
+
+	for i := 0; i < ppscount; i++ {
+		if len(b) < n+2 {
+			err = ErrDecconfInvalid
 			return
 		}
-		length = int(u)
-		if data, err = bits.ReadBytes(r, length); err != nil {
+		ppslen := int(pio.U16BE(b[n:]))
+		n += 2
+
+		if len(b) < n+ppslen {
+			err = ErrDecconfInvalid
 			return
 		}
-		self.PPS = append(self.PPS, data)
+		self.PPS = append(self.PPS, b[n:n+ppslen])
+		n += ppslen
+	}
+
+	return
+}
+
+func (self AVCDecoderConfRecord) Len() (n int) {
+	n = 7
+	for _, sps := range self.SPS {
+		n += 2+len(sps)
+	}
+	for _, pps := range self.PPS {
+		n += 2+len(pps)
+	}
+	return
+}
+
+func (self AVCDecoderConfRecord) Marshal(b []byte) (n int) {
+	b[0] = 1
+	b[1] = self.AVCProfileIndication
+	b[2] = self.ProfileCompatibility
+	b[3] = self.AVCLevelIndication
+	b[4] = self.LengthSizeMinusOne|0xfc
+	b[5] = uint8(len(self.SPS))|0xe0
+	n += 6
+
+	for _, sps := range self.SPS {
+		pio.PutU16BE(b[n:], uint16(len(sps)))
+		n += 2
+		copy(b[n:], sps)
+		n += len(sps)
+	}
+
+	b[n] = uint8(len(self.PPS))
+	n++
+
+	for _, pps := range self.PPS {
+		pio.PutU16BE(b[n:], uint16(len(pps)))
+		n += 2
+		copy(b[n:], pps)
+		n += len(pps)
 	}
 
 	return
@@ -761,44 +740,4 @@ func ParseSliceHeaderFromNALU(packet []byte) (sliceType SliceType, err error) {
 
 	return
 }
-
-/*
-type CodecInfo struct {
-	Record AVCDecoderConfRecord
-	SPSInfo SPSInfo
-}
-
-func ParseCodecData(config []byte) (info CodecInfo, err error) {
-	if info.Record, err = ParseAVCDecoderConfRecord(config); err != nil {
-		return
-	}
-	if len(info.Record.SPS) < 1 {
-		err = fmt.Errorf("CodecData invalid: no SPS found in AVCDecoderConfRecord")
-		return
-	}
-	if info.SPSInfo, err = ParseSPS(info.Record.SPS[0]); err != nil {
-		err = fmt.Errorf("CodecData invalid: parse SPS failed(%s)", err)
-		return
-	}
-	return
-}
-
-func CreateCodecDataBySPSAndPPS(SPS, PPS []byte) (codecData []byte, err error) {
-	self := AVCDecoderConfRecord{}
-	self.AVCProfileIndication = uint(SPS[1])
-	self.ProfileCompatibility = uint(SPS[2])
-	self.AVCLevelIndication = uint(SPS[3])
-	self.SPS = [][]byte{SPS}
-	self.PPS = [][]byte{PPS}
-	self.LengthSizeMinusOne = 3
-
-	buf := &bytes.Buffer{}
-	if err = WriteAVCDecoderConfRecord(buf, self); err != nil {
-		return
-	}
-	codecData = buf.Bytes()
-
-	return
-}
-*/
 
