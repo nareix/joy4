@@ -224,7 +224,29 @@ func (self *AudioEncoder) SetChannelLayout(ch av.ChannelLayout) (err error) {
 	return
 }
 
-func (self *AudioEncoder) SetOption(opt string) (err error) {
+func (self *AudioEncoder) SetOption(key string, val interface{}) (err error) {
+	ff := &self.ff.ff
+	s := fmt.Sprint(val)
+	C.av_dict_set(&ff.options, C.CString(key), C.CString(s), 0)
+	return
+}
+
+func (self *AudioEncoder) GetOption(key string, val interface{}) (err error) {
+	ff := &self.ff.ff
+	entry := C.av_dict_get(ff.options, C.CString(key), nil, 0)
+	if entry == nil {
+		err = fmt.Errorf("ffmpeg: GetOption failed: `%s` not exists", key)
+		return
+	}
+	switch p := val.(type) {
+	case *string:
+		*p = C.GoString(entry.value)
+	case *int:
+		fmt.Sscanf(C.GoString(entry.value), "%d", p)
+	default:
+		err = fmt.Errorf("ffmpeg: GetOption failed: val must be *string or *int receiver")
+		return
+	}
 	return
 }
 
@@ -236,6 +258,7 @@ func (self *AudioEncoder) Setup() (err error) {
 	if self.SampleFormat == av.SampleFormat(0) {
 		self.SampleFormat = sampleFormatFF2AV(*ff.codec.sample_fmts)
 	}
+
 	if self.BitRate == 0 {
 		self.BitRate = 80000
 	}
@@ -251,6 +274,8 @@ func (self *AudioEncoder) Setup() (err error) {
 	ff.codecCtx.bit_rate = C.int64_t(self.BitRate)
 	ff.codecCtx.channel_layout = channelLayoutAV2FF(self.ChannelLayout)
 	ff.codecCtx.strict_std_compliance = C.FF_COMPLIANCE_EXPERIMENTAL
+	ff.codecCtx.flags = C.AV_CODEC_FLAG_GLOBAL_HEADER
+
 	if C.avcodec_open2(ff.codecCtx, ff.codec, nil) != 0 {
 		err = fmt.Errorf("ffmpeg: encoder: avcodec_open2 failed")
 		return
@@ -259,6 +284,7 @@ func (self *AudioEncoder) Setup() (err error) {
 	self.FrameSampleCount = int(ff.codecCtx.frame_size)
 
 	extradata := C.GoBytes(unsafe.Pointer(ff.codecCtx.extradata), ff.codecCtx.extradata_size)
+
 	switch ff.codecCtx.codec_id {
 	case C.AV_CODEC_ID_AAC:
 		if self.codecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(extradata); err != nil {
@@ -696,6 +722,7 @@ func AudioCodecHandler(h *avutil.RegisterHandler) {
 			return dec, err
 		}
 	}
+
 	h.AudioEncoder = func(typ av.CodecType) (av.AudioEncoder, error) {
 		if enc, err := NewAudioEncoderByCodecType(typ); err != nil {
 			return nil, nil

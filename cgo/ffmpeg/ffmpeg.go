@@ -60,12 +60,14 @@ func freeFFCtx(self *ffctx) {
 	ff := &self.ff
 	if ff.frame != nil {
 		C.av_frame_free(&ff.frame)
-		ff.frame = nil
 	}
 	if ff.codecCtx != nil {
 		C.avcodec_close(ff.codecCtx)
 		C.av_free(unsafe.Pointer(ff.codecCtx))
 		ff.codecCtx = nil
+	}
+	if ff.options != nil {
+		C.av_dict_free(&ff.options)
 	}
 }
 

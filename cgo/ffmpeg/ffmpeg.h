@@ -10,5 +10,6 @@ typedef struct {
 	AVCodec *codec;
 	AVCodecContext *codecCtx;
 	AVFrame *frame;
+	AVDictionary *options;
 } FFCtx;
 
