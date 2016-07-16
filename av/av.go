@@ -269,8 +269,8 @@ type AudioEncoder interface {
 	SetSampleRate(int) (error)
 	SetChannelLayout(ChannelLayout) (error)
 	SetSampleFormat(SampleFormat) (error)
-	SetOption(string,interface{}) (error)
 	SetBitrate(int) (error)
+	SetOption(string,interface{}) (error)
 	GetOption(string,interface{}) (error)
 }
 
