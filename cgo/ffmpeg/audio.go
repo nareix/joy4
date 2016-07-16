@@ -283,9 +283,9 @@ func (self *AudioEncoder) Setup() (err error) {
 		self.SampleFormat = sampleFormatFF2AV(*ff.codec.sample_fmts)
 	}
 
-	if self.Bitrate == 0 {
-		self.Bitrate = 80000
-	}
+	//if self.Bitrate == 0 {
+	//	self.Bitrate = 80000
+	//}
 	if self.SampleRate == 0 {
 		self.SampleRate = 44100
 	}
@@ -673,7 +673,6 @@ func NewAudioDecoder(codec av.AudioCodecData) (dec *AudioDecoder, err error) {
 
 	case av.PCM_MULAW:
 		id = C.AV_CODEC_ID_PCM_MULAW
-
 
 	case av.PCM_ALAW:
 		id = C.AV_CODEC_ID_PCM_ALAW
