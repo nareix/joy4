@@ -91,24 +91,32 @@ func (self *Resampler) Resample(in av.AudioFrame) (out av.AudioFrame, err error)
 		self.avr = avr
 	}
 
-	inChannels := self.inChannelLayout.Count()
+	var inChannels, inLinesize int
+	inSampleCount := in.SampleCount
 	if !self.inSampleFormat.IsPlanar() {
 		inChannels = 1
+		inLinesize = inSampleCount*in.SampleFormat.BytesPerSample()*self.inChannelLayout.Count()
+	} else {
+		inChannels = self.inChannelLayout.Count()
+		inLinesize = inSampleCount*in.SampleFormat.BytesPerSample()
 	}
-	inSampleCount := in.SampleCount
-	inLinesize := inSampleCount*in.SampleFormat.BytesPerSample()
 	inData := make([]*C.uint8_t, inChannels)
 	for i := 0; i < inChannels; i++ {
 		inData[i] = (*C.uint8_t)(unsafe.Pointer(&in.Data[i][0]))
 	}
 
-	outChannels := self.OutChannelLayout.Count()
+	var outChannels, outLinesize, outBytesPerSample int
+	outSampleCount := int(C.avresample_get_out_samples(self.avr, C.int(in.SampleCount)))
 	if !self.OutSampleFormat.IsPlanar() {
 		outChannels = 1
+		outBytesPerSample = self.OutSampleFormat.BytesPerSample()*self.OutChannelLayout.Count()
+		outLinesize = outSampleCount*outBytesPerSample
+	} else {
+		outChannels = self.OutChannelLayout.Count()
+		outBytesPerSample = self.OutSampleFormat.BytesPerSample()
+		outLinesize = outSampleCount*outBytesPerSample
 	}
 	outData := make([]*C.uint8_t, outChannels)
-	outSampleCount := int(C.avresample_get_out_samples(self.avr, C.int(in.SampleCount)))
-	outLinesize := outSampleCount*self.OutSampleFormat.BytesPerSample()
 	out.Data = make([][]byte, outChannels)
 	for i := 0; i < outChannels; i++ {
 		out.Data[i] = make([]byte, outLinesize)
@@ -127,10 +135,11 @@ func (self *Resampler) Resample(in av.AudioFrame) (out av.AudioFrame, err error)
 		err = fmt.Errorf("ffmpeg: avresample_convert_frame failed")
 		return
 	}
+
 	out.SampleCount = convertSamples
 	if convertSamples < outSampleCount {
 		for i := 0; i < outChannels; i++ {
-			out.Data[i] = out.Data[i][:convertSamples*self.OutSampleFormat.BytesPerSample()]
+			out.Data[i] = out.Data[i][:convertSamples*outBytesPerSample]
 		}
 	}
 
