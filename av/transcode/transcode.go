@@ -18,7 +18,7 @@ type tStream struct {
 }
 
 type Options struct {
-	FindAudioDecoderEncoder func(codec av.AudioCodecData, i int) (ok bool, err error, dec av.AudioDecoder, enc av.AudioEncoder)
+	FindAudioDecoderEncoder func(codec av.AudioCodecData, i int) (ok bool, dec av.AudioDecoder, enc av.AudioEncoder, err error)
 }
 
 type Transcoder struct {
@@ -36,7 +36,7 @@ func NewTranscoder(streams []av.CodecData, options Options) (_self *Transcoder, 
 				var ok bool
 				var enc av.AudioEncoder
 				var dec av.AudioDecoder
-				ok, err, dec, enc = options.FindAudioDecoderEncoder(stream.(av.AudioCodecData), i)
+				ok, dec, enc, err = options.FindAudioDecoderEncoder(stream.(av.AudioCodecData), i)
 				if ok {
 					if err != nil {
 						return
