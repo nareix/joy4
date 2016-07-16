@@ -74,15 +74,34 @@ func (self *WaitKeyFrame) ModifyPacket(pkt *av.Packet, streams []av.CodecData, v
 	return
 }
 
-type TimeStartFromZero struct {
-	timebase time.Duration
+type FixTime struct {
+	zerobase time.Duration
+	incrbase time.Duration
+	lasttime time.Duration
+	StartFromZero bool
+	MakeIncrement bool
 }
 
-func (self *TimeStartFromZero) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoidx int, audioidx int) (drop bool, err error) {
-	if self.timebase == 0 {
-		self.timebase = pkt.Time
+func (self *FixTime) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoidx int, audioidx int) (drop bool, err error) {
+	if self.StartFromZero {
+		if self.zerobase == 0 {
+			self.zerobase = pkt.Time
+		}
+		pkt.Time -= self.zerobase
 	}
-	pkt.Time -= self.timebase
+
+	if self.MakeIncrement {
+		pkt.Time -= self.incrbase
+		if self.lasttime == 0 {
+			self.lasttime = pkt.Time
+		}
+		if pkt.Time < self.lasttime || pkt.Time > self.lasttime+time.Millisecond*500 {
+			self.incrbase += pkt.Time - self.lasttime
+			pkt.Time = self.lasttime
+		}
+		self.lasttime = pkt.Time
+	}
+
 	return
 }
 
