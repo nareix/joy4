@@ -11,5 +11,14 @@ typedef struct {
 	AVCodecContext *codecCtx;
 	AVFrame *frame;
 	AVDictionary *options;
+	int profile;
 } FFCtx;
+
+static inline int avcodec_profile_name_to_int(AVCodec *codec, const char *name) {
+	const AVProfile *p;
+	for (p = codec->profiles; p != NULL && p->profile != FF_PROFILE_UNKNOWN; p++)
+		if (!strcmp(p->name, name))
+			return p->profile;
+	return FF_PROFILE_UNKNOWN;
+}
 
