@@ -319,7 +319,19 @@ func createURL(tcurl, app, play string) (u *url.URL) {
 
 var CodecTypes = flv.CodecTypes
 
-func (self *Conn) recvConnect() (err error) {
+func (self *Conn) writeBasicConf() {
+	// > WindowAckSize
+	self.writeWindowAckSize(5000000)
+
+	// > SetPeerBandwidth
+	self.writeSetPeerBandwidth(5000000, 2)
+
+	self.writeMaxChunkSize = 1024*1024*128
+	// > SetChunkSize
+	self.writeSetChunkSize(uint32(self.writeMaxChunkSize))
+}
+
+func (self *Conn) readConnect() (err error) {
 	var connectpath string
 
 	// < connect("app")
@@ -351,19 +363,7 @@ func (self *Conn) recvConnect() (err error) {
 		tcurl, _ = _tcurl.(string)
 	}
 
-	// > WindowAckSize
-	if err = self.writeWindowAckSize(5000000); err != nil {
-		return
-	}
-	// > SetPeerBandwidth
-	if err = self.writeSetPeerBandwidth(5000000, 2); err != nil {
-		return
-	}
-	self.writeMaxChunkSize = 1024*1024*128
-	// > SetChunkSize
-	if err = self.writeSetChunkSize(uint32(self.writeMaxChunkSize)); err != nil {
-		return
-	}
+	self.writeBasicConf()
 
 	// > _result("NetConnection.Connect.Success")
 	w := self.writeCommandMsgStart()
@@ -379,7 +379,9 @@ func (self *Conn) recvConnect() (err error) {
 		"description": "Connection succeeded.",
 		"objectEncoding": 3,
 	})
-	if err = self.writeCommandMsgEnd(3, 0); err != nil {
+	self.writeCommandMsgEnd(3, 0)
+
+	if err = self.flushWrite(); err != nil {
 		return
 	}
 
@@ -399,7 +401,9 @@ func (self *Conn) recvConnect() (err error) {
 				flvio.WriteAMF0Val(w, self.commandtransid)
 				flvio.WriteAMF0Val(w, nil)
 				flvio.WriteAMF0Val(w, self.avmsgsid) // streamid=1
-				if err = self.writeCommandMsgEnd(3, 0); err != nil {
+				self.writeCommandMsgEnd(3, 0)
+
+				if err = self.flushWrite(); err != nil {
 					return
 				}
 
@@ -425,7 +429,9 @@ func (self *Conn) recvConnect() (err error) {
 					"code": "NetStream.Publish.Start",
 					"description": "Start publishing",
 				})
-				if err = self.writeCommandMsgEnd(5, self.avmsgsid); err != nil {
+				self.writeCommandMsgEnd(5, self.avmsgsid)
+
+				if err = self.flushWrite(); err != nil {
 					return
 				}
 
@@ -448,9 +454,7 @@ func (self *Conn) recvConnect() (err error) {
 				playpath, _ := self.commandparams[0].(string)
 
 				// > streamBegin(streamid)
-				if err = self.writeStreamBegin(self.avmsgsid); err != nil {
-					return
-				}
+				self.writeStreamBegin(self.avmsgsid)
 
 				// > onStatus()
 				w := self.writeCommandMsgStart()
@@ -462,16 +466,16 @@ func (self *Conn) recvConnect() (err error) {
 					"code": "NetStream.Play.Start",
 					"description": "Start live",
 				})
-				if err = self.writeCommandMsgEnd(5, self.avmsgsid); err != nil {
-					return
-				}
+				self.writeCommandMsgEnd(5, self.avmsgsid)
 
 				// > |RtmpSampleAccess()
 				w = self.writeDataMsgStart()
 				flvio.WriteAMF0Val(w, "|RtmpSampleAccess")
 				flvio.WriteAMF0Val(w, true)
 				flvio.WriteAMF0Val(w, true)
-				if err = self.writeDataMsgEnd(5, self.avmsgsid); err != nil {
+				self.writeDataMsgEnd(5, self.avmsgsid)
+
+				if err = self.flushWrite(); err != nil {
 					return
 				}
 
@@ -539,7 +543,7 @@ func (self *Conn) probe() (err error) {
 	return
 }
 
-func (self *Conn) connect(path string) (err error) {
+func (self *Conn) writeConnect(path string) (err error) {
 	// > connect("app")
 	if Debug {
 		fmt.Printf("rtmp: > connect('%s') host=%s\n", path, self.URL.Host)
@@ -557,7 +561,11 @@ func (self *Conn) connect(path string) (err error) {
 		"videoCodecs": 252,
 		"videoFunction": 1,
 	})
-	if err = self.writeCommandMsgEnd(3, 0); err != nil {
+	self.writeCommandMsgEnd(3, 0)
+
+	self.writeBasicConf()
+
+	if err = self.flushWrite(); err != nil {
 		return
 	}
 
@@ -581,9 +589,7 @@ func (self *Conn) connect(path string) (err error) {
 			}
 		} else {
 			if self.msgtypeid == msgtypeidWindowAckSize {
-				if err = self.writeWindowAckSize(2500000); err != nil {
-					return
-				}
+				self.writeWindowAckSize(2500000)
 			}
 		}
 	}
@@ -594,7 +600,7 @@ func (self *Conn) connect(path string) (err error) {
 func (self *Conn) connectPublish() (err error) {
 	connectpath, publishpath := SplitPath(self.URL)
 
-	if err = self.connect(connectpath); err != nil {
+	if err = self.writeConnect(connectpath); err != nil {
 		return
 	}
 
@@ -608,10 +614,12 @@ func (self *Conn) connectPublish() (err error) {
 	flvio.WriteAMF0Val(w, "createStream")
 	flvio.WriteAMF0Val(w, transid)
 	flvio.WriteAMF0Val(w, nil)
-	if err = self.writeCommandMsgEnd(3, 0); err != nil {
+	self.writeCommandMsgEnd(3, 0)
+	transid++
+
+	if err = self.flushWrite(); err != nil {
 		return
 	}
-	transid++
 
 	for {
 		if err = self.pollMsg(); err != nil {
@@ -639,10 +647,12 @@ func (self *Conn) connectPublish() (err error) {
 	flvio.WriteAMF0Val(w, transid)
 	flvio.WriteAMF0Val(w, nil)
 	flvio.WriteAMF0Val(w, publishpath)
-	if err = self.writeCommandMsgEnd(8, self.avmsgsid); err != nil {
+	self.writeCommandMsgEnd(8, self.avmsgsid)
+	transid++
+
+	if err = self.flushWrite(); err != nil {
 		return
 	}
-	transid++
 
 	self.writing = true
 	self.publishing = true
@@ -653,7 +663,7 @@ func (self *Conn) connectPublish() (err error) {
 func (self *Conn) connectPlay() (err error) {
 	connectpath, playpath := SplitPath(self.URL)
 
-	if err = self.connect(connectpath); err != nil {
+	if err = self.writeConnect(connectpath); err != nil {
 		return
 	}
 
@@ -665,12 +675,12 @@ func (self *Conn) connectPlay() (err error) {
 	flvio.WriteAMF0Val(w, "createStream")
 	flvio.WriteAMF0Val(w, 2)
 	flvio.WriteAMF0Val(w, nil)
-	if err = self.writeCommandMsgEnd(3, 0); err != nil {
-		return
-	}
+	self.writeCommandMsgEnd(3, 0)
 
 	// > SetBufferLength 0,100ms
-	if err = self.writeSetBufferLength(0, 100); err != nil {
+	self.writeSetBufferLength(0, 100)
+
+	if err = self.flushWrite(); err != nil {
 		return
 	}
 
@@ -700,7 +710,9 @@ func (self *Conn) connectPlay() (err error) {
 	flvio.WriteAMF0Val(w, 0)
 	flvio.WriteAMF0Val(w, nil)
 	flvio.WriteAMF0Val(w, playpath)
-	if err = self.writeCommandMsgEnd(8, self.avmsgsid); err != nil {
+	self.writeCommandMsgEnd(8, self.avmsgsid)
+
+	if err = self.flushWrite(); err != nil {
 		return
 	}
 
@@ -751,7 +763,7 @@ func (self *Conn) prepare(stage int, flags int) (err error) {
 
 		case stageHandshakeDone:
 			if self.isserver {
-				if err = self.recvConnect(); err != nil {
+				if err = self.readConnect(); err != nil {
 					return
 				}
 			} else {
@@ -808,6 +820,9 @@ func (self *Conn) WritePacket(pkt av.Packet) (err error) {
 }
 
 func (self *Conn) WriteTrailer() (err error) {
+	if err = self.flushWrite(); err != nil {
+		return
+	}
 	return
 }
 
@@ -856,9 +871,7 @@ func (self *Conn) WriteHeader(streams []av.CodecData) (err error) {
 	w := self.writeDataMsgStart()
 	flvio.WriteAMF0Val(w, "onMetaData")
 	flvio.WriteAMF0Val(w, metadata)
-	if err = self.writeDataMsgEnd(5, self.avmsgsid); err != nil {
-		return
-	}
+	self.writeDataMsgEnd(5, self.avmsgsid)
 
 	// > Videodata(decoder config)
 	// > Audiodata(decoder config)
@@ -1121,10 +1134,13 @@ func (self *Conn) writeChunks(csid uint32, timestamp uint32, msgtypeid uint8, ms
 		fmt.Print(hex.Dump(b))
 	}
 
+	return
+}
+
+func (self *Conn) flushWrite() (err error) {
 	if err = self.bufw.Flush(); err != nil {
 		return
 	}
-
 	return
 }
 
