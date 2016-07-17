@@ -4,6 +4,7 @@ import (
 	"sync"
 	"fmt"
 	"time"
+	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/format"
 	"github.com/nareix/joy4/av/avutil"
 	"github.com/nareix/joy4/av/pubsub"
@@ -13,6 +14,20 @@ import (
 
 func init() {
 	format.RegisterAll()
+}
+
+type FrameDropper struct {
+	Interval int
+	n int
+}
+
+func (self *FrameDropper) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoidx int, audioidx int) (drop bool, err error) {
+	if self.Interval != 0 && self.n >= self.Interval && pkt.Idx == int8(videoidx) && !pkt.IsKeyFrame {
+		drop = true
+		self.n = 0
+	}
+	self.n++
+	return
 }
 
 func main() {
@@ -45,6 +60,11 @@ func main() {
 				filters = append(filters, &pktque.WaitKeyFrame{})
 			}
 			filters = append(filters, &pktque.FixTime{StartFromZero: true})
+			if q := query.Get("framedrop"); q != "" {
+				n := 0
+				fmt.Sscanf(q, "%d", &n)
+				filters = append(filters, &FrameDropper{Interval: n})
+			}
 			demuxer := &pktque.FilterDemuxer{
 				Filter: filters,
 				Demuxer: cursor,
