@@ -1199,11 +1199,11 @@ func (self *Conn) readChunk() (err error) {
 		if h, err = self.br.ReadBytes(11); err != nil {
 			return
 		}
-		timestamp = pio.GetU24BE(h[0:3])
+		timestamp = pio.U24BE(h[0:3])
 		cs.msghdrtype = msghdrtype
-		cs.msgdatalen = pio.GetU24BE(h[3:6])
+		cs.msgdatalen = pio.U24BE(h[3:6])
 		cs.msgtypeid = h[6]
-		cs.msgsid = pio.GetU32LE(h[7:11])
+		cs.msgsid = pio.U32LE(h[7:11])
 		if timestamp == 0xffffff {
 			if timestamp, err = self.br.ReadU32BE(); err != nil {
 				return
@@ -1233,9 +1233,9 @@ func (self *Conn) readChunk() (err error) {
 		if h, err = self.br.ReadBytes(7); err != nil {
 			return
 		}
-		timestamp = pio.GetU24BE(h[0:3])
+		timestamp = pio.U24BE(h[0:3])
 		cs.msghdrtype = msghdrtype
-		cs.msgdatalen = pio.GetU24BE(h[3:6])
+		cs.msgdatalen = pio.U24BE(h[3:6])
 		cs.msgtypeid = h[6]
 		if timestamp == 0xffffff {
 			if timestamp, err = self.br.ReadU32BE(); err != nil {
@@ -1266,7 +1266,7 @@ func (self *Conn) readChunk() (err error) {
 			return
 		}
 		cs.msghdrtype = msghdrtype
-		timestamp = pio.GetU24BE(h[0:3])
+		timestamp = pio.U24BE(h[0:3])
 		if timestamp == 0xffffff {
 			if timestamp, err = self.br.ReadU32BE(); err != nil {
 				return
@@ -1383,7 +1383,7 @@ func (self *Conn) handleMsg(timestamp uint32, msgsid uint32, msgtypeid uint8, ms
 
 	case msgtypeidUserControl:
 		if len(msgdata) >= 2 {
-			self.eventtype = pio.GetU16BE(msgdata)
+			self.eventtype = pio.U16BE(msgdata)
 			self.msgdata = msgdata
 		} else {
 			err = fmt.Errorf("rtmp: short packet of UserControl")
@@ -1419,7 +1419,7 @@ func (self *Conn) handleMsg(timestamp uint32, msgsid uint32, msgtypeid uint8, ms
 		self.audiodata = tag
 
 	case msgtypeidSetChunkSize:
-		self.readMaxChunkSize = int(pio.GetU32BE(msgdata))
+		self.readMaxChunkSize = int(pio.U32BE(msgdata))
 		return
 	}
 
@@ -1542,7 +1542,7 @@ func (self *Conn) handshakeClient() (err error) {
 		fmt.Println("rtmp: handshakeClient: server version", S1[4],S1[5],S1[6],S1[7])
 	}
 
-	if ver := pio.GetU32BE(S1[4:8]); ver != 0 {
+	if ver := pio.U32BE(S1[4:8]); ver != 0 {
 		C2 = S1
 	} else {
 		C2 = S1
@@ -1586,10 +1586,10 @@ func (self *Conn) handshakeServer() (err error) {
 
 	S0[0] = 3
 
-	clitime := pio.GetU32BE(C1[0:4])
+	clitime := pio.U32BE(C1[0:4])
 	srvtime := clitime
 	srvver := uint32(0x0d0e0a0d)
-	cliver := pio.GetU32BE(C1[4:8])
+	cliver := pio.U32BE(C1[4:8])
 
 	if cliver != 0 {
 		var ok bool
