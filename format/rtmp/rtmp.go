@@ -1570,7 +1570,7 @@ func (self *Conn) handshakeServer() (err error) {
 	C2 := C0C1C2[1536+1:]
 
 	S0S1S2 := random[1536*2+1:]
-	//S0 := S0S1S2[:1]
+	S0 := S0S1S2[:1]
 	S1 := S0S1S2[1:1536+1]
 	S0S1 := S0S1S2[:1536+1]
 	S2 := S0S1S2[1536+1:]
@@ -1583,6 +1583,8 @@ func (self *Conn) handshakeServer() (err error) {
 		err = fmt.Errorf("rtmp: handshake version=%d invalid", C0[0])
 		return
 	}
+
+	S0[0] = 3
 
 	clitime := pio.GetU32BE(C1[0:4])
 	srvtime := clitime
