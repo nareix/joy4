@@ -24,6 +24,7 @@ type FrameDropper struct {
 	lasttime time.Time
 	lastpkttime time.Duration
 	delay time.Duration
+	SkipInterval int
 }
 
 func (self *FrameDropper) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoidx int, audioidx int) (drop bool, err error) {
@@ -49,6 +50,14 @@ func (self *FrameDropper) ModifyPacket(pkt *av.Packet, streams []av.CodecData, v
 		}
 		if self.skipping {
 			drop = true
+		}
+
+		if self.SkipInterval != 0 && pkt.IsKeyFrame {
+			if self.n == self.SkipInterval {
+				self.n = 0
+				self.skipping = true
+			}
+			self.n++
 		}
 	}
 
@@ -100,7 +109,13 @@ func main() {
 			}
 			if q := query.Get("delayskip"); q != "" {
 				dur, _ := time.ParseDuration(q)
-				filters = append(filters, &FrameDropper{DelaySkip: dur})
+				skipper := &FrameDropper{DelaySkip: dur}
+				if q := query.Get("skipinterval"); q != "" {
+					n := 0
+					fmt.Sscanf(q, "%d", &n)
+					skipper.SkipInterval = n
+				}
+				filters = append(filters, skipper)
 			}
 			demuxer := &pktque.FilterDemuxer{
 				Filter: filters,
