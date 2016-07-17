@@ -16,6 +16,49 @@ import (
 
 var MaxProbePacketCount = 20
 
+func NewMetadataByStreams(streams []av.CodecData) (metadata flvio.AMFMap, err error) {
+	metadata = flvio.AMFMap{}
+
+	for _, _stream := range streams {
+		typ := _stream.Type()
+		switch {
+		case typ.IsVideo():
+			stream := _stream.(av.VideoCodecData)
+			switch typ {
+			case av.H264:
+				metadata["videocodecid"] = flvio.VIDEO_H264
+
+			default:
+				err = fmt.Errorf("flv: metadata: unsupported video codecType=%v", stream.Type())
+				return
+			}
+
+			metadata["width"] = stream.Width()
+			metadata["height"] = stream.Height()
+			metadata["displayWidth"] = stream.Width()
+			metadata["displayHeight"] = stream.Height()
+
+		case typ.IsAudio():
+			stream := _stream.(av.AudioCodecData)
+			switch typ {
+			case av.AAC:
+				metadata["audiocodecid"] = flvio.SOUND_AAC
+
+			case av.SPEEX:
+				metadata["audiocodecid"] = flvio.SOUND_SPEEX
+
+			default:
+				err = fmt.Errorf("flv: metadata: unsupported audio codecType=%v", stream.Type())
+				return
+			}
+
+			metadata["audiosamplerate"] = stream.SampleRate()
+		}
+	}
+
+	return
+}
+
 type Prober struct {
 	HasAudio, HasVideo bool
 	GotAudio, GotVideo bool

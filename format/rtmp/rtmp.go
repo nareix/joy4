@@ -831,40 +831,9 @@ func (self *Conn) WriteHeader(streams []av.CodecData) (err error) {
 		return
 	}
 
-	metadata := flvio.AMFMap{}
-
-	for _, _stream := range streams {
-		typ := _stream.Type()
-		switch {
-		case typ.IsVideo():
-			stream := _stream.(av.VideoCodecData)
-			switch typ {
-			case av.H264:
-				metadata["videocodecid"] = flvio.VIDEO_H264
-
-			default:
-				err = fmt.Errorf("rtmp: WriteHeader: unsupported video codecType=%v", stream.Type())
-				return
-			}
-
-			metadata["width"] = stream.Width()
-			metadata["height"] = stream.Height()
-			metadata["displayWidth"] = stream.Width()
-			metadata["displayHeight"] = stream.Height()
-
-		case typ.IsAudio():
-			stream := _stream.(av.AudioCodecData)
-			switch typ {
-			case av.AAC:
-				metadata["audiocodecid"] = flvio.SOUND_AAC
-
-			default:
-				err = fmt.Errorf("rtmp: WriteHeader: unsupported audio codecType=%v", stream.Type())
-				return
-			}
-
-			metadata["audiosamplerate"] = stream.SampleRate()
-		}
+	var metadata flvio.AMFMap
+	if metadata, err = flv.NewMetadataByStreams(streams); err != nil {
+		return
 	}
 
 	// > onMetaData()
