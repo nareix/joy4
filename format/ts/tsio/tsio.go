@@ -306,6 +306,11 @@ func ParsePSI(h []byte) (tableid uint8, tableext uint16, hdrlen int, datalen int
 	datalen = int(pio.U16BE(h[hdrlen:]))&0x3ff - 9
 	hdrlen += 2
 
+	if datalen < 0 {
+		err = ErrPSIHeader
+		return
+	}
+
 	// Table ID extension(16)
 	tableext = pio.U16BE(h[hdrlen:])
 	hdrlen += 2
@@ -330,7 +335,7 @@ func ParsePSI(h []byte) (tableid uint8, tableext uint16, hdrlen int, datalen int
 
 const PSIHeaderLength = 9
 
-func FillPSI(h []byte, tableid uint8, tableext uint16, data []byte) (n int) {
+func FillPSI(h []byte, tableid uint8, tableext uint16, datalen int) (n int) {
 	// pointer(8)
 	h[n] = 0
 	n++
@@ -340,7 +345,7 @@ func FillPSI(h []byte, tableid uint8, tableext uint16, data []byte) (n int) {
 	n++
 
 	// section_syntax_indicator(1)=1,private_bit(1)=0,reserved(2)=3,unused(2)=0,section_length(10)
-	pio.PutU16BE(h[n:], uint16(0xa<<12 | 2+3+4+len(data)))
+	pio.PutU16BE(h[n:], uint16(0xa<<12 | 2+3+4+datalen))
 	n += 2
 
 	// Table ID extension(16)
@@ -359,8 +364,7 @@ func FillPSI(h []byte, tableid uint8, tableext uint16, data []byte) (n int) {
 	h[n] = 0
 	n++
 
-	copy(h[n:], data)
-	n += len(data)
+	n += datalen
 
 	crc := calcCRC32(0xffffffff, h[1:n])
 	pio.PutU32LE(h[n:], crc)

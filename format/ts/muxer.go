@@ -102,6 +102,7 @@ func (self *Muxer) WritePATPMT() (err error) {
 		},
 	}
 	patlen := pat.Marshal(self.psidata[tsio.PSIHeaderLength:])
+	tsio.FillPSI(self.psidata, tsio.TableIdPAT, tsio.TableExtPAT, patlen)
 	self.datav[0] = self.psidata[:tsio.PSIHeaderLength+patlen]
 	if err = self.tswpat.WritePackets(self.w, self.datav[:1], 0, false, true); err != nil {
 		return
@@ -133,6 +134,7 @@ func (self *Muxer) WritePATPMT() (err error) {
 		return
 	}
 	pmt.Marshal(self.psidata[tsio.PSIHeaderLength:])
+	tsio.FillPSI(self.psidata, tsio.TableIdPMT, tsio.TableExtPMT, pmtlen)
 	self.datav[0] = self.psidata[:tsio.PSIHeaderLength+pmtlen]
 	if err = self.tswpmt.WritePackets(self.w, self.datav[:1], 0, false, true); err != nil {
 		return
