@@ -64,7 +64,7 @@ func (self *Demuxer) prepare() (err error) {
 	supports := self.Options.OutputCodecTypes
 
 	transopts := transcode.Options{}
-	transopts.FindAudioDecoderEncoder = func(codec av.AudioCodecData, i int) (ok bool, err error, dec av.AudioDecoder, enc av.AudioEncoder) {
+	transopts.FindAudioDecoderEncoder = func(codec av.AudioCodecData, i int) (ok bool, dec av.AudioDecoder, enc av.AudioEncoder, err error) {
 		if len(supports) == 0 {
 			return
 		}
