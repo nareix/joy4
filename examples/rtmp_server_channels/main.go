@@ -89,6 +89,7 @@ func main() {
 		if ch != nil {
 			cursor := ch.que.Latest()
 			query := conn.URL.Query()
+
 			if q := query.Get("delaygop"); q != "" {
 				n := 0
 				fmt.Sscanf(q, "%d", &n)
@@ -97,16 +98,21 @@ func main() {
 				dur, _ := time.ParseDuration(q)
 				cursor = ch.que.DelayedTime(dur)
 			}
+
 			filters := pktque.Filters{}
+
 			if q := query.Get("waitkey"); q != "" {
 				filters = append(filters, &pktque.WaitKeyFrame{})
 			}
-			filters = append(filters, &pktque.FixTime{StartFromZero: true})
+
+			filters = append(filters, &pktque.FixTime{StartFromZero: true, MakeIncrement: true})
+
 			if q := query.Get("framedrop"); q != "" {
 				n := 0
 				fmt.Sscanf(q, "%d", &n)
 				filters = append(filters, &FrameDropper{Interval: n})
 			}
+
 			if q := query.Get("delayskip"); q != "" {
 				dur, _ := time.ParseDuration(q)
 				skipper := &FrameDropper{DelaySkip: dur}
@@ -117,10 +123,12 @@ func main() {
 				}
 				filters = append(filters, skipper)
 			}
+
 			demuxer := &pktque.FilterDemuxer{
 				Filter: filters,
 				Demuxer: cursor,
 			}
+
 			avutil.CopyFile(conn, demuxer)
 		}
 	}
