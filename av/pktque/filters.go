@@ -108,7 +108,6 @@ func (self *FixTime) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoi
 type AVSync struct {
 	MaxTimeDiff time.Duration
 	time []time.Duration
-	timebase time.Duration
 }
 
 func (self *AVSync) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoidx int, audioidx int) (drop bool, err error) {
@@ -120,20 +119,18 @@ func (self *AVSync) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoid
 	}
 
 	start, end, correctable, correcttime := self.check(int(pkt.Idx))
-	time := pkt.Time - self.timebase
-	if time >= start && time < end {
-		pkt.Time = time
-		self.time[pkt.Idx] = time
+	if pkt.Time >= start && pkt.Time < end {
+		self.time[pkt.Idx] = pkt.Time
 	} else {
 		if correctable {
-			self.timebase = pkt.Time - correcttime
 			pkt.Time = correcttime
-			self.time[pkt.Idx] = correcttime
+			for i := range self.time {
+				self.time[i] = correcttime
+			}
 		} else {
 			drop = true
 		}
 	}
-
 	return
 }
 
@@ -150,7 +147,7 @@ func (self *AVSync) check(i int) (start time.Duration, end time.Duration, correc
 	}
 	allthesame := self.time[minidx] == self.time[maxidx]
 
-	if i == minidx {
+	if i == maxidx {
 		if allthesame {
 			correctable = true
 		} else {
