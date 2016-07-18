@@ -549,7 +549,7 @@ func (self *TSWriter) WritePackets(w io.Writer, datav [][]byte, pcr time.Duratio
 			}
 			end = datavlen
 		}
-		n := pio.VecSliceNoNew(datav, writev, writepos, end)
+		n := pio.VecSliceTo(datav, writev, writepos, end)
 
 		self.tshdr[4] = byte(hdrlen)-5 // length
 		if _, err = w.Write(self.tshdr[:hdrlen]); err != nil {
