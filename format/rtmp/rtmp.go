@@ -493,22 +493,26 @@ func (self *Conn) readConnect() (err error) {
 }
 
 func (self *Conn) checkConnectResult() (ok bool, errmsg string) {
-	errmsg = "params invalid"
 	if len(self.commandparams) < 1 {
+		errmsg = "params length < 1"
 		return
 	}
 
 	obj, _ := self.commandparams[0].(flvio.AMFMap)
 	if obj == nil {
+		errmsg = "params[0] not object"
 		return
 	}
 
 	_code, _ := obj["code"]
 	if _code == nil {
+		errmsg = "code invalid"
 		return
 	}
+
 	code, _ := _code.(string)
 	if code != "NetConnection.Connect.Success" {
+		errmsg = "code != NetConnection.Connect.Success"
 		return
 	}
 
