@@ -26,9 +26,8 @@ const MaxTagSubHeaderLength = 16
 
 type Tag interface {
 	Type() uint8
-	Len() int
-	Marshal(*pio.Writer) error
-	Unmarshal(*pio.Reader) error
+	GetData() []byte
+	SetData([]byte)
 	FillHeader([]byte) int
 	ParseHeader([]byte) (int,error)
 }
@@ -41,30 +40,20 @@ func (self Scriptdata) Type() uint8 {
 	return TAG_SCRIPTDATA
 }
 
-func (self Scriptdata) Marshal(w *pio.Writer) (err error) {
-	if _, err = w.Write(self.Data); err != nil {
-		return
-	}
-	return
-}
-
-func (self Scriptdata) Len() int {
-	return len(self.Data)
-}
-
-func (self *Scriptdata) Unmarshal(r *pio.Reader) (err error) {
-	if self.Data, err = r.ReadBytes(int(r.N)); err != nil {
-		return
-	}
-	return
-}
-
 func (self *Scriptdata) FillHeader(b []byte) (n int) {
 	return
 }
 
 func (self *Scriptdata) ParseHeader(b []byte) (n int, err error) {
 	return
+}
+
+func (self Scriptdata) GetData() []byte {
+	return self.Data
+}
+
+func (self *Scriptdata) SetData(b []byte) {
+	self.Data = b
 }
 
 const (
@@ -165,41 +154,6 @@ func (self Audiodata) ChannelLayout() av.ChannelLayout {
 	}
 }
 
-func (self Audiodata) Len() int {
-	if self.SoundFormat == SOUND_AAC {
-		return 2 + len(self.Data)
-	} else {
-		return 1 + len(self.Data)
-	}
-}
-
-func (self Audiodata) Marshal(w *pio.Writer) (err error) {
-	var flags uint8
-	flags |= self.SoundFormat << 4
-	flags |= self.SoundRate << 2
-	flags |= self.SoundSize << 1
-	flags |= self.SoundType
-	if err = w.WriteU8(flags); err != nil {
-		return
-	}
-
-	switch self.SoundFormat {
-	case SOUND_AAC:
-		if err = w.WriteU8(self.AACPacketType); err != nil {
-			return
-		}
-		if _, err = w.Write(self.Data); err != nil {
-			return
-		}
-
-	default:
-		if _, err = w.Write(self.Data); err != nil {
-			return
-		}
-	}
-	return
-}
-
 func (self *Audiodata) ParseHeader(b []byte) (n int, err error) {
 	if len(b) < n+1 {
 		err = fmt.Errorf("audiodata: parse invalid")
@@ -244,32 +198,12 @@ func (self Audiodata) FillHeader(b []byte) (n int) {
 	return
 }
 
-func (self *Audiodata) Unmarshal(r *pio.Reader) (err error) {
-	var flags uint8
-	if flags, err = r.ReadU8(); err != nil {
-		return
-	}
-	self.SoundFormat = flags >> 4
-	self.SoundRate = (flags >> 2) & 0x3
-	self.SoundSize = (flags >> 1) & 0x1
-	self.SoundType = flags & 0x1
+func (self Audiodata) GetData() []byte {
+	return self.Data
+}
 
-	switch self.SoundFormat {
-	case SOUND_AAC:
-		if self.AACPacketType, err = r.ReadU8(); err != nil {
-			return
-		}
-		if self.Data, err = r.ReadBytes(int(r.N)); err != nil {
-			return
-		}
-
-	default:
-		if self.Data, err = r.ReadBytes(int(r.N)); err != nil {
-			return
-		}
-	}
-
-	return
+func (self *Audiodata) SetData(b []byte) {
+	self.Data = b
 }
 
 const (
@@ -319,10 +253,6 @@ func (self Videodata) Type() uint8 {
 	return TAG_VIDEO
 }
 
-func (self Videodata) Len() int {
-	return 5 + len(self.Data)
-}
-
 func (self *Videodata) ParseHeader(b []byte) (n int, err error) {
 	if len(b) < n+1 {
 		err = fmt.Errorf("videodata: parse invalid")
@@ -359,46 +289,12 @@ func (self Videodata) FillHeader(b []byte) (n int) {
 	return
 }
 
-func (self *Videodata) Unmarshal(r *pio.Reader) (err error) {
-	var flags uint8
-	if flags, err = r.ReadU8(); err != nil {
-		return
-	}
-	self.FrameType = flags >> 4
-	self.CodecID = flags & 0xf
-	if self.AVCPacketType, err = r.ReadU8(); err != nil {
-		return
-	}
-	if self.CompositionTime, err = r.ReadI24BE(); err != nil {
-		return
-	}
-	switch self.AVCPacketType {
-	case AVC_SEQHDR, AVC_NALU:
-		if self.Data, err = r.ReadBytes(int(r.N)); err != nil {
-			return
-		}
-	}
-	return
+func (self Videodata) GetData() []byte {
+	return self.Data
 }
 
-func (self Videodata) Marshal(w *pio.Writer) (err error) {
-	flags := self.FrameType<<4 | self.CodecID
-	if err = w.WriteU8(flags); err != nil {
-		return
-	}
-	if err = w.WriteU8(self.AVCPacketType); err != nil {
-		return
-	}
-	if err = w.WriteI24BE(self.CompositionTime); err != nil {
-		return
-	}
-	switch self.AVCPacketType {
-	case AVC_SEQHDR, AVC_NALU:
-		if _, err = w.Write(self.Data); err != nil {
-			return
-		}
-	}
-	return
+func (self *Videodata) SetData(b []byte) {
+	self.Data = b
 }
 
 const (
@@ -409,59 +305,6 @@ const (
 	FILE_HAS_AUDIO = 0x4
 	FILE_HAS_VIDEO = 0x1
 )
-
-const FileHeaderLength = 9
-
-func ParseFileHeader(b []byte) (flags uint8, skip int, err error) {
-	flv := pio.U24BE(b[0:3])
-	if flv != 0x464c56 { // 'FLV'
-		err = fmt.Errorf("flvio: file header cc3 invalid")
-		return
-	}
-
-	flags = b[4]
-
-	skip = int(pio.U32BE(b[5:9])) - 5
-	if skip < 0 {
-		err = fmt.Errorf("flvio: file header datasize invalid")
-		return
-	}
-
-	return
-}
-
-func ReadFileHeader(r *pio.Reader) (flags uint8, err error) {
-	var cc3 uint32
-	if cc3, err = r.ReadU24BE(); err != nil {
-		return
-	}
-	if cc3 != 0x464c56 { // 'FLV'
-		err = fmt.Errorf("flvio: file header cc3 invalid")
-		return
-	}
-
-	// version
-	if _, err = r.ReadI8(); err != nil {
-		return
-	}
-
-	if flags, err = r.ReadU8(); err != nil {
-		return
-	}
-
-	var dataoffset uint32
-	if dataoffset, err = r.ReadU32BE(); err != nil {
-		return
-	}
-	dataoffset -= 9
-
-	// skip header and first `tagsize`
-	if _, err = r.Discard(int(dataoffset + 4)); err != nil {
-		return
-	}
-
-	return
-}
 
 const TagHeaderLength = 11
 const TagTrailerLength = 4
@@ -495,143 +338,82 @@ func ParseTagHeader(b []byte) (tag Tag, ts int32, datalen int, err error) {
 	return
 }
 
-func ReadTag(r *pio.Reader) (tag Tag, timestamp int32, err error) {
-	var tagtype uint8
-	if tagtype, err = r.ReadU8(); err != nil {
+func ReadTag(r io.Reader, b []byte) (tag Tag, ts int32, err error) {
+	if _, err = io.ReadFull(r, b[:TagHeaderLength]); err != nil {
+		return
+	}
+	var datalen int
+	if tag, ts, datalen, err = ParseTagHeader(b); err != nil {
 		return
 	}
 
-	switch tagtype {
-	case TAG_AUDIO:
-		tag = &Audiodata{}
-
-	case TAG_VIDEO:
-		tag = &Videodata{}
-
-	case TAG_SCRIPTDATA:
-		tag = &Scriptdata{}
-
-	default:
-		err = fmt.Errorf("flvio: ReadTag tagtype=%d invalid", tagtype)
+	data := make([]byte, datalen)
+	if _, err = io.ReadFull(r, data); err != nil {
 		return
 	}
 
-	var datasize uint32
-	if datasize, err = r.ReadU24BE(); err != nil {
+	var n int
+	if n, err = tag.ParseHeader(data); err != nil {
 		return
 	}
+	tag.SetData(data[n:])
 
-	var tslo uint32
-	var tshi uint8
-	if tslo, err = r.ReadU24BE(); err != nil {
+	if _, err = io.ReadFull(r, b[:4]); err != nil {
 		return
 	}
-	if tshi, err = r.ReadU8(); err != nil {
-		return
-	}
-	timestamp = int32(tslo|uint32(tshi)<<24)
-
-	if _, err = r.ReadI24BE(); err != nil {
-		return
-	}
-
-	b := make([]byte, datasize)
-	if _, err = io.ReadFull(r, b); err != nil {
-		return
-	}
-	br := pio.NewReaderBytes(b)
-	br.LimitOn(int64(datasize))
-	if err = tag.Unmarshal(br); err != nil {
-		return
-	}
-	br.LimitOff()
-
-	if _, err = r.ReadI32BE(); err != nil {
-		return
-	}
-
 	return
 }
 
-func FillTagHeader(b []byte, tag Tag, datalen int, ts int32) (n int) {
-	b[n] = tag.Type()
+func FillTagHeader(b []byte, tagtype uint8, datalen int, ts int32) (n int) {
+	b[n] = tagtype
 	n++
-
 	pio.PutU24BE(b[n:], uint32(datalen))
 	n += 3
-
 	pio.PutU24BE(b[n:], uint32(ts & 0xffffff))
 	n += 3
-
 	b[n] = uint8(ts >> 24)
 	n++
-
 	pio.PutI24BE(b[n:], 0)
 	n += 3
-
 	return
 }
 
 func FillTagTrailer(b []byte, datalen int) (n int) {
-	pio.PutU32BE(b[n:], uint32(datalen + TagHeaderLength))
+	pio.PutU32BE(b[n:], uint32(datalen+TagHeaderLength))
 	n += 4
 	return
 }
 
-func WriteTag(w *pio.Writer, tag Tag, timestamp int32) (err error) {
-	if err = w.WriteU8(tag.Type()); err != nil {
-		return
-	}
-	datasize := tag.Len()
-	if err = w.WriteU24BE(uint32(datasize)); err != nil {
-		return
-	}
-	if err = w.WriteU24BE(uint32(timestamp & 0xffffff)); err != nil {
-		return
-	}
-	if err = w.WriteU8(uint8(timestamp >> 24)); err != nil {
-		return
-	}
-	if err = w.WriteI24BE(0); err != nil {
-		return
-	}
-	if err = tag.Marshal(w); err != nil {
-		return
-	}
-	if err = w.WriteU32BE(uint32(datasize) + 11); err != nil {
-		return
-	}
-	return
-}
+func WriteTag(w io.Writer, tag Tag, ts int32, b []byte) (err error) {
+	data := tag.GetData()
 
-func WriteFileHeader(w *pio.Writer, flags uint8) (err error) {
-	// 'FLV', version 1
-	if err = w.WriteI32BE(0x464c5601); err != nil {
+	n := tag.FillHeader(b[TagHeaderLength:])
+	datalen := len(data)+n
+
+	n += FillTagHeader(b, tag.Type(), datalen, ts)
+
+	if _, err = w.Write(b[:n]); err != nil {
 		return
 	}
 
-	if err = w.WriteU8(flags); err != nil {
+	if _, err = w.Write(data); err != nil {
 		return
 	}
 
-	// DataOffset: UI32 Offset in bytes from start of file to start of body (that is, size of header)
-	// The DataOffset field usually has a value of 9 for FLV version 1.
-	if err = w.WriteU32BE(9); err != nil {
-		return
-	}
-
-	// PreviousTagSize0: UI32 Always 0
-	if err = w.WriteU32BE(0); err != nil {
+	n = FillTagTrailer(b, datalen)
+	if _, err = w.Write(b[:n]); err != nil {
 		return
 	}
 
 	return
 }
+
+const FileHeaderLength = 9
 
 func FillFileHeader(b []byte, flags uint8) (n int) {
 	// 'FLV', version 1
 	pio.PutU32BE(b[n:], 0x464c5601)
-	n += 3
+	n += 4
 
 	b[n] = flags
 	n++
@@ -647,4 +429,23 @@ func FillFileHeader(b []byte, flags uint8) (n int) {
 
 	return
 }
+
+func ParseFileHeader(b []byte) (flags uint8, skip int, err error) {
+	flv := pio.U24BE(b[0:3])
+	if flv != 0x464c56 { // 'FLV'
+		err = fmt.Errorf("flvio: file header cc3 invalid")
+		return
+	}
+
+	flags = b[4]
+
+	skip = int(pio.U32BE(b[5:9]))-9+4
+	if skip < 0 {
+		err = fmt.Errorf("flvio: file header datasize invalid")
+		return
+	}
+
+	return
+}
+
 

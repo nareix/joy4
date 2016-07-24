@@ -312,16 +312,16 @@ func PacketToTag(pkt av.Packet, stream av.CodecData) (_tag flvio.Tag, timestamp 
 }
 
 type Muxer struct {
-	pw *pio.Writer
-	bw *bufio.Writer
+	bufw *bufio.Writer
+	b []byte
 	streams []av.CodecData
 }
 
 func NewMuxer(w io.Writer) *Muxer {
-	self := &Muxer{}
-	self.bw = bufio.NewWriterSize(w, pio.RecommendBufioSize)
-	self.pw = pio.NewWriter(self.bw)
-	return self
+	return &Muxer{
+		bufw: bufio.NewWriterSize(w, pio.RecommendBufioSize),
+		b: make([]byte, 256),
+	}
 }
 
 var CodecTypes = []av.CodecType{av.H264, av.AAC, av.SPEEX}
@@ -336,7 +336,8 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 		}
 	}
 
-	if err = flvio.WriteFileHeader(self.pw, flags); err != nil {
+	n := flvio.FillFileHeader(self.b, flags)
+	if _, err = self.bufw.Write(self.b[:n]); err != nil {
 		return
 	}
 
@@ -347,7 +348,7 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 			return
 		}
 		if ok {
-			if err = flvio.WriteTag(self.pw, tag, 0); err != nil {
+			if err = flvio.WriteTag(self.bufw, tag, 0, self.b); err != nil {
 				return
 			}
 		}
@@ -361,15 +362,14 @@ func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
 	stream := self.streams[pkt.Idx]
 	tag, timestamp := PacketToTag(pkt, stream)
 
-	if err = flvio.WriteTag(self.pw, tag, timestamp); err != nil {
+	if err = flvio.WriteTag(self.bufw, tag, timestamp, self.b); err != nil {
 		return
 	}
-
 	return
 }
 
 func (self *Muxer) WriteTrailer() (err error) {
-	if err = self.bw.Flush(); err != nil {
+	if err = self.bufw.Flush(); err != nil {
 		return
 	}
 	return
@@ -377,14 +377,16 @@ func (self *Muxer) WriteTrailer() (err error) {
 
 type Demuxer struct {
 	prober *Prober
-	pr *pio.Reader
+	bufr *bufio.Reader
+	b []byte
 	stage int
 }
 
 func NewDemuxer(r io.Reader) *Demuxer {
 	return &Demuxer{
-		pr: pio.NewReader(bufio.NewReaderSize(r, pio.RecommendBufioSize)),
+		bufr: bufio.NewReaderSize(r, pio.RecommendBufioSize),
 		prober: &Prober{},
+		b: make([]byte, 256),
 	}
 }
 
@@ -392,8 +394,15 @@ func (self *Demuxer) prepare() (err error) {
 	for self.stage < 2 {
 		switch self.stage {
 		case 0:
+			if _, err = io.ReadFull(self.bufr, self.b[:flvio.FileHeaderLength]); err != nil {
+				return
+			}
 			var flags uint8
-			if flags, err = flvio.ReadFileHeader(self.pr); err != nil {
+			var skip int
+			if flags, skip, err = flvio.ParseFileHeader(self.b); err != nil {
+				return
+			}
+			if _, err = self.bufr.Discard(skip); err != nil {
 				return
 			}
 			if flags & flvio.FILE_HAS_AUDIO != 0 {
@@ -408,7 +417,7 @@ func (self *Demuxer) prepare() (err error) {
 			for !self.prober.Probed() {
 				var tag flvio.Tag
 				var timestamp int32
-				if tag, timestamp, err = flvio.ReadTag(self.pr); err != nil {
+				if tag, timestamp, err = flvio.ReadTag(self.bufr, self.b); err != nil {
 					return
 				}
 				if err = self.prober.PushTag(tag, timestamp); err != nil {
@@ -442,7 +451,7 @@ func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
 	for {
 		var tag flvio.Tag
 		var timestamp int32
-		if tag, timestamp, err = flvio.ReadTag(self.pr); err != nil {
+		if tag, timestamp, err = flvio.ReadTag(self.bufr, self.b); err != nil {
 			return
 		}
 
