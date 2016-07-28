@@ -2,7 +2,7 @@ package mp4
 
 import (
 	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/format/mp4/atom"
+	"github.com/nareix/joy4/format/mp4/mp4io"
 	"time"
 	"io"
 )
@@ -10,7 +10,7 @@ import (
 type Stream struct {
 	av.CodecData
 
-	trackAtom *atom.Track
+	trackAtom *mp4io.Track
 	r         io.ReadSeeker
 	idx       int
 
@@ -21,7 +21,7 @@ type Stream struct {
 
 	muxer *Muxer
 
-	sample      *atom.SampleTable
+	sample      *mp4io.SampleTable
 	sampleIndex int
 
 	sampleOffsetInChunk int64
@@ -38,8 +38,8 @@ type Stream struct {
 	chunkIndex         int
 	sampleIndexInChunk int
 
-	sttsEntry *atom.TimeToSampleEntry
-	cttsEntry *atom.CompositionOffsetEntry
+	sttsEntry *mp4io.TimeToSampleEntry
+	cttsEntry *mp4io.CompositionOffsetEntry
 }
 
 func timeToTs(tm time.Duration, timeScale int64) int64 {

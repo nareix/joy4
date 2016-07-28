@@ -1,14 +1,12 @@
 package mp4
 
 import (
-	"bytes"
 	"time"
 	"fmt"
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/codec/aacparser"
 	"github.com/nareix/joy4/codec/h264parser"
-	"github.com/nareix/joy4/format/mp4/atom"
-	"github.com/nareix/joy4/format/mp4/isom"
+	"github.com/nareix/joy4/format/mp4/mp4io"
 	"io"
 )
 
@@ -16,7 +14,7 @@ type Demuxer struct {
 	r io.ReadSeeker
 
 	streams   []*Stream
-	movieAtom *atom.Movie
+	movieAtom *mp4io.Movie
 }
 
 func NewDemuxer(r io.ReadSeeker) *Demuxer {
@@ -38,34 +36,15 @@ func (self *Demuxer) probe() (err error) {
 		return
 	}
 
-	var N int64
-	var moov *atom.Movie
+	var moov *mp4io.Movie
+	var atoms []mp4io.Atom
 
-	if N, err = self.r.Seek(0, 2); err != nil {
+	if atoms, err = mp4io.ReadFileAtoms(self.r); err != nil {
 		return
 	}
-	if _, err = self.r.Seek(0, 0); err != nil {
-		return
-	}
-
-	lr := &io.LimitedReader{R: self.r, N: N}
-	for lr.N > 0 {
-		var ar *io.LimitedReader
-
-		var cc4 string
-		if ar, cc4, err = atom.ReadAtomHeader(lr, ""); err != nil {
-			return
-		}
-
-		if cc4 == "moov" {
-			if moov, err = atom.ReadMovie(ar); err != nil {
-				err = fmt.Errorf("mp4: moov invalid")
-				return
-			}
-		}
-
-		if _, err = atom.ReadDummy(lr, int(ar.N)); err != nil {
-			return
+	for _, atom := range atoms {
+		if atom.Tag() == mp4io.MOOV {
+			moov = atom.(*mp4io.Movie)
 		}
 	}
 
@@ -89,22 +68,16 @@ func (self *Demuxer) probe() (err error) {
 			return
 		}
 
-		if avc1 := atom.GetAvc1ConfByTrack(atrack); avc1 != nil {
+		if avc1 := atrack.GetAVC1Conf(); avc1 != nil {
 			if stream.CodecData, err = h264parser.NewCodecDataFromAVCDecoderConfRecord(avc1.Data); err != nil {
 				return
 			}
 			self.streams = append(self.streams, stream)
-
-		} else if mp4a := atom.GetMp4aDescByTrack(atrack); mp4a != nil && mp4a.Conf != nil {
-			var config []byte
-			if config, err = isom.ReadElemStreamDesc(bytes.NewReader(mp4a.Conf.Data)); err != nil {
-				return
-			}
-			if stream.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(config); err != nil {
+		} else if esds := atrack.GetElemStreamDesc(); esds != nil {
+			if stream.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(esds.DecConfig); err != nil {
 				return
 			}
 			self.streams = append(self.streams, stream)
-
 		}
 	}
 
@@ -119,10 +92,10 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 
 	for self.chunkIndex = range self.sample.ChunkOffset.Entries {
 		if self.chunkGroupIndex+1 < len(self.sample.SampleToChunk.Entries) &&
-			self.chunkIndex+1 == self.sample.SampleToChunk.Entries[self.chunkGroupIndex+1].FirstChunk {
+			uint32(self.chunkIndex+1) == self.sample.SampleToChunk.Entries[self.chunkGroupIndex+1].FirstChunk {
 			self.chunkGroupIndex++
 		}
-		n := self.sample.SampleToChunk.Entries[self.chunkGroupIndex].SamplesPerChunk
+		n := int(self.sample.SampleToChunk.Entries[self.chunkGroupIndex].SamplesPerChunk)
 		if index >= start && index < start+n {
 			found = true
 			self.sampleIndexInChunk = index - start
@@ -136,7 +109,7 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 	}
 
 	if self.sample.SampleSize.SampleSize != 0 {
-		self.sampleOffsetInChunk = int64(self.sampleIndexInChunk * self.sample.SampleSize.SampleSize)
+		self.sampleOffsetInChunk = int64(self.sampleIndexInChunk)*int64(self.sample.SampleSize.SampleSize)
 	} else {
 		if index >= len(self.sample.SampleSize.Entries) {
 			err = fmt.Errorf("mp4: stream[%d]: sample index out of range", self.idx)
@@ -154,15 +127,15 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 	self.sttsEntryIndex = 0
 	for self.sttsEntryIndex < len(self.sample.TimeToSample.Entries) {
 		entry := self.sample.TimeToSample.Entries[self.sttsEntryIndex]
-		n := entry.Count
+		n := int(entry.Count)
 		if index >= start && index < start+n {
 			self.sampleIndexInSttsEntry = index - start
-			self.dts += int64((index - start) * entry.Duration)
+			self.dts += int64(index-start)*int64(entry.Duration)
 			found = true
 			break
 		}
 		start += n
-		self.dts += int64(n * entry.Duration)
+		self.dts += int64(n)*int64(entry.Duration)
 		self.sttsEntryIndex++
 	}
 	if !found {
@@ -175,7 +148,7 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 		found = false
 		self.cttsEntryIndex = 0
 		for self.cttsEntryIndex < len(self.sample.CompositionOffset.Entries) {
-			n := self.sample.CompositionOffset.Entries[self.cttsEntryIndex].Count
+			n := int(self.sample.CompositionOffset.Entries[self.cttsEntryIndex].Count)
 			if index >= start && index < start+n {
 				self.sampleIndexInCttsEntry = index - start
 				found = true
@@ -193,7 +166,7 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 	if self.sample.SyncSample != nil {
 		self.syncSampleIndex = 0
 		for self.syncSampleIndex < len(self.sample.SyncSample.Entries)-1 {
-			if self.sample.SyncSample.Entries[self.syncSampleIndex+1]-1 > index {
+			if self.sample.SyncSample.Entries[self.syncSampleIndex+1]-1 > uint32(index) {
 				break
 			}
 			self.syncSampleIndex++
@@ -244,7 +217,7 @@ func (self *Stream) incSampleIndex() (duration int64) {
 	}
 
 	self.sampleIndexInChunk++
-	if self.sampleIndexInChunk == self.sample.SampleToChunk.Entries[self.chunkGroupIndex].SamplesPerChunk {
+	if uint32(self.sampleIndexInChunk) == self.sample.SampleToChunk.Entries[self.chunkGroupIndex].SamplesPerChunk {
 		self.chunkIndex++
 		self.sampleIndexInChunk = 0
 		self.sampleOffsetInChunk = int64(0)
@@ -257,7 +230,7 @@ func (self *Stream) incSampleIndex() (duration int64) {
 	}
 
 	if self.chunkGroupIndex+1 < len(self.sample.SampleToChunk.Entries) &&
-		self.chunkIndex+1 == self.sample.SampleToChunk.Entries[self.chunkGroupIndex+1].FirstChunk {
+		uint32(self.chunkIndex+1) == self.sample.SampleToChunk.Entries[self.chunkGroupIndex+1].FirstChunk {
 		self.chunkGroupIndex++
 	}
 
@@ -265,14 +238,14 @@ func (self *Stream) incSampleIndex() (duration int64) {
 	duration = int64(sttsEntry.Duration)
 	self.sampleIndexInSttsEntry++
 	self.dts += duration
-	if self.sampleIndexInSttsEntry == sttsEntry.Count {
+	if uint32(self.sampleIndexInSttsEntry) == sttsEntry.Count {
 		self.sampleIndexInSttsEntry = 0
 		self.sttsEntryIndex++
 	}
 
 	if self.sample.CompositionOffset != nil && len(self.sample.CompositionOffset.Entries) > 0 {
 		self.sampleIndexInCttsEntry++
-		if self.sampleIndexInCttsEntry == self.sample.CompositionOffset.Entries[self.cttsEntryIndex].Count {
+		if uint32(self.sampleIndexInCttsEntry) == self.sample.CompositionOffset.Entries[self.cttsEntryIndex].Count {
 			self.sampleIndexInCttsEntry = 0
 			self.cttsEntryIndex++
 		}
@@ -280,7 +253,7 @@ func (self *Stream) incSampleIndex() (duration int64) {
 
 	if self.sample.SyncSample != nil {
 		entries := self.sample.SyncSample.Entries
-		if self.syncSampleIndex+1 < len(entries) && entries[self.syncSampleIndex+1]-1 == self.sampleIndex+1 {
+		if self.syncSampleIndex+1 < len(entries) && entries[self.syncSampleIndex+1]-1 == uint32(self.sampleIndex+1) {
 			self.syncSampleIndex++
 		}
 	}
@@ -294,10 +267,10 @@ func (self *Stream) sampleCount() int {
 		chunkGroupIndex := 0
 		count := 0
 		for chunkIndex := range self.sample.ChunkOffset.Entries {
-			n := self.sample.SampleToChunk.Entries[chunkGroupIndex].SamplesPerChunk
+			n := int(self.sample.SampleToChunk.Entries[chunkGroupIndex].SamplesPerChunk)
 			count += n
 			if chunkGroupIndex+1 < len(self.sample.SampleToChunk.Entries) &&
-				chunkIndex+1 == self.sample.SampleToChunk.Entries[chunkGroupIndex+1].FirstChunk {
+				uint32(chunkIndex+1) == self.sample.SampleToChunk.Entries[chunkGroupIndex+1].FirstChunk {
 				chunkGroupIndex++
 			}
 		}
@@ -370,7 +343,7 @@ func (self *Stream) readPacket() (pkt av.Packet, err error) {
 	//fmt.Println("readPacket", self.sampleIndex)
 
 	chunkOffset := self.sample.ChunkOffset.Entries[self.chunkIndex]
-	sampleSize := 0
+	sampleSize := uint32(0)
 	if self.sample.SampleSize.SampleSize != 0 {
 		sampleSize = self.sample.SampleSize.SampleSize
 	} else {
@@ -388,7 +361,7 @@ func (self *Stream) readPacket() (pkt av.Packet, err error) {
 	}
 
 	if self.sample.SyncSample != nil {
-		if self.sample.SyncSample.Entries[self.syncSampleIndex]-1 == self.sampleIndex {
+		if self.sample.SyncSample.Entries[self.syncSampleIndex]-1 == uint32(self.sampleIndex) {
 			pkt.IsKeyFrame = true
 		}
 	}
@@ -426,7 +399,7 @@ func (self *Stream) timeToSampleIndex(tm time.Duration) int {
 	found := false
 	for _, entry := range self.sample.TimeToSample.Entries {
 		endTs = startTs + int64(entry.Count*entry.Duration)
-		endIndex = startIndex + entry.Count
+		endIndex = startIndex + int(entry.Count)
 		if targetTs >= startTs && targetTs < endTs {
 			targetIndex = startIndex + int((targetTs-startTs)/int64(entry.Duration))
 			found = true
@@ -445,8 +418,8 @@ func (self *Stream) timeToSampleIndex(tm time.Duration) int {
 	if self.sample.SyncSample != nil {
 		entries := self.sample.SyncSample.Entries
 		for i := len(entries) - 1; i >= 0; i-- {
-			if entries[i]-1 < targetIndex {
-				targetIndex = entries[i] - 1
+			if entries[i]-1 < uint32(targetIndex) {
+				targetIndex = int(entries[i]-1)
 				break
 			}
 		}
