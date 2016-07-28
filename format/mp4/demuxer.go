@@ -3,20 +3,15 @@ package mp4
 import (
 	"time"
 	"fmt"
-	"github.com/nareix/pio"
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/codec/aacparser"
 	"github.com/nareix/joy4/codec/h264parser"
 	"github.com/nareix/joy4/format/mp4/mp4io"
 	"io"
-	"bufio"
 )
 
 type Demuxer struct {
 	r io.ReadSeeker
-	bufr *bufio.Reader
-	rpos int64
-
 	streams   []*Stream
 	movieAtom *mp4io.Movie
 }
@@ -24,7 +19,6 @@ type Demuxer struct {
 func NewDemuxer(r io.ReadSeeker) *Demuxer {
 	return &Demuxer{
 		r: r,
-		bufr: bufio.NewReaderSize(r, pio.RecommendBufioSize),
 	}
 }
 
@@ -39,20 +33,12 @@ func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
 }
 
 func (self *Demuxer) readat(pos int64, b []byte) (err error) {
-	if pos < self.rpos || pos > self.rpos+int64(pio.RecommendBufioSize) {
-		self.bufr.Reset(self.r)
-		if _, err = self.r.Seek(pos, 0); err != nil {
-			return
-		}
-	} else if pos != self.rpos {
-		if _, err = self.bufr.Discard(int(pos-self.rpos)); err != nil {
-			return
-		}
-	}
-	if _, err = io.ReadFull(self.bufr, b); err != nil {
+	if _, err = self.r.Seek(pos, 0); err != nil {
 		return
 	}
-	self.rpos = pos+int64(len(b))
+	if _, err = io.ReadFull(self.r, b); err != nil {
+		return
+	}
 	return
 }
 
