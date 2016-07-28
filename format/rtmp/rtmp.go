@@ -142,6 +142,7 @@ type Conn struct {
 
 	bufr *bufio.Reader
 	bufw *bufio.Writer
+	readn uint32
 	writebuf []byte
 	readbuf []byte
 
@@ -149,6 +150,7 @@ type Conn struct {
 
 	writeMaxChunkSize int
 	readMaxChunkSize int
+	readAckSize uint32
 	readcsmap map[uint32]*chunkStream
 
 	isserver bool
@@ -208,6 +210,7 @@ func (self *chunkStream) Start() {
 
 const (
 	msgtypeidUserControl = 4
+	msgtypeidAck = 3
 	msgtypeidWindowAckSize = 5
 	msgtypeidSetPeerBandwidth = 6
 	msgtypeidSetChunkSize = 1
@@ -317,16 +320,16 @@ func createURL(tcurl, app, play string) (u *url.URL) {
 var CodecTypes = flv.CodecTypes
 
 func (self *Conn) writeBasicConf() (err error) {
+	// > SetChunkSize
+	if err = self.writeSetChunkSize(1024*1024*128); err != nil {
+		return
+	}
 	// > WindowAckSize
 	if err = self.writeWindowAckSize(5000000); err != nil {
 		return
 	}
 	// > SetPeerBandwidth
 	if err = self.writeSetPeerBandwidth(5000000, 2); err != nil {
-		return
-	}
-	// > SetChunkSize
-	if err = self.writeSetChunkSize(1024*1024*128); err != nil {
 		return
 	}
 	return
@@ -595,7 +598,10 @@ func (self *Conn) writeConnect(path string) (err error) {
 			}
 		} else {
 			if self.msgtypeid == msgtypeidWindowAckSize {
-				if err = self.writeWindowAckSize(2500000); err != nil {
+				if len(self.msgdata) == 4 {
+					self.readAckSize = pio.U32BE(self.msgdata)
+				}
+				if err = self.writeWindowAckSize(0xffffffff); err != nil {
 					return
 				}
 			}
@@ -877,6 +883,15 @@ func (self *Conn) writeSetChunkSize(size int) (err error) {
 	return
 }
 
+func (self *Conn) writeAck(seqnum uint32) (err error) {
+	b := self.tmpwbuf(chunkHeaderLength+4)
+	n := self.fillChunkHeader(b, 2, 0, msgtypeidAck, 0, 4)
+	pio.PutU32BE(b[n:], seqnum)
+	n += 4
+	_, err = self.bufw.Write(b[:n])
+	return
+}
+
 func (self *Conn) writeWindowAckSize(size uint32) (err error) {
 	b := self.tmpwbuf(chunkHeaderLength+4)
 	n := self.fillChunkHeader(b, 2, 0, msgtypeidWindowAckSize, 0, 4)
@@ -1022,10 +1037,12 @@ func (self *Conn) flushWrite() (err error) {
 
 func (self *Conn) readChunk() (err error) {
 	b := self.readbuf
+	n := 0
 	if _, err = io.ReadFull(self.bufr, b[:1]); err != nil {
 		return
 	}
 	header := b[0]
+	n += 1
 
 	var msghdrtype uint8
 	var csid uint32
@@ -1039,11 +1056,13 @@ func (self *Conn) readChunk() (err error) {
 		if _, err = io.ReadFull(self.bufr, b[:1]); err != nil {
 			return
 		}
+		n += 1
 		csid = uint32(b[0])+64
 	case 1: // Chunk basic header 3
 		if _, err = io.ReadFull(self.bufr, b[:2]); err != nil {
 			return
 		}
+		n += 2
 		csid = uint32(pio.U16BE(b))+64
 	}
 
@@ -1076,6 +1095,7 @@ func (self *Conn) readChunk() (err error) {
 		if _, err = io.ReadFull(self.bufr, h); err != nil {
 			return
 		}
+		n += len(h)
 		timestamp = pio.U24BE(h[0:3])
 		cs.msghdrtype = msghdrtype
 		cs.msgdatalen = pio.U24BE(h[3:6])
@@ -1085,6 +1105,7 @@ func (self *Conn) readChunk() (err error) {
 			if _, err = io.ReadFull(self.bufr, b[:4]); err != nil {
 				return
 			}
+			n += 4
 			timestamp = pio.U32BE(b)
 			cs.hastimeext = true
 		} else {
@@ -1111,6 +1132,7 @@ func (self *Conn) readChunk() (err error) {
 		if _, err = io.ReadFull(self.bufr, h); err != nil {
 			return
 		}
+		n += len(h)
 		timestamp = pio.U24BE(h[0:3])
 		cs.msghdrtype = msghdrtype
 		cs.msgdatalen = pio.U24BE(h[3:6])
@@ -1119,6 +1141,7 @@ func (self *Conn) readChunk() (err error) {
 			if _, err = io.ReadFull(self.bufr, b[:4]); err != nil {
 				return
 			}
+			n += 4
 			timestamp = pio.U32BE(b)
 			cs.hastimeext = true
 		} else {
@@ -1144,12 +1167,14 @@ func (self *Conn) readChunk() (err error) {
 		if _, err = io.ReadFull(self.bufr, h); err != nil {
 			return
 		}
+		n += len(h)
 		cs.msghdrtype = msghdrtype
 		timestamp = pio.U24BE(h[0:3])
 		if timestamp == 0xffffff {
 			if _, err = io.ReadFull(self.bufr, b[:4]); err != nil {
 				return
 			}
+			n += 4
 			timestamp = pio.U32BE(b)
 			cs.hastimeext = true
 		} else {
@@ -1167,6 +1192,7 @@ func (self *Conn) readChunk() (err error) {
 					if _, err = io.ReadFull(self.bufr, b[:4]); err != nil {
 						return
 					}
+					n += 4
 					timestamp = pio.U32BE(b)
 					cs.timenow = timestamp
 				}
@@ -1175,6 +1201,7 @@ func (self *Conn) readChunk() (err error) {
 					if _, err = io.ReadFull(self.bufr, b[:4]); err != nil {
 						return
 					}
+					n += 4
 					timestamp = pio.U32BE(b)
 				} else {
 					timestamp = cs.timedelta
@@ -1198,6 +1225,7 @@ func (self *Conn) readChunk() (err error) {
 	if _, err = io.ReadFull(self.bufr, buf); err != nil {
 		return
 	}
+	n += len(buf)
 	cs.msgdataleft -= uint32(size)
 
 	if Debug {
@@ -1214,6 +1242,14 @@ func (self *Conn) readChunk() (err error) {
 		if err = self.handleMsg(cs.timenow, cs.msgsid, cs.msgtypeid, cs.msgdata); err != nil {
 			return
 		}
+	}
+
+	self.readn += uint32(n)
+	if self.readAckSize != 0 && self.readn > self.readAckSize {
+		if err = self.writeAck(self.readn); err != nil {
+			return
+		}
+		self.readn = 0
 	}
 
 	return
@@ -1262,6 +1298,7 @@ func (self *Conn) handleCommandMsgAMF0(b []byte) (n int, err error) {
 }
 
 func (self *Conn) handleMsg(timestamp uint32, msgsid uint32, msgtypeid uint8, msgdata []byte) (err error) {
+	self.msgdata = msgdata
 	self.msgtypeid = msgtypeid
 	self.timestamp = timestamp
 
@@ -1287,7 +1324,6 @@ func (self *Conn) handleMsg(timestamp uint32, msgsid uint32, msgtypeid uint8, ms
 			return
 		}
 		self.eventtype = pio.U16BE(msgdata)
-		self.msgdata = msgdata
 
 	case msgtypeidDataMsgAMF0:
 		b := msgdata
