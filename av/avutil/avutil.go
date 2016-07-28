@@ -184,8 +184,17 @@ func (self *Handlers) Open(uri string) (demuxer av.DemuxCloser, err error) {
 
 	for _, handler := range self.handlers {
 		if handler.Probe != nil && handler.Probe(probebuf[:]) && handler.ReaderDemuxer != nil {
+			var _r io.Reader
+			if rs, ok := r.(io.ReadSeeker); ok {
+				if _, err = rs.Seek(0, 0); err != nil {
+					return
+				}
+				_r = rs
+			} else {
+				_r = io.MultiReader(bytes.NewReader(probebuf[:]), r)
+			}
 			demuxer = &HandlerDemuxer{
-				Demuxer: handler.ReaderDemuxer(io.MultiReader(bytes.NewReader(probebuf[:]), r)),
+				Demuxer: handler.ReaderDemuxer(_r),
 				r: r,
 			}
 			return
