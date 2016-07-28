@@ -38,10 +38,10 @@ func (self *HandlerMuxer) WriteHeader(streams []av.CodecData) (err error) {
 
 func (self *HandlerMuxer) WriteTrailer() (err error) {
 	if self.stage == 1 {
+		self.stage++
 		if err = self.Muxer.WriteTrailer(); err != nil {
 			return
 		}
-		self.stage++
 	}
 	return
 }
