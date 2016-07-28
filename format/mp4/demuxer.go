@@ -3,22 +3,29 @@ package mp4
 import (
 	"time"
 	"fmt"
+	"github.com/nareix/pio"
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/codec/aacparser"
 	"github.com/nareix/joy4/codec/h264parser"
 	"github.com/nareix/joy4/format/mp4/mp4io"
 	"io"
+	"bufio"
 )
 
 type Demuxer struct {
 	r io.ReadSeeker
+	bufr *bufio.Reader
+	rpos int64
 
 	streams   []*Stream
 	movieAtom *mp4io.Movie
 }
 
 func NewDemuxer(r io.ReadSeeker) *Demuxer {
-	return &Demuxer{r: r}
+	return &Demuxer{
+		r: r,
+		bufr: bufio.NewReaderSize(r, pio.RecommendBufioSize),
+	}
 }
 
 func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
@@ -28,6 +35,24 @@ func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
 	for _, stream := range self.streams {
 		streams = append(streams, stream.CodecData)
 	}
+	return
+}
+
+func (self *Demuxer) readat(pos int64, b []byte) (err error) {
+	if pos < self.rpos || pos > self.rpos+int64(pio.RecommendBufioSize) {
+		self.bufr.Reset(self.r)
+		if _, err = self.r.Seek(pos, 0); err != nil {
+			return
+		}
+	} else if pos != self.rpos {
+		if _, err = self.bufr.Discard(int(pos-self.rpos)); err != nil {
+			return
+		}
+	}
+	if _, err = io.ReadFull(self.bufr, b); err != nil {
+		return
+	}
+	self.rpos = pos+int64(len(b))
 	return
 }
 
@@ -42,6 +67,10 @@ func (self *Demuxer) probe() (err error) {
 	if atoms, err = mp4io.ReadFileAtoms(self.r); err != nil {
 		return
 	}
+	if _, err = self.r.Seek(0, 0); err != nil {
+		return
+	}
+
 	for _, atom := range atoms {
 		if atom.Tag() == mp4io.MOOV {
 			moov = atom.(*mp4io.Movie)
@@ -57,7 +86,7 @@ func (self *Demuxer) probe() (err error) {
 	for i, atrack := range moov.Tracks {
 		stream := &Stream{
 			trackAtom: atrack,
-			r:         self.r,
+			demuxer:   self,
 			idx:       i,
 		}
 		if atrack.Media != nil && atrack.Media.Info != nil && atrack.Media.Info.Sample != nil {
@@ -351,12 +380,8 @@ func (self *Stream) readPacket() (pkt av.Packet, err error) {
 	}
 
 	sampleOffset := int64(chunkOffset) + self.sampleOffsetInChunk
-	if _, err = self.r.Seek(sampleOffset, 0); err != nil {
-		return
-	}
-
 	pkt.Data = make([]byte, sampleSize)
-	if _, err = self.r.Read(pkt.Data); err != nil {
+	if err = self.demuxer.readat(sampleOffset, pkt.Data); err != nil {
 		return
 	}
 

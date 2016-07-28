@@ -4,14 +4,12 @@ import (
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/format/mp4/mp4io"
 	"time"
-	"io"
 )
 
 type Stream struct {
 	av.CodecData
 
 	trackAtom *mp4io.Track
-	r         io.ReadSeeker
 	idx       int
 
 	lastpkt *av.Packet
@@ -20,6 +18,7 @@ type Stream struct {
 	duration  int64
 
 	muxer *Muxer
+	demuxer *Demuxer
 
 	sample      *mp4io.SampleTable
 	sampleIndex int
