@@ -81,15 +81,17 @@ func (self *Demuxer) prepare() (err error) {
 		}
 		ok = true
 
+		var enctype av.CodecType
 		for _, typ:= range supports {
 			if typ.IsAudio() {
-				if enc, _ = avutil.DefaultHandlers.NewAudioEncoder(typ); dec != nil {
+				if enc, _ = avutil.DefaultHandlers.NewAudioEncoder(typ); enc != nil {
+					enctype = typ
 					break
 				}
 			}
 		}
 		if enc == nil {
-			err = fmt.Errorf("avconv: convert %s failed", codec.Type())
+			err = fmt.Errorf("avconv: convert %s->%s failed", codec.Type(), enctype)
 			return
 		}
 
