@@ -312,16 +312,25 @@ func PacketToTag(pkt av.Packet, stream av.CodecData) (_tag flvio.Tag, timestamp 
 }
 
 type Muxer struct {
-	bufw *bufio.Writer
+	bufw writeFlusher
 	b []byte
 	streams []av.CodecData
 }
 
-func NewMuxer(w io.Writer) *Muxer {
+type writeFlusher interface {
+	io.Writer
+	Flush() error
+}
+
+func NewMuxerWriteFlusher(w writeFlusher) *Muxer {
 	return &Muxer{
-		bufw: bufio.NewWriterSize(w, pio.RecommendBufioSize),
+		bufw: w,
 		b: make([]byte, 256),
 	}
+}
+
+func NewMuxer(w io.Writer) *Muxer {
+	return NewMuxerWriteFlusher(bufio.NewWriterSize(w, pio.RecommendBufioSize))
 }
 
 var CodecTypes = []av.CodecType{av.H264, av.AAC, av.SPEEX}

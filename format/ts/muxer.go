@@ -15,7 +15,7 @@ import (
 var CodecTypes = []av.CodecType{av.H264, av.AAC}
 
 type Muxer struct {
-	w                        *bufio.Writer
+	w                        writeFlusher
 	streams                  []*Stream
 	PaddingToMakeCounterCont bool
 
@@ -29,9 +29,14 @@ type Muxer struct {
 	tswpat, tswpmt *tsio.TSWriter
 }
 
-func NewMuxer(w io.Writer) *Muxer {
+type writeFlusher interface {
+	io.Writer
+	Flush() error
+}
+
+func NewMuxerWriteFlusher(w writeFlusher) *Muxer {
 	return &Muxer{
-		w: bufio.NewWriterSize(w, pio.RecommendBufioSize),
+		w: w,
 		psidata: make([]byte, 188),
 		peshdr: make([]byte, tsio.MaxPESHeaderLength),
 		tshdr: make([]byte, tsio.MaxTSHeaderLength),
@@ -41,6 +46,10 @@ func NewMuxer(w io.Writer) *Muxer {
 		tswpmt: tsio.NewTSWriter(tsio.PMT_PID),
 		tswpat: tsio.NewTSWriter(tsio.PAT_PID),
 	}
+}
+
+func NewMuxer(w io.Writer) *Muxer {
+	return NewMuxerWriteFlusher(bufio.NewWriterSize(w, pio.RecommendBufioSize))
 }
 
 func (self *Muxer) newStream(codec av.CodecData) (err error) {
