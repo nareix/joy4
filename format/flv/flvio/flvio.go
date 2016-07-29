@@ -4,7 +4,7 @@ import (
 	"io"
 	"time"
 	"fmt"
-	"github.com/nareix/pio"
+	"github.com/nareix/bits/pio"
 	"github.com/nareix/joy4/av"
 )
 

@@ -4,7 +4,7 @@ package h264parser
 import (
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/bits"
-	"github.com/nareix/pio"
+	"github.com/nareix/bits/pio"
 	"fmt"
 	"bytes"
 )

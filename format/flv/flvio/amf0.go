@@ -5,7 +5,7 @@ import (
 	"math"
 	"fmt"
 	"time"
-	"github.com/nareix/pio"
+	"github.com/nareix/bits/pio"
 )
 
 type AMF0ParseError struct {

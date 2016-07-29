@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"encoding/hex"
 	"io"
-	"github.com/nareix/pio"
+	"github.com/nareix/bits/pio"
 	"github.com/nareix/joy4/format/flv"
 	"github.com/nareix/joy4/format/flv/flvio"
 	"github.com/nareix/joy4/av"
