@@ -17,14 +17,17 @@ type tStream struct {
 	adec av.AudioDecoder
 }
 
+// Transcode options
 type Options struct {
-	FindAudioDecoderEncoder func(codec av.AudioCodecData, i int) (ok bool, dec av.AudioDecoder, enc av.AudioEncoder, err error)
+	// if transcode is needed, create your AudioDecoder and AudioEncoder for Transcoder use.
+	FindAudioDecoderEncoder func(codec av.AudioCodecData, i int) (need bool, dec av.AudioDecoder, enc av.AudioEncoder, err error)
 }
 
 type Transcoder struct {
 	streams                 []*tStream
 }
 
+// Create new Transcoder
 func NewTranscoder(streams []av.CodecData, options Options) (_self *Transcoder, err error) {
 	self := &Transcoder{}
 	self.streams = []*tStream{}
@@ -102,6 +105,10 @@ func (self *tStream) audioDecodeAndEncode(inpkt av.Packet) (outpkts []av.Packet,
 	return
 }
 
+// Do the transcode.
+// 
+// in audio transcoding one Packet may transcode into many Packets.
+// packet time will be adjusted in transcoder.
 func (self *Transcoder) Do(pkt av.Packet) (out []av.Packet, err error) {
 	stream := self.streams[pkt.Idx]
 	if stream.aenc != nil && stream.adec != nil {
@@ -114,6 +121,7 @@ func (self *Transcoder) Do(pkt av.Packet) (out []av.Packet, err error) {
 	return
 }
 
+// CodecData after transcode
 func (self *Transcoder) Streams() (streams []av.CodecData, err error) {
 	for _, stream := range self.streams {
 		streams = append(streams, stream.codec)
@@ -121,6 +129,7 @@ func (self *Transcoder) Streams() (streams []av.CodecData, err error) {
 	return
 }
 
+// Close transcoder, will close related encoder and decoders
 func (self *Transcoder) Close() (err error) {
 	for _, stream := range self.streams {
 		if stream.aenc != nil {
@@ -136,10 +145,12 @@ func (self *Transcoder) Close() (err error) {
 	return
 }
 
+// Wrap transcoder and origin Muxer into new Muxer.
+// write to new Muxer will do transcode automatically
 type Muxer struct {
-	av.Muxer
+	av.Muxer // origin Muxer
 	transcoder *Transcoder
-	Options
+	Options // transcode options
 }
 
 func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
@@ -176,6 +187,8 @@ func (self *Muxer) Close() (err error) {
 	return
 }
 
+// Wrap transcoder and origin Demuxer into new Demuxer.
+// read this Demuxer will do transcode automatically
 type Demuxer struct {
 	av.Demuxer
 	transcoder *Transcoder
