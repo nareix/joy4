@@ -46,7 +46,7 @@ Packet filters ([doc](https://godoc.org/github.com/nareix/joy4/av/pktque))
 - Wait first keyframe
 - Fix timestamp
 - Make A/V sync
-- Customize (example)
+- Customize ([example](https://github.com/nareix/joy4/blob/master/examples/rtmp_server_channels/main.go#L19))
 
 FFMPEG Golang-style binding ([doc](https://godoc.org/github.com/nareix/joy4/cgo/ffmpeg))
 - Audio Encoder / Decoder
