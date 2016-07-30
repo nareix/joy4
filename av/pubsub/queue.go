@@ -19,7 +19,7 @@ import (
 // oldest          latest
 // 
 
-// One publisher and multiple subscribers thread-safe packet queue buffer.
+// One publisher and multiple subscribers thread-safe packet buffer queue.
 type Queue struct {
 	pkts []av.Packet
 	head, tail int
