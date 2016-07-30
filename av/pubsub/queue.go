@@ -1,3 +1,5 @@
+
+// Packege pubsub implements publisher-subscribers model used in multi-channel streaming.
 package pubsub
 
 import (
@@ -17,6 +19,7 @@ import (
 // oldest          latest
 // 
 
+// One publisher and multiple subscribers thread-safe packet queue buffer.
 type Queue struct {
 	pkts []av.Packet
 	head, tail int
@@ -43,6 +46,7 @@ func NewQueue(streams []av.CodecData) *Queue {
 	return q
 }
 
+// Set max buffered total packets duration.
 func (self *Queue) SetMaxDuration(dur time.Duration) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -55,6 +59,7 @@ func (self *Queue) SetMaxDuration(dur time.Duration) {
 	return
 }
 
+// Currently buffered packets total duration.
 func (self *Queue) Duration() (dur time.Duration) {
 	self.lock.RLock()
 	defer self.lock.RUnlock()
@@ -65,6 +70,7 @@ func (self *Queue) Duration() (dur time.Duration) {
 	return
 }
 
+// After Close() called, all QueueCursor's ReadPacket will return io.EOF.
 func (self *Queue) Close() (err error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -74,6 +80,7 @@ func (self *Queue) Close() (err error) {
 	return
 }
 
+// Put packet into buffer, old packets will be discared.
 func (self *Queue) WritePacket(pkt av.Packet) (err error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -101,6 +108,7 @@ func (self *Queue) newCursor() *QueueCursor {
 	}
 }
 
+// Create cursor position at latest packet.
 func (self *Queue) Latest() *QueueCursor {
 	cursor := self.newCursor()
 	cursor.init = func(pkts []av.Packet, videoidx int) int {
@@ -109,6 +117,7 @@ func (self *Queue) Latest() *QueueCursor {
 	return cursor
 }
 
+// Create cursor position at oldest buffered packet.
 func (self *Queue) Oldest() *QueueCursor {
 	cursor := self.newCursor()
 	cursor.init = func(pkts []av.Packet, videoidx int) int {
@@ -117,6 +126,7 @@ func (self *Queue) Oldest() *QueueCursor {
 	return cursor
 }
 
+// Create cursor position at specific time in buffered packets.
 func (self *Queue) DelayedTime(dur time.Duration) *QueueCursor {
 	cursor := self.newCursor()
 	cursor.init = func(pkts []av.Packet, videoidx int) int {
@@ -134,6 +144,7 @@ func (self *Queue) DelayedTime(dur time.Duration) *QueueCursor {
 	return cursor
 }
 
+// Create cursor position at specific delayed GOP count in buffered packets.
 func (self *Queue) DelayedGopCount(n int) *QueueCursor {
 	cursor := self.newCursor()
 	cursor.init = func(pkts []av.Packet, videoidx int) int {
@@ -159,6 +170,7 @@ func (self *QueueCursor) Streams() (streams []av.CodecData, err error) {
 	return
 }
 
+// ReadPacket will not consume packets in Queue, it's just a cursor.
 func (self *QueueCursor) ReadPacket() (pkt av.Packet, err error) {
 	self.que.cond.L.Lock()
 	if self.pos == -1 {

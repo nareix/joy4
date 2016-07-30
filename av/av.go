@@ -1,5 +1,5 @@
 
-// Package av defines import interfaces and data structures includes container demux/mux and audio encode/decode.
+// Package av defines basic interfaces and data structures of container demux/mux and audio encode/decode.
 package av
 
 import (

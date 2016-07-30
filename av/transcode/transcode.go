@@ -1,3 +1,5 @@
+
+// Package transcoder implements Transcoder based on Muxer/Demuxer and AudioEncoder/AudioDecoder interface.
 package transcode
 
 import (

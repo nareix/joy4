@@ -1,4 +1,5 @@
 
+// Package pktque provides packet Filter interface and structures used by other components.
 package pktque
 
 import (
@@ -7,9 +8,11 @@ import (
 )
 
 type Filter interface {
+	// Change packet time or drop packet
 	ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoidx int, audioidx int) (drop bool, err error)
 }
 
+// Combine multiple Filters into one, ModifyPacket will be called in order.
 type Filters []Filter
 
 func (self Filters) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoidx int, audioidx int) (drop bool, err error) {
@@ -24,6 +27,7 @@ func (self Filters) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoid
 	return
 }
 
+// Wrap origin Demuxer and Filter into a new Demuxer, when read this Demuxer filters will be called.
 type FilterDemuxer struct {
 	av.Demuxer
 	Filter Filter
@@ -62,6 +66,7 @@ func (self FilterDemuxer) ReadPacket() (pkt av.Packet, err error) {
 	return
 }
 
+// Drop packets until first video key frame arrived.
 type WaitKeyFrame struct {
 	ok bool
 }
@@ -74,12 +79,13 @@ func (self *WaitKeyFrame) ModifyPacket(pkt *av.Packet, streams []av.CodecData, v
 	return
 }
 
+// Fix incorrect packet timestamps.
 type FixTime struct {
 	zerobase time.Duration
 	incrbase time.Duration
 	lasttime time.Duration
-	StartFromZero bool
-	MakeIncrement bool
+	StartFromZero bool // make timestamp start from zero
+	MakeIncrement bool // force timestamp increment
 }
 
 func (self *FixTime) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoidx int, audioidx int) (drop bool, err error) {
@@ -105,6 +111,7 @@ func (self *FixTime) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoi
 	return
 }
 
+// Drop incorrect packets to make A/V sync.
 type AVSync struct {
 	MaxTimeDiff time.Duration
 	time []time.Duration
@@ -163,6 +170,7 @@ func (self *AVSync) check(i int) (start time.Duration, end time.Duration, correc
 	return
 }
 
+// Make packets reading speed as same as walltime, effect like ffmpeg -re option.
 type Walltime struct {
 	firsttime time.Time
 }
