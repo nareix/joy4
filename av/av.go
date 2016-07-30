@@ -1,3 +1,5 @@
+
+// Package av defines import interfaces and data structures includes container demux/mux and audio encode/decode.
 package av
 
 import (
@@ -5,7 +7,7 @@ import (
 	"time"
 )
 
-// Audio sample format
+// Audio sample format.
 type SampleFormat uint8
 
 const (
@@ -64,7 +66,7 @@ func (self SampleFormat) String() string {
 	}
 }
 
-// checkout if this sample format is in planar
+// Check if this sample format is in planar.
 func (self SampleFormat) IsPlanar() bool {
 	switch self {
 	case S16P, S32P, FLTP, DBLP:
@@ -74,7 +76,7 @@ func (self SampleFormat) IsPlanar() bool {
 	}
 }
 
-// audio channel layout
+// Audio channel layout
 type ChannelLayout uint16
 
 func (self ChannelLayout) String() string {
@@ -143,23 +145,21 @@ func (self CodecType) String() string {
 	return ""
 }
 
-// CodecType is audio
 func (self CodecType) IsAudio() bool {
 	return self&codecTypeAudioBit != 0
 }
 
-// CodecType is video
 func (self CodecType) IsVideo() bool {
 	return self&codecTypeAudioBit == 0
 }
 
-// make a new audio codec type
+// Make a new audio codec type
 func MakeAudioCodecType(base uint32) (c CodecType) {
 	c = CodecType(base)<<codecTypeOtherBits | CodecType(codecTypeAudioBit)
 	return
 }
 
-// make a new video codec type
+// Make a new video codec type
 func MakeVideoCodecType(base uint32) (c CodecType) {
 	c = CodecType(base) << codecTypeOtherBits
 	return
@@ -167,13 +167,10 @@ func MakeVideoCodecType(base uint32) (c CodecType) {
 
 const avCodecTypeMagic = 233333
 
-// CodecData is some important bytes for initializing audio/video decoder.
-// 
-// video width/height and audio sample rate, channel layout can get from CodecData.
-// 
-// CodecData can convert to VideoCodecData or AudioCodecData using:
+// CodecData is some important bytes for initializing audio/video decoder,
+// can be converted to VideoCodecData or AudioCodecData using:
 //
-//     ```codecdata.(AudioCodecData) or codecdata.(VideoCodecData)```
+//     codecdata.(AudioCodecData) or codecdata.(VideoCodecData)
 // 
 // for H264, CodecData is AVCDecoderConfigure bytes, includes SPS/PPS
 type CodecData interface {
@@ -188,12 +185,10 @@ type VideoCodecData interface {
 
 type AudioCodecData interface {
 	CodecData
-	SampleFormat() SampleFormat // Audio sample format
-	SampleRate() int // Audio sample rate
-	ChannelLayout() ChannelLayout // Audio channel layout
-
-	// get audio packet duration
-	PacketDuration([]byte) (time.Duration, error)
+	SampleFormat() SampleFormat // audio sample format
+	SampleRate() int // audio sample rate
+	ChannelLayout() ChannelLayout // audio channel layout
+	PacketDuration([]byte) (time.Duration, error) // get audio compressed packet duration
 }
 
 type PacketWriter interface {
@@ -205,20 +200,12 @@ type PacketReader interface {
 }
 
 // Muxer describes the steps of writing compressed audio/video packets into container formats like MP4/FLV/MPEG-TS.
-//
-// 1. WriteHeader([]CodecData) write the file header, each stream 
-//
-// 2. WritePacket(Packet) write the audio/video packets
-//
-// 3. WriteTrailer() end writing, now it's a complete file.
-//
-// WriteHeader/WriteTrailer can be called only once.
 // 
-// every formsts(format/flv format/mp4 ...), rtmp.Conn, and transcode.Muxer implements Muxer interface.
+// Container formats, rtmp.Conn, and transcode.Muxer implements Muxer interface.
 type Muxer interface {
-	PacketWriter
-	WriteHeader([]CodecData) error
-	WriteTrailer() error
+	WriteHeader([]CodecData) error // write the file header
+	PacketWriter // write compressed audio/video packets
+	WriteTrailer() error // end writing, complete file. can be called only once
 }
 
 // Muxer with Close() method
@@ -227,14 +214,10 @@ type MuxCloser interface {
 	Close() error
 }
 
-// Demuxer can demux compressed audio/video packets from container formats like MP4/FLV/MPEG-TS.
-// 
-// Streams() ([]CodecData, error) reads the file header, contains video/audio meta infomations
-//
-// ReadPacket() (Packet, error) read compressed audio/video packets
+// Demuxer can read compressed audio/video packets from container formats like MP4/FLV/MPEG-TS.
 type Demuxer interface {
-	PacketReader
-	Streams() ([]CodecData, error)
+	PacketReader // read compressed audio/video packets
+	Streams() ([]CodecData, error) // reads the file header, contains video/audio meta infomations
 }
 
 // Demuxer with Close() method
@@ -261,12 +244,11 @@ type AudioFrame struct {
 	Data          [][]byte // data array for planar format len(Data) > 1
 }
 
-// audio frame duration
 func (self AudioFrame) Duration() time.Duration {
 	return time.Second * time.Duration(self.SampleCount) / time.Duration(self.SampleRate)
 }
 
-// check this audio frame has same format as other audio frame
+// Check this audio frame has same format as other audio frame
 func (self AudioFrame) HasSameFormat(other AudioFrame) bool {
 	if self.SampleRate != other.SampleRate {
 		return false
@@ -280,7 +262,7 @@ func (self AudioFrame) HasSameFormat(other AudioFrame) bool {
 	return true
 }
 
-// split sample audio sample from this frame
+// Split sample audio sample from this frame
 func (self AudioFrame) Slice(start int, end int) (out AudioFrame) {
 	out = self
 	out.Data = append([][]byte(nil), out.Data...)
@@ -292,7 +274,7 @@ func (self AudioFrame) Slice(start int, end int) (out AudioFrame) {
 	return
 }
 
-// concat two audio frames
+// Concat two audio frames
 func (self AudioFrame) Concat(in AudioFrame) (out AudioFrame) {
 	out = self
 	out.Data = append([][]byte(nil), out.Data...)
@@ -303,13 +285,11 @@ func (self AudioFrame) Concat(in AudioFrame) (out AudioFrame) {
 	return
 }
 
-// AudioEncoder can encode raw audio frame into compressed audio packets
-//
-// now cgo/ffmpeg inplements AudioEncoder, using ffmpeg.NewAudioEncoder to create it
+// AudioEncoder can encode raw audio frame into compressed audio packets.
+// cgo/ffmpeg inplements AudioEncoder, using ffmpeg.NewAudioEncoder to create it.
 type AudioEncoder interface {
 	CodecData() (AudioCodecData, error) // encoder's codec data can put into container
 	Encode(AudioFrame) ([][]byte, error) // encode raw audio frame into compressed pakcet(s)
-	//Flush() ([]Packet, error)
 	Close() // close encoder, free cgo contexts
 	SetSampleRate(int) (error) // set encoder sample rate
 	SetChannelLayout(ChannelLayout) (error) // set encoder channel layout
@@ -319,12 +299,10 @@ type AudioEncoder interface {
 	GetOption(string,interface{}) (error) // encoder getopt
 }
 
-// AudioDecoder can decode compressed audio packets into raw audio frame
-//
-// use ffmpeg.NewAudioDecoder to create it
+// AudioDecoder can decode compressed audio packets into raw audio frame.
+// use ffmpeg.NewAudioDecoder to create it.
 type AudioDecoder interface {
 	Decode([]byte) (bool, AudioFrame, error) // decode one compressed audio packet
-	//Flush() (AudioFrame, error)
 	Close() // close decode, free cgo contexts
 }
 
