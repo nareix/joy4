@@ -70,7 +70,7 @@ ffmpeg version >= 3.0 (optional)
 
 HLS / MPEG-DASH Server
 
-ffmpeg.VideoEncoder / ffmpeg.VideoFilter
+ffmpeg.VideoEncoder / ffmpeg.SWScale
 
 # License
 
