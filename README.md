@@ -60,6 +60,12 @@ Support codec and container parsers:
 - MP4 Atoms parser ([doc](https://godoc.org/github.com/nareix/joy4/format/mp4/mp4io))
 - FLV AMF0 object parser ([doc](https://godoc.org/github.com/nareix/joy4/format/flv/flvio))
 
+# Requirements
+
+Go version >= 1.5
+
+ffmpeg version >= 3.0 (optional)
+
 # TODO
 
 HLS / MPEG-DASH Server
