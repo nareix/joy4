@@ -184,8 +184,8 @@ func NewConn(netconn net.Conn) *Conn {
 	conn.readcsmap = make(map[uint32]*chunkStream)
 	conn.readMaxChunkSize = 128
 	conn.writeMaxChunkSize = 128
-	conn.bufr = bufio.NewReaderSize(netconn, 2048)
-	conn.bufw = bufio.NewWriterSize(netconn, 2048)
+	conn.bufr = bufio.NewReaderSize(netconn, pio.RecommendBufioSize)
+	conn.bufw = bufio.NewWriterSize(netconn, pio.RecommendBufioSize)
 	conn.writebuf = make([]byte, 4096)
 	conn.readbuf = make([]byte, 4096)
 	return conn
