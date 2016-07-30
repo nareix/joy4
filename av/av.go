@@ -167,11 +167,15 @@ func MakeVideoCodecType(base uint32) (c CodecType) {
 
 const avCodecTypeMagic = 233333
 
-// CodecData is some bytes for initializing audio/video decoder
-// video width/height and audio samplerate/channellayout can get from CodecData
+// CodecData is some important bytes for initializing audio/video decoder.
+// 
+// video width/height and audio sample rate, channel layout can get from CodecData.
+// 
 // CodecData can convert to VideoCodecData or AudioCodecData using:
-// codecdata.(AudioCodecData) or codecdata.(VideoCodecData)
-// e.g: for H264, CodecData is AVCDecoderConfigure bytes, includes SPS/PPS
+//
+//     ```codecdata.(AudioCodecData) or codecdata.(VideoCodecData)```
+// 
+// for H264, CodecData is AVCDecoderConfigure bytes, includes SPS/PPS
 type CodecData interface {
 	Type() CodecType // Video/Audio codec type
 }
@@ -201,15 +205,16 @@ type PacketReader interface {
 }
 
 // Muxer describes the steps of writing compressed audio/video packets into container formats like MP4/FLV/MPEG-TS.
+//
 // 1. WriteHeader([]CodecData) write the file header, each stream 
+//
 // 2. WritePacket(Packet) write the audio/video packets
+//
 // 3. WriteTrailer() end writing, now it's a complete file.
 //
 // WriteHeader/WriteTrailer can be called only once.
 // 
-// every formsts(format/flv format/mp4 ...) implements Muxer interface.
-// rtmp.Conn implements Muxer interface.
-// and in some case like transcode.Muxer also implements Muxer interface.
+// every formsts(format/flv format/mp4 ...), rtmp.Conn, and transcode.Muxer implements Muxer interface.
 type Muxer interface {
 	PacketWriter
 	WriteHeader([]CodecData) error
@@ -223,7 +228,9 @@ type MuxCloser interface {
 }
 
 // Demuxer can demux compressed audio/video packets from container formats like MP4/FLV/MPEG-TS.
+// 
 // Streams() ([]CodecData, error) reads the file header, contains video/audio meta infomations
+//
 // ReadPacket() (Packet, error) read compressed audio/video packets
 type Demuxer interface {
 	PacketReader
@@ -297,6 +304,7 @@ func (self AudioFrame) Concat(in AudioFrame) (out AudioFrame) {
 }
 
 // AudioEncoder can encode raw audio frame into compressed audio packets
+//
 // now cgo/ffmpeg inplements AudioEncoder, using ffmpeg.NewAudioEncoder to create it
 type AudioEncoder interface {
 	CodecData() (AudioCodecData, error) // encoder's codec data can put into container
@@ -312,6 +320,7 @@ type AudioEncoder interface {
 }
 
 // AudioDecoder can decode compressed audio packets into raw audio frame
+//
 // use ffmpeg.NewAudioDecoder to create it
 type AudioDecoder interface {
 	Decode([]byte) (bool, AudioFrame, error) // decode one compressed audio packet
