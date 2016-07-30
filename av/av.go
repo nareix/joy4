@@ -76,7 +76,7 @@ func (self SampleFormat) IsPlanar() bool {
 	}
 }
 
-// Audio channel layout
+// Audio channel layout.
 type ChannelLayout uint16
 
 func (self ChannelLayout) String() string {
@@ -153,13 +153,13 @@ func (self CodecType) IsVideo() bool {
 	return self&codecTypeAudioBit == 0
 }
 
-// Make a new audio codec type
+// Make a new audio codec type.
 func MakeAudioCodecType(base uint32) (c CodecType) {
 	c = CodecType(base)<<codecTypeOtherBits | CodecType(codecTypeAudioBit)
 	return
 }
 
-// Make a new video codec type
+// Make a new video codec type.
 func MakeVideoCodecType(base uint32) (c CodecType) {
 	c = CodecType(base) << codecTypeOtherBits
 	return
@@ -172,7 +172,7 @@ const avCodecTypeMagic = 233333
 //
 //     codecdata.(AudioCodecData) or codecdata.(VideoCodecData)
 // 
-// for H264, CodecData is AVCDecoderConfigure bytes, includes SPS/PPS
+// for H264, CodecData is AVCDecoderConfigure bytes, includes SPS/PPS.
 type CodecData interface {
 	Type() CodecType // Video/Audio codec type
 }
@@ -205,7 +205,7 @@ type PacketReader interface {
 type Muxer interface {
 	WriteHeader([]CodecData) error // write the file header
 	PacketWriter // write compressed audio/video packets
-	WriteTrailer() error // end writing, complete file. can be called only once
+	WriteTrailer() error // finish writing file, this func can be called only once
 }
 
 // Muxer with Close() method
@@ -226,7 +226,7 @@ type DemuxCloser interface {
 	Close() error
 }
 
-// Packet stores compressed audio/video data
+// Packet stores compressed audio/video data.
 type Packet struct {
 	IsKeyFrame      bool // video packet is key frame
 	Idx             int8 // stream index in container format
@@ -235,7 +235,7 @@ type Packet struct {
 	Data            []byte // packet data
 }
 
-// Raw audio frame
+// Raw audio frame.
 type AudioFrame struct {
 	SampleFormat  SampleFormat // audio sample format, e.g: S16,FLTP,...
 	ChannelLayout ChannelLayout // audio channel layout, e.g: CH_MONO,CH_STEREO,...
@@ -248,7 +248,7 @@ func (self AudioFrame) Duration() time.Duration {
 	return time.Second * time.Duration(self.SampleCount) / time.Duration(self.SampleRate)
 }
 
-// Check this audio frame has same format as other audio frame
+// Check this audio frame has same format as other audio frame.
 func (self AudioFrame) HasSameFormat(other AudioFrame) bool {
 	if self.SampleRate != other.SampleRate {
 		return false
@@ -262,7 +262,7 @@ func (self AudioFrame) HasSameFormat(other AudioFrame) bool {
 	return true
 }
 
-// Split sample audio sample from this frame
+// Split sample audio sample from this frame.
 func (self AudioFrame) Slice(start int, end int) (out AudioFrame) {
 	out = self
 	out.Data = append([][]byte(nil), out.Data...)
@@ -274,7 +274,7 @@ func (self AudioFrame) Slice(start int, end int) (out AudioFrame) {
 	return
 }
 
-// Concat two audio frames
+// Concat two audio frames.
 func (self AudioFrame) Concat(in AudioFrame) (out AudioFrame) {
 	out = self
 	out.Data = append([][]byte(nil), out.Data...)
@@ -306,7 +306,7 @@ type AudioDecoder interface {
 	Close() // close decode, free cgo contexts
 }
 
-// AudioResampler can convert raw audio frames in different sample rate/format/channel layout
+// AudioResampler can convert raw audio frames in different sample rate/format/channel layout.
 type AudioResampler interface {
 	Resample(AudioFrame) (AudioFrame, error) // convert raw audio frames
 }
