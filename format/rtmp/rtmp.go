@@ -102,8 +102,8 @@ func (self *Server) ListenAndServe() (err error) {
 		fmt.Println("rtmp: server: listening on", addr)
 	}
 
-	var netconn net.Conn
 	for {
+		var netconn net.Conn
 		if netconn, err = listener.Accept(); err != nil {
 			return
 		}
@@ -115,7 +115,7 @@ func (self *Server) ListenAndServe() (err error) {
 		conn := NewConn(netconn)
 		conn.isserver = true
 		go func() {
-			err = self.handleConn(conn)
+			err := self.handleConn(conn)
 			if Debug {
 				fmt.Println("rtmp: server: client closed err:", err)
 			}
