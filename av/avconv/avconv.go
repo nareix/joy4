@@ -6,6 +6,7 @@ import (
 	"time"
 	"github.com/nareix/joy4/av/avutil"
 	"github.com/nareix/joy4/av"
+	"github.com/nareix/joy4/av/pktque"
 	"github.com/nareix/joy4/av/transcode"
 )
 
@@ -123,6 +124,7 @@ func ConvertCmdline(args []string) (err error) {
 	flagi := false
 	flagv := false
 	flagt := false
+	flagre := false
 	duration := time.Duration(0)
 	options := Options{}
 
@@ -136,6 +138,9 @@ func ConvertCmdline(args []string) (err error) {
 
 		case "-t":
 			flagt = true
+
+		case "-re":
+			flagre = true
 
 		default:
 			switch {
@@ -212,9 +217,18 @@ func ConvertCmdline(args []string) (err error) {
 		return
 	}
 
+	filters := pktque.Filters{}
+	if flagre {
+		filters = append(filters, &pktque.Walltime{})
+	}
+	filterdemux := &pktque.FilterDemuxer{
+		Demuxer: convdemux,
+		Filter: filters,
+	}
+
 	for {
 		var pkt av.Packet
-		if pkt, err = convdemux.ReadPacket(); err != nil {
+		if pkt, err = filterdemux.ReadPacket(); err != nil {
 			if err == io.EOF {
 				err = nil
 				break

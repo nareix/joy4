@@ -1594,6 +1594,15 @@ func Handler(h *avutil.RegisterHandler) {
 		return
 	}
 
+	h.UrlMuxer = func(uri string) (ok bool, muxer av.MuxCloser, err error) {
+		if !strings.HasPrefix(uri, "rtmp://") {
+			return
+		}
+		ok = true
+		muxer, err = Dial(uri)
+		return
+	}
+
 	h.ServerMuxer = func(uri string) (ok bool, muxer av.MuxCloser, err error) {
 		if !strings.HasPrefix(uri, "rtmp://") {
 			return

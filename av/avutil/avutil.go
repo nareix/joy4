@@ -57,6 +57,7 @@ type RegisterHandler struct {
 	Ext string
 	ReaderDemuxer func(io.Reader)av.Demuxer
 	WriterMuxer func(io.Writer)av.Muxer
+	UrlMuxer func(string)(bool,av.MuxCloser,error)
 	UrlDemuxer func(string)(bool,av.DemuxCloser,error)
 	UrlReader func(string)(bool,io.ReadCloser,error)
 	Probe func([]byte)bool
@@ -223,6 +224,13 @@ func (self *Handlers) FindCreate(uri string) (handler RegisterHandler, muxer av.
 			if handler.ServerMuxer != nil {
 				var ok bool
 				if ok, muxer, err = handler.ServerMuxer(uri); ok {
+					return
+				}
+			}
+		} else {
+			if handler.UrlMuxer != nil {
+				var ok bool
+				if ok, muxer, err = handler.UrlMuxer(uri); ok {
 					return
 				}
 			}
