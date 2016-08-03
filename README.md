@@ -62,7 +62,7 @@ Support codec and container parsers:
 
 # Requirements
 
-Go version >= 1.5
+Go version >= 1.6
 
 ffmpeg version >= 3.0 (optional)
 
