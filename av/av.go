@@ -264,6 +264,9 @@ func (self AudioFrame) HasSameFormat(other AudioFrame) bool {
 
 // Split sample audio sample from this frame.
 func (self AudioFrame) Slice(start int, end int) (out AudioFrame) {
+	if start > end {
+		panic(fmt.Sprintf("av: AudioFrame split failed start=%d end=%d invalid", start, end))
+	}
 	out = self
 	out.Data = append([][]byte(nil), out.Data...)
 	out.SampleCount = end - start
