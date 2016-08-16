@@ -5,6 +5,7 @@
 #include <libavresample/avresample.h>
 #include <libavutil/opt.h>
 #include <string.h>
+#include <libswscale/swscale.h>
 
 typedef struct {
 	AVCodec *codec;
