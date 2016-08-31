@@ -58,25 +58,26 @@ type Server struct {
 	Addr string
 	HandlePublish func(*Conn)
 	HandlePlay func(*Conn)
+	HandleConn func(*Conn)
 }
 
 func (self *Server) handleConn(conn *Conn) (err error) {
-	if err = conn.prepare(stageCommandDone, 0); err != nil {
-		return
-	}
-
-	if conn.playing {
-		if self.HandlePlay != nil {
-			self.HandlePlay(conn)
+	if self.HandleConn != nil {
+		self.HandleConn(conn)
+	} else {
+		if err = conn.prepare(stageCommandDone, 0); err != nil {
+			return
 		}
-	} else if conn.publishing {
-		if self.HandlePublish != nil {
-			self.HandlePublish(conn)
-		}
-	}
 
-	if err = conn.Close(); err != nil {
-		return
+		if conn.playing {
+			if self.HandlePlay != nil {
+				self.HandlePlay(conn)
+			}
+		} else if conn.publishing {
+			if self.HandlePublish != nil {
+				self.HandlePublish(conn)
+			}
+		}
 	}
 
 	return
@@ -136,17 +137,22 @@ const (
 
 type Conn struct {
 	URL *url.URL
+	OnPlayOrPublish func(string,flvio.AMFMap) error
 
 	prober *flv.Prober
 	streams []av.CodecData
 
+	txbytes uint64
+	rxbytes uint64
+
 	bufr *bufio.Reader
 	bufw *bufio.Writer
-	readn uint32
+	ackn uint32
 	writebuf []byte
 	readbuf []byte
 
 	netconn net.Conn
+	txrxcount *txrxcount
 
 	writeMaxChunkSize int
 	readMaxChunkSize int
@@ -177,6 +183,24 @@ type Conn struct {
 	eventtype uint16
 }
 
+type txrxcount struct {
+	io.ReadWriter
+	txbytes uint64
+	rxbytes uint64
+}
+
+func (self *txrxcount) Read(p []byte) (int, error) {
+	n, err := self.ReadWriter.Read(p)
+	self.rxbytes += uint64(n)
+	return n, err
+}
+
+func (self *txrxcount) Write(p []byte) (int, error) {
+	n, err := self.ReadWriter.Write(p)
+	self.txbytes += uint64(n)
+	return n, err
+}
+
 func NewConn(netconn net.Conn) *Conn {
 	conn := &Conn{}
 	conn.prober = &flv.Prober{}
@@ -186,6 +210,7 @@ func NewConn(netconn net.Conn) *Conn {
 	conn.writeMaxChunkSize = 128
 	conn.bufr = bufio.NewReaderSize(netconn, pio.RecommendBufioSize)
 	conn.bufw = bufio.NewWriterSize(netconn, pio.RecommendBufioSize)
+	conn.txrxcount = &txrxcount{ReadWriter: netconn}
 	conn.writebuf = make([]byte, 4096)
 	conn.readbuf = make([]byte, 4096)
 	return conn
@@ -227,6 +252,18 @@ const (
 	eventtypeSetBufferLength = 3
 	eventtypeStreamIsRecorded = 4
 )
+
+func (self *Conn) NetConn() net.Conn {
+	return self.netconn
+}
+
+func (self *Conn) TxBytes() uint64 {
+	return self.txrxcount.txbytes
+}
+
+func (self *Conn) RxBytes() uint64 {
+	return self.txrxcount.rxbytes
+}
 
 func (self *Conn) Close() (err error) {
 	return self.netconn.Close()
@@ -366,6 +403,7 @@ func (self *Conn) readConnect() (err error) {
 	if ok {
 		tcurl, _ = _tcurl.(string)
 	}
+	connectparams := self.commandobj
 
 	if err = self.writeBasicConf(); err != nil {
 		return
@@ -421,18 +459,38 @@ func (self *Conn) readConnect() (err error) {
 				}
 				publishpath, _ := self.commandparams[0].(string)
 
+				var cberr error
+				if self.OnPlayOrPublish != nil {
+					cberr = self.OnPlayOrPublish(self.commandname, connectparams)
+				}
+
+				var code string
+				var description string
+				if cberr != nil {
+					code = "NetStream.Publish.Failed"
+					description = cberr.Error()
+				} else {
+					code = "NetStream.Publish.Start"
+					description = "Start publishing"
+				}
+
 				// > onStatus()
 				if err = self.writeCommandMsg(5, self.avmsgsid,
 					"onStatus", self.commandtransid, nil,
 					flvio.AMFMap{
 						"level": "status",
-						"code": "NetStream.Publish.Start",
-						"description": "Start publishing",
+						"code": code,
+						"description": description,
 					},
 				); err != nil {
 					return
 				}
 				if err = self.flushWrite(); err != nil {
+					return
+				}
+
+				if cberr != nil {
+					err = fmt.Errorf("rtmp: OnPlayOrPublish check failed")
 					return
 				}
 
@@ -750,6 +808,10 @@ func (self *Conn) ReadPacket() (pkt av.Packet, err error) {
 	}
 
 	return
+}
+
+func (self *Conn) Prepare() (err error) {
+	return self.prepare(stageCommandDone, 0)
 }
 
 func (self *Conn) prepare(stage int, flags int) (err error) {
@@ -1244,12 +1306,12 @@ func (self *Conn) readChunk() (err error) {
 		}
 	}
 
-	self.readn += uint32(n)
-	if self.readAckSize != 0 && self.readn > self.readAckSize {
-		if err = self.writeAck(self.readn); err != nil {
+	self.ackn += uint32(n)
+	if self.readAckSize != 0 && self.ackn > self.readAckSize {
+		if err = self.writeAck(self.ackn); err != nil {
 			return
 		}
-		self.readn = 0
+		self.ackn = 0
 	}
 
 	return
