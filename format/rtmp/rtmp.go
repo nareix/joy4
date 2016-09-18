@@ -1,27 +1,26 @@
-
 package rtmp
 
 import (
-	"strings"
-	"bytes"
-	"net"
-	"net/url"
 	"bufio"
-	"time"
-	"fmt"
+	"bytes"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
-	"io"
+	"fmt"
 	"github.com/nareix/bits/pio"
-	"github.com/nareix/joy4/format/flv"
-	"github.com/nareix/joy4/format/flv/flvio"
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/av/avutil"
-	"crypto/hmac"
-	"crypto/sha256"
-	"crypto/rand"
+	"github.com/nareix/joy4/format/flv"
+	"github.com/nareix/joy4/format/flv/flvio"
+	"io"
+	"net"
+	"net/url"
+	"strings"
+	"time"
 )
 
-var	Debug bool
+var Debug bool
 
 func ParseURL(uri string) (u *url.URL, err error) {
 	if u, err = url.Parse(uri); err != nil {
@@ -55,10 +54,10 @@ func DialTimeout(uri string, timeout time.Duration) (conn *Conn, err error) {
 }
 
 type Server struct {
-	Addr string
+	Addr          string
 	HandlePublish func(*Conn)
-	HandlePlay func(*Conn)
-	HandleConn func(*Conn)
+	HandlePlay    func(*Conn)
+	HandleConn    func(*Conn)
 }
 
 func (self *Server) handleConn(conn *Conn) (err error) {
@@ -125,21 +124,21 @@ func (self *Server) ListenAndServe() (err error) {
 }
 
 const (
-	stageHandshakeDone = iota+1
+	stageHandshakeDone = iota + 1
 	stageCommandDone
 	stageCodecDataDone
 )
 
 const (
-	prepareReading = iota+1
+	prepareReading = iota + 1
 	prepareWriting
 )
 
 type Conn struct {
-	URL *url.URL
-	OnPlayOrPublish func(string,flvio.AMFMap) error
+	URL             *url.URL
+	OnPlayOrPublish func(string, flvio.AMFMap) error
 
-	prober *flv.Prober
+	prober  *flv.Prober
 	streams []av.CodecData
 
 	txbytes uint64
@@ -148,37 +147,37 @@ type Conn struct {
 	bufr *bufio.Reader
 	bufw *bufio.Writer
 	ackn uint32
-	writebuf []byte
-	readbuf []byte
 
-	netconn net.Conn
+	writebuf []byte
+	readbuf  []byte
+
+	netconn   net.Conn
 	txrxcount *txrxcount
 
 	writeMaxChunkSize int
-	readMaxChunkSize int
-	readAckSize uint32
-	readcsmap map[uint32]*chunkStream
+	readMaxChunkSize  int
+	readAckSize       uint32
+	readcsmap         map[uint32]*chunkStream
 
-	isserver bool
+	isserver            bool
 	publishing, playing bool
-	reading, writing bool
-	stage int
+	reading, writing    bool
+	stage               int
 
 	avmsgsid uint32
 
-	gotcommand bool
-	commandname string
+	gotcommand     bool
+	commandname    string
 	commandtransid float64
-	commandobj flvio.AMFMap
-	commandparams []interface{}
+	commandobj     flvio.AMFMap
+	commandparams  []interface{}
 
-	gotmsg bool
-	timestamp uint32
-	msgdata []byte
-	msgtypeid uint8
+	gotmsg      bool
+	timestamp   uint32
+	msgdata     []byte
+	msgtypeid   uint8
 	datamsgvals []interface{}
-	videodata *flvio.Videodata
-	audiodata *flvio.Audiodata
+	avtag       flvio.Tag
 
 	eventtype uint16
 }
@@ -217,15 +216,15 @@ func NewConn(netconn net.Conn) *Conn {
 }
 
 type chunkStream struct {
-	timenow uint32
-	timedelta uint32
-	hastimeext bool
-	msgsid uint32
-	msgtypeid uint8
-	msgdatalen uint32
+	timenow     uint32
+	timedelta   uint32
+	hastimeext  bool
+	msgsid      uint32
+	msgtypeid   uint8
+	msgdatalen  uint32
 	msgdataleft uint32
-	msghdrtype uint8
-	msgdata []byte
+	msghdrtype  uint8
+	msgdata     []byte
 }
 
 func (self *chunkStream) Start() {
@@ -234,22 +233,22 @@ func (self *chunkStream) Start() {
 }
 
 const (
-	msgtypeidUserControl = 4
-	msgtypeidAck = 3
-	msgtypeidWindowAckSize = 5
+	msgtypeidUserControl      = 4
+	msgtypeidAck              = 3
+	msgtypeidWindowAckSize    = 5
 	msgtypeidSetPeerBandwidth = 6
-	msgtypeidSetChunkSize = 1
-	msgtypeidCommandMsgAMF0 = 20
-	msgtypeidCommandMsgAMF3 = 17
-	msgtypeidDataMsgAMF0 = 18
-	msgtypeidDataMsgAMF3 = 15
-	msgtypeidVideoMsg = 9
-	msgtypeidAudioMsg = 8
+	msgtypeidSetChunkSize     = 1
+	msgtypeidCommandMsgAMF0   = 20
+	msgtypeidCommandMsgAMF3   = 17
+	msgtypeidDataMsgAMF0      = 18
+	msgtypeidDataMsgAMF3      = 15
+	msgtypeidVideoMsg         = 9
+	msgtypeidAudioMsg         = 8
 )
 
 const (
-	eventtypeStreamBegin = 0
-	eventtypeSetBufferLength = 3
+	eventtypeStreamBegin      = 0
+	eventtypeSetBufferLength  = 3
 	eventtypeStreamIsRecorded = 4
 )
 
@@ -286,11 +285,8 @@ func (self *Conn) pollAVTag() (tag flvio.Tag, err error) {
 			return
 		}
 		switch self.msgtypeid {
-		case msgtypeidVideoMsg:
-			tag = self.videodata
-			return
-		case msgtypeidAudioMsg:
-			tag = self.audiodata
+		case msgtypeidVideoMsg, msgtypeidAudioMsg:
+			tag = self.avtag
 			return
 		}
 	}
@@ -300,8 +296,7 @@ func (self *Conn) pollMsg() (err error) {
 	self.gotmsg = false
 	self.gotcommand = false
 	self.datamsgvals = nil
-	self.videodata = nil
-	self.audiodata = nil
+	self.avtag = flvio.Tag{}
 	for {
 		if err = self.readChunk(); err != nil {
 			return
@@ -326,7 +321,7 @@ func SplitPath(u *url.URL) (app, stream string) {
 func getTcUrl(u *url.URL) string {
 	app, _ := SplitPath(u)
 	nu := *u
-	nu.Path = "/"+app
+	nu.Path = "/" + app
 	return nu.String()
 }
 
@@ -358,7 +353,7 @@ var CodecTypes = flv.CodecTypes
 
 func (self *Conn) writeBasicConf() (err error) {
 	// > SetChunkSize
-	if err = self.writeSetChunkSize(1024*1024*128); err != nil {
+	if err = self.writeSetChunkSize(1024 * 1024 * 128); err != nil {
 		return
 	}
 	// > WindowAckSize
@@ -412,13 +407,13 @@ func (self *Conn) readConnect() (err error) {
 	// > _result("NetConnection.Connect.Success")
 	if err = self.writeCommandMsg(3, 0, "_result", self.commandtransid,
 		flvio.AMFMap{
-			"fmtVer": "FMS/3,0,1,123",
+			"fmtVer":       "FMS/3,0,1,123",
 			"capabilities": 31,
 		},
 		flvio.AMFMap{
-			"level": "status",
-			"code": "NetConnection.Connect.Success",
-			"description": "Connection succeeded.",
+			"level":          "status",
+			"code":           "NetConnection.Connect.Success",
+			"description":    "Connection succeeded.",
 			"objectEncoding": 3,
 		},
 	); err != nil {
@@ -478,9 +473,9 @@ func (self *Conn) readConnect() (err error) {
 				if err = self.writeCommandMsg(5, self.avmsgsid,
 					"onStatus", self.commandtransid, nil,
 					flvio.AMFMap{
-						"level": "status",
-						"code": code,
-						"description": description,
+						"level":       "status",
+						"code":        "NetStream.Publish.Start",
+						"description": "Start publishing",
 					},
 				); err != nil {
 					return
@@ -521,8 +516,8 @@ func (self *Conn) readConnect() (err error) {
 				if err = self.writeCommandMsg(5, self.avmsgsid,
 					"onStatus", self.commandtransid, nil,
 					flvio.AMFMap{
-						"level": "status",
-						"code": "NetStream.Play.Start",
+						"level":       "status",
+						"code":        "NetStream.Play.Start",
 						"description": "Start live",
 					},
 				); err != nil {
@@ -619,13 +614,13 @@ func (self *Conn) writeConnect(path string) (err error) {
 	}
 	if err = self.writeCommandMsg(3, 0, "connect", 1,
 		flvio.AMFMap{
-			"app": path,
-			"flashVer": "MAC 22,0,0,192",
-			"tcUrl": getTcUrl(self.URL),
-			"fpad": false,
-			"capabilities": 15,
-			"audioCodecs": 4071,
-			"videoCodecs": 252,
+			"app":           path,
+			"flashVer":      "MAC 22,0,0,192",
+			"tcUrl":         getTcUrl(self.URL),
+			"fpad":          false,
+			"capabilities":  15,
+			"audioCodecs":   4071,
+			"videoCodecs":   252,
 			"videoFunction": 1,
 		},
 	); err != nil {
@@ -937,7 +932,7 @@ func (self *Conn) tmpwbuf(n int) []byte {
 
 func (self *Conn) writeSetChunkSize(size int) (err error) {
 	self.writeMaxChunkSize = size
-	b := self.tmpwbuf(chunkHeaderLength+4)
+	b := self.tmpwbuf(chunkHeaderLength + 4)
 	n := self.fillChunkHeader(b, 2, 0, msgtypeidSetChunkSize, 0, 4)
 	pio.PutU32BE(b[n:], uint32(size))
 	n += 4
@@ -946,7 +941,7 @@ func (self *Conn) writeSetChunkSize(size int) (err error) {
 }
 
 func (self *Conn) writeAck(seqnum uint32) (err error) {
-	b := self.tmpwbuf(chunkHeaderLength+4)
+	b := self.tmpwbuf(chunkHeaderLength + 4)
 	n := self.fillChunkHeader(b, 2, 0, msgtypeidAck, 0, 4)
 	pio.PutU32BE(b[n:], seqnum)
 	n += 4
@@ -955,7 +950,7 @@ func (self *Conn) writeAck(seqnum uint32) (err error) {
 }
 
 func (self *Conn) writeWindowAckSize(size uint32) (err error) {
-	b := self.tmpwbuf(chunkHeaderLength+4)
+	b := self.tmpwbuf(chunkHeaderLength + 4)
 	n := self.fillChunkHeader(b, 2, 0, msgtypeidWindowAckSize, 0, 4)
 	pio.PutU32BE(b[n:], size)
 	n += 4
@@ -964,7 +959,7 @@ func (self *Conn) writeWindowAckSize(size uint32) (err error) {
 }
 
 func (self *Conn) writeSetPeerBandwidth(acksize uint32, limittype uint8) (err error) {
-	b := self.tmpwbuf(chunkHeaderLength+5)
+	b := self.tmpwbuf(chunkHeaderLength + 5)
 	n := self.fillChunkHeader(b, 2, 0, msgtypeidSetPeerBandwidth, 0, 5)
 	pio.PutU32BE(b[n:], acksize)
 	n += 4
@@ -974,21 +969,21 @@ func (self *Conn) writeSetPeerBandwidth(acksize uint32, limittype uint8) (err er
 	return
 }
 
-func (self *Conn) writeCommandMsg(csid, msgsid uint32, args... interface{}) (err error) {
+func (self *Conn) writeCommandMsg(csid, msgsid uint32, args ...interface{}) (err error) {
 	return self.writeAMF0Msg(msgtypeidCommandMsgAMF0, csid, msgsid, args...)
 }
 
-func (self *Conn) writeDataMsg(csid, msgsid uint32, args... interface{}) (err error) {
+func (self *Conn) writeDataMsg(csid, msgsid uint32, args ...interface{}) (err error) {
 	return self.writeAMF0Msg(msgtypeidDataMsgAMF0, csid, msgsid, args...)
 }
 
-func (self *Conn) writeAMF0Msg(msgtypeid uint8, csid, msgsid uint32, args... interface{}) (err error) {
+func (self *Conn) writeAMF0Msg(msgtypeid uint8, csid, msgsid uint32, args ...interface{}) (err error) {
 	size := 0
 	for _, arg := range args {
 		size += flvio.LenAMF0Val(arg)
 	}
 
-	b := self.tmpwbuf(chunkHeaderLength+size)
+	b := self.tmpwbuf(chunkHeaderLength + size)
 	n := self.fillChunkHeader(b, csid, 0, msgtypeid, msgsid, size)
 	for _, arg := range args {
 		n += flvio.FillAMF0Val(b[n:], arg)
@@ -1003,25 +998,25 @@ func (self *Conn) writeAVTag(tag flvio.Tag, ts int32) (err error) {
 	var csid uint32
 	var data []byte
 
-	switch _tag := tag.(type) {
-	case *flvio.Audiodata:
+	switch tag.Type {
+	case flvio.TAG_AUDIO:
 		msgtypeid = msgtypeidAudioMsg
 		csid = 6
-		data = _tag.Data
+		data = tag.Data
 
-	case *flvio.Videodata:
+	case flvio.TAG_VIDEO:
 		msgtypeid = msgtypeidVideoMsg
 		csid = 7
-		data = _tag.Data
+		data = tag.Data
 	}
 
-	b := self.tmpwbuf(chunkHeaderLength+flvio.MaxTagSubHeaderLength)
+	b := self.tmpwbuf(chunkHeaderLength + flvio.MaxTagSubHeaderLength)
 	hdrlen := tag.FillHeader(b[chunkHeaderLength:])
 	self.fillChunkHeader(b, csid, ts, msgtypeid, self.avmsgsid, hdrlen+len(data))
-	n := hdrlen+chunkHeaderLength
+	n := hdrlen + chunkHeaderLength
 
 	if n+len(data) > self.writeMaxChunkSize {
-		if err = self.writeSetChunkSize(n+len(data)); err != nil {
+		if err = self.writeSetChunkSize(n + len(data)); err != nil {
 			return
 		}
 	}
@@ -1034,7 +1029,7 @@ func (self *Conn) writeAVTag(tag flvio.Tag, ts int32) (err error) {
 }
 
 func (self *Conn) writeStreamBegin(msgsid uint32) (err error) {
-	b := self.tmpwbuf(chunkHeaderLength+6)
+	b := self.tmpwbuf(chunkHeaderLength + 6)
 	n := self.fillChunkHeader(b, 2, 0, msgtypeidUserControl, 0, 6)
 	pio.PutU16BE(b[n:], eventtypeStreamBegin)
 	n += 2
@@ -1045,7 +1040,7 @@ func (self *Conn) writeStreamBegin(msgsid uint32) (err error) {
 }
 
 func (self *Conn) writeSetBufferLength(msgsid uint32, timestamp uint32) (err error) {
-	b := self.tmpwbuf(chunkHeaderLength+10)
+	b := self.tmpwbuf(chunkHeaderLength + 10)
 	n := self.fillChunkHeader(b, 2, 0, msgtypeidUserControl, 0, 10)
 	pio.PutU16BE(b[n:], eventtypeSetBufferLength)
 	n += 2
@@ -1072,7 +1067,7 @@ func (self *Conn) fillChunkHeader(b []byte, csid uint32, timestamp int32, msgtyp
 	//
 	//       Figure 9 Chunk Message Header – Type 0
 
-	b[n] = byte(csid)&0x3f
+	b[n] = byte(csid) & 0x3f
 	n++
 	pio.PutU24BE(b[n:], uint32(timestamp))
 	n += 3
@@ -1109,9 +1104,9 @@ func (self *Conn) readChunk() (err error) {
 	var msghdrtype uint8
 	var csid uint32
 
-	msghdrtype = header>>6
+	msghdrtype = header >> 6
 
-	csid = uint32(header)&0x3f
+	csid = uint32(header) & 0x3f
 	switch csid {
 	default: // Chunk basic header 1
 	case 0: // Chunk basic header 2
@@ -1119,13 +1114,13 @@ func (self *Conn) readChunk() (err error) {
 			return
 		}
 		n += 1
-		csid = uint32(b[0])+64
+		csid = uint32(b[0]) + 64
 	case 1: // Chunk basic header 3
 		if _, err = io.ReadFull(self.bufr, b[:2]); err != nil {
 			return
 		}
 		n += 2
-		csid = uint32(pio.U16BE(b))+64
+		csid = uint32(pio.U16BE(b)) + 64
 	}
 
 	cs := self.readcsmap[csid]
@@ -1282,8 +1277,8 @@ func (self *Conn) readChunk() (err error) {
 	if size > self.readMaxChunkSize {
 		size = self.readMaxChunkSize
 	}
-	off := cs.msgdatalen-cs.msgdataleft
-	buf := cs.msgdata[off:int(off)+size]
+	off := cs.msgdatalen - cs.msgdataleft
+	buf := cs.msgdata[off : int(off)+size]
 	if _, err = io.ReadFull(self.bufr, buf); err != nil {
 		return
 	}
@@ -1408,28 +1403,28 @@ func (self *Conn) handleMsg(timestamp uint32, msgsid uint32, msgtypeid uint8, ms
 		if len(msgdata) == 0 {
 			return
 		}
-		tag := &flvio.Videodata{}
+		tag := flvio.Tag{Type: flvio.TAG_VIDEO}
 		var n int
-		if n, err = tag.ParseHeader(msgdata); err != nil {
+		if n, err = (&tag).ParseHeader(msgdata); err != nil {
 			return
 		}
 		if !(tag.FrameType == flvio.FRAME_INTER || tag.FrameType == flvio.FRAME_KEY) {
 			return
 		}
 		tag.Data = msgdata[n:]
-		self.videodata = tag
+		self.avtag = tag
 
 	case msgtypeidAudioMsg:
 		if len(msgdata) == 0 {
 			return
 		}
-		tag := &flvio.Audiodata{}
+		tag := flvio.Tag{Type: flvio.TAG_AUDIO}
 		var n int
-		if n, err = tag.ParseHeader(msgdata); err != nil {
+		if n, err = (&tag).ParseHeader(msgdata); err != nil {
 			return
 		}
 		tag.Data = msgdata[n:]
-		self.audiodata = tag
+		self.avtag = tag
 
 	case msgtypeidSetChunkSize:
 		if len(msgdata) < 4 {
@@ -1481,7 +1476,7 @@ func hsCalcDigestPos(p []byte, base int) (pos int) {
 	for i := 0; i < 4; i++ {
 		pos += int(p[base+i])
 	}
-	pos = (pos%728)+base+4
+	pos = (pos % 728) + base + 4
 	return
 }
 
@@ -1519,13 +1514,13 @@ func hsCreate01(p []byte, time uint32, ver uint32, key []byte) {
 
 func hsCreate2(p []byte, key []byte) {
 	rand.Read(p)
-	gap := len(p)-32
+	gap := len(p) - 32
 	digest := hsMakeDigest(key, p, gap)
 	copy(p[gap:], digest)
 }
 
 func (self *Conn) handshakeClient() (err error) {
-	var random [(1+1536*2)*2]byte
+	var random [(1 + 1536*2) * 2]byte
 
 	C0C1C2 := random[:1536*2+1]
 	C0 := C0C1C2[:1]
@@ -1535,7 +1530,7 @@ func (self *Conn) handshakeClient() (err error) {
 
 	S0S1S2 := random[1536*2+1:]
 	//S0 := S0S1S2[:1]
-	S1 := S0S1S2[1:1536+1]
+	S1 := S0S1S2[1 : 1536+1]
 	//S0S1 := S0S1S2[:1536+1]
 	//S2 := S0S1S2[1536+1:]
 
@@ -1556,7 +1551,7 @@ func (self *Conn) handshakeClient() (err error) {
 	}
 
 	if Debug {
-		fmt.Println("rtmp: handshakeClient: server version", S1[4],S1[5],S1[6],S1[7])
+		fmt.Println("rtmp: handshakeClient: server version", S1[4], S1[5], S1[6], S1[7])
 	}
 
 	if ver := pio.U32BE(S1[4:8]); ver != 0 {
@@ -1575,17 +1570,17 @@ func (self *Conn) handshakeClient() (err error) {
 }
 
 func (self *Conn) handshakeServer() (err error) {
-	var random [(1+1536*2)*2]byte
+	var random [(1 + 1536*2) * 2]byte
 
 	C0C1C2 := random[:1536*2+1]
 	C0 := C0C1C2[:1]
-	C1 := C0C1C2[1:1536+1]
+	C1 := C0C1C2[1 : 1536+1]
 	C0C1 := C0C1C2[:1536+1]
 	C2 := C0C1C2[1536+1:]
 
 	S0S1S2 := random[1536*2+1:]
 	S0 := S0S1S2[:1]
-	S1 := S0S1S2[1:1536+1]
+	S1 := S0S1S2[1 : 1536+1]
 	S0S1 := S0S1S2[:1536+1]
 	S2 := S0S1S2[1536+1:]
 
@@ -1749,4 +1744,3 @@ func Handler(h *avutil.RegisterHandler) {
 
 	h.CodecTypes = CodecTypes
 }
-

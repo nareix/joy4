@@ -1,17 +1,17 @@
 package flv
 
 import (
+	"bufio"
 	"fmt"
+	"github.com/nareix/bits/pio"
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/av/avutil"
-	"github.com/nareix/joy4/codec/h264parser"
 	"github.com/nareix/joy4/codec"
-	"github.com/nareix/joy4/codec/fake"
 	"github.com/nareix/joy4/codec/aacparser"
-	"github.com/nareix/bits/pio"
+	"github.com/nareix/joy4/codec/fake"
+	"github.com/nareix/joy4/codec/h264parser"
 	"github.com/nareix/joy4/format/flv/flvio"
 	"io"
-	"bufio"
 )
 
 var MaxProbePacketCount = 20
@@ -60,12 +60,12 @@ func NewMetadataByStreams(streams []av.CodecData) (metadata flvio.AMFMap, err er
 }
 
 type Prober struct {
-	HasAudio, HasVideo bool
-	GotAudio, GotVideo bool
+	HasAudio, HasVideo             bool
+	GotAudio, GotVideo             bool
 	VideoStreamIdx, AudioStreamIdx int
-	PushedCount int
-	Streams []av.CodecData
-	CachedPkts []av.Packet
+	PushedCount                    int
+	Streams                        []av.CodecData
+	CachedPkts                     []av.Packet
 }
 
 func (self *Prober) CacheTag(_tag flvio.Tag, timestamp int32) {
@@ -73,7 +73,7 @@ func (self *Prober) CacheTag(_tag flvio.Tag, timestamp int32) {
 	self.CachedPkts = append(self.CachedPkts, pkt)
 }
 
-func (self *Prober) PushTag(_tag flvio.Tag, timestamp int32) (err error) {
+func (self *Prober) PushTag(tag flvio.Tag, timestamp int32) (err error) {
 	self.PushedCount++
 
 	if self.PushedCount > MaxProbePacketCount {
@@ -81,8 +81,8 @@ func (self *Prober) PushTag(_tag flvio.Tag, timestamp int32) (err error) {
 		return
 	}
 
-	switch tag := _tag.(type) {
-	case *flvio.Videodata:
+	switch tag.Type {
+	case flvio.TAG_VIDEO:
 		switch tag.AVCPacketType {
 		case flvio.AVC_SEQHDR:
 			if !self.GotVideo {
@@ -100,7 +100,7 @@ func (self *Prober) PushTag(_tag flvio.Tag, timestamp int32) (err error) {
 			self.CacheTag(tag, timestamp)
 		}
 
-	case *flvio.Audiodata:
+	case flvio.TAG_AUDIO:
 		switch tag.SoundFormat {
 		case flvio.SOUND_AAC:
 			switch tag.AACPacketType {
@@ -132,9 +132,9 @@ func (self *Prober) PushTag(_tag flvio.Tag, timestamp int32) (err error) {
 		case flvio.SOUND_NELLYMOSER:
 			if !self.GotAudio {
 				stream := fake.CodecData{
-					CodecType_: av.NELLYMOSER,
-					SampleRate_: 16000,
-					SampleFormat_: av.S16,
+					CodecType_:     av.NELLYMOSER,
+					SampleRate_:    16000,
+					SampleFormat_:  av.S16,
 					ChannelLayout_: tag.ChannelLayout(),
 				}
 				self.AudioStreamIdx = len(self.Streams)
@@ -162,9 +162,9 @@ func (self *Prober) Probed() (ok bool) {
 	return
 }
 
-func (self *Prober) TagToPacket(_tag flvio.Tag, timestamp int32) (pkt av.Packet, ok bool) {
-	switch tag := _tag.(type) {
-	case *flvio.Videodata:
+func (self *Prober) TagToPacket(tag flvio.Tag, timestamp int32) (pkt av.Packet, ok bool) {
+	switch tag.Type {
+	case flvio.TAG_VIDEO:
 		pkt.Idx = int8(self.VideoStreamIdx)
 		switch tag.AVCPacketType {
 		case flvio.AVC_NALU:
@@ -174,7 +174,7 @@ func (self *Prober) TagToPacket(_tag flvio.Tag, timestamp int32) (pkt av.Packet,
 			pkt.IsKeyFrame = tag.FrameType == flvio.FRAME_KEY
 		}
 
-	case *flvio.Audiodata:
+	case flvio.TAG_AUDIO:
 		pkt.Idx = int8(self.AudioStreamIdx)
 		switch tag.SoundFormat {
 		case flvio.SOUND_AAC:
@@ -212,11 +212,12 @@ func CodecDataToTag(stream av.CodecData) (_tag flvio.Tag, ok bool, err error) {
 	switch stream.Type() {
 	case av.H264:
 		h264 := stream.(h264parser.CodecData)
-		tag := &flvio.Videodata{
+		tag := flvio.Tag{
+			Type:          flvio.TAG_VIDEO,
 			AVCPacketType: flvio.AVC_SEQHDR,
-			CodecID: flvio.VIDEO_H264,
-			Data: h264.AVCDecoderConfRecordBytes(),
-			FrameType: flvio.FRAME_KEY,
+			CodecID:       flvio.VIDEO_H264,
+			Data:          h264.AVCDecoderConfRecordBytes(),
+			FrameType:     flvio.FRAME_KEY,
 		}
 		ok = true
 		_tag = tag
@@ -226,11 +227,12 @@ func CodecDataToTag(stream av.CodecData) (_tag flvio.Tag, ok bool, err error) {
 
 	case av.AAC:
 		aac := stream.(aacparser.CodecData)
-		tag := &flvio.Audiodata{
-			SoundFormat: flvio.SOUND_AAC,
-			SoundRate: flvio.SOUND_44Khz,
+		tag := flvio.Tag{
+			Type:          flvio.TAG_AUDIO,
+			SoundFormat:   flvio.SOUND_AAC,
+			SoundRate:     flvio.SOUND_44Khz,
 			AACPacketType: flvio.AAC_SEQHDR,
-			Data: aac.MPEG4AudioConfigBytes(),
+			Data:          aac.MPEG4AudioConfigBytes(),
 		}
 		switch aac.SampleFormat().BytesPerSample() {
 		case 1:
@@ -254,13 +256,14 @@ func CodecDataToTag(stream av.CodecData) (_tag flvio.Tag, ok bool, err error) {
 	return
 }
 
-func PacketToTag(pkt av.Packet, stream av.CodecData) (_tag flvio.Tag, timestamp int32) {
+func PacketToTag(pkt av.Packet, stream av.CodecData) (tag flvio.Tag, timestamp int32) {
 	switch stream.Type() {
 	case av.H264:
-		tag := &flvio.Videodata{
-			AVCPacketType: flvio.AVC_NALU,
-			CodecID: flvio.VIDEO_H264,
-			Data: pkt.Data,
+		tag = flvio.Tag{
+			Type:            flvio.TAG_VIDEO,
+			AVCPacketType:   flvio.AVC_NALU,
+			CodecID:         flvio.VIDEO_H264,
+			Data:            pkt.Data,
 			CompositionTime: flvio.TimeToTs(pkt.CompositionTime),
 		}
 		if pkt.IsKeyFrame {
@@ -268,14 +271,14 @@ func PacketToTag(pkt av.Packet, stream av.CodecData) (_tag flvio.Tag, timestamp 
 		} else {
 			tag.FrameType = flvio.FRAME_INTER
 		}
-		_tag = tag
 
 	case av.AAC:
-		tag := &flvio.Audiodata{
-			SoundFormat: flvio.SOUND_AAC,
-			SoundRate: flvio.SOUND_44Khz,
+		tag = flvio.Tag{
+			Type:          flvio.TAG_AUDIO,
+			SoundFormat:   flvio.SOUND_AAC,
+			SoundRate:     flvio.SOUND_44Khz,
 			AACPacketType: flvio.AAC_RAW,
-			Data: pkt.Data,
+			Data:          pkt.Data,
 		}
 		astream := stream.(av.AudioCodecData)
 		switch astream.SampleFormat().BytesPerSample() {
@@ -290,21 +293,20 @@ func PacketToTag(pkt av.Packet, stream av.CodecData) (_tag flvio.Tag, timestamp 
 		case 2:
 			tag.SoundType = flvio.SOUND_STEREO
 		}
-		_tag = tag
 
 	case av.SPEEX:
-		tag := &flvio.Audiodata{
+		tag = flvio.Tag{
+			Type:        flvio.TAG_AUDIO,
 			SoundFormat: flvio.SOUND_SPEEX,
-			Data: pkt.Data,
+			Data:        pkt.Data,
 		}
-		_tag = tag
 
 	case av.NELLYMOSER:
-		tag := &flvio.Audiodata{
+		tag = flvio.Tag{
+			Type:        flvio.TAG_AUDIO,
 			SoundFormat: flvio.SOUND_NELLYMOSER,
-			Data: pkt.Data,
+			Data:        pkt.Data,
 		}
-		_tag = tag
 	}
 
 	timestamp = flvio.TimeToTs(pkt.Time)
@@ -312,8 +314,8 @@ func PacketToTag(pkt av.Packet, stream av.CodecData) (_tag flvio.Tag, timestamp 
 }
 
 type Muxer struct {
-	bufw writeFlusher
-	b []byte
+	bufw    writeFlusher
+	b       []byte
 	streams []av.CodecData
 }
 
@@ -325,7 +327,7 @@ type writeFlusher interface {
 func NewMuxerWriteFlusher(w writeFlusher) *Muxer {
 	return &Muxer{
 		bufw: w,
-		b: make([]byte, 256),
+		b:    make([]byte, 256),
 	}
 }
 
@@ -386,16 +388,16 @@ func (self *Muxer) WriteTrailer() (err error) {
 
 type Demuxer struct {
 	prober *Prober
-	bufr *bufio.Reader
-	b []byte
-	stage int
+	bufr   *bufio.Reader
+	b      []byte
+	stage  int
 }
 
 func NewDemuxer(r io.Reader) *Demuxer {
 	return &Demuxer{
-		bufr: bufio.NewReaderSize(r, pio.RecommendBufioSize),
+		bufr:   bufio.NewReaderSize(r, pio.RecommendBufioSize),
 		prober: &Prober{},
-		b: make([]byte, 256),
+		b:      make([]byte, 256),
 	}
 }
 
@@ -414,10 +416,10 @@ func (self *Demuxer) prepare() (err error) {
 			if _, err = self.bufr.Discard(skip); err != nil {
 				return
 			}
-			if flags & flvio.FILE_HAS_AUDIO != 0 {
+			if flags&flvio.FILE_HAS_AUDIO != 0 {
 				self.prober.HasAudio = true
 			}
-			if flags & flvio.FILE_HAS_VIDEO != 0 {
+			if flags&flvio.FILE_HAS_VIDEO != 0 {
 				self.prober.HasVideo = true
 			}
 			self.stage++
@@ -490,4 +492,3 @@ func Handler(h *avutil.RegisterHandler) {
 
 	h.CodecTypes = CodecTypes
 }
-

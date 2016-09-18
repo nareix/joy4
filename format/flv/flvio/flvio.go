@@ -1,20 +1,22 @@
 package flvio
 
 import (
-	"io"
-	"time"
 	"fmt"
 	"github.com/nareix/bits/pio"
 	"github.com/nareix/joy4/av"
+	"io"
+	"time"
 )
 
 func TsToTime(ts int32) time.Duration {
-	return time.Millisecond*time.Duration(ts)
+	return time.Millisecond * time.Duration(ts)
 }
 
 func TimeToTs(tm time.Duration) int32 {
 	return int32(tm / time.Millisecond)
 }
+
+const MaxTagSubHeaderLength = 16
 
 const (
 	TAG_AUDIO      = 8
@@ -22,49 +24,15 @@ const (
 	TAG_SCRIPTDATA = 18
 )
 
-const MaxTagSubHeaderLength = 16
-
-type Tag interface {
-	Type() uint8
-	GetData() []byte
-	SetData([]byte)
-	FillHeader([]byte) int
-	ParseHeader([]byte) (int,error)
-}
-
-type Scriptdata struct {
-	Data []byte
-}
-
-func (self Scriptdata) Type() uint8 {
-	return TAG_SCRIPTDATA
-}
-
-func (self *Scriptdata) FillHeader(b []byte) (n int) {
-	return
-}
-
-func (self *Scriptdata) ParseHeader(b []byte) (n int, err error) {
-	return
-}
-
-func (self Scriptdata) GetData() []byte {
-	return self.Data
-}
-
-func (self *Scriptdata) SetData(b []byte) {
-	self.Data = b
-}
-
 const (
-	SOUND_MP3 = 2
+	SOUND_MP3                   = 2
 	SOUND_NELLYMOSER_16KHZ_MONO = 4
-	SOUND_NELLYMOSER_8KHZ_MONO = 5
-	SOUND_NELLYMOSER = 6
-	SOUND_ALAW = 7
-	SOUND_MULAW = 8
-	SOUND_AAC = 10
-	SOUND_SPEEX = 11
+	SOUND_NELLYMOSER_8KHZ_MONO  = 5
+	SOUND_NELLYMOSER            = 6
+	SOUND_ALAW                  = 7
+	SOUND_MULAW                 = 8
+	SOUND_AAC                   = 10
+	SOUND_SPEEX                 = 11
 
 	SOUND_5_5Khz = 0
 	SOUND_11Khz  = 1
@@ -81,7 +49,20 @@ const (
 	AAC_RAW    = 1
 )
 
-type Audiodata struct {
+const (
+	AVC_SEQHDR = 0
+	AVC_NALU   = 1
+	AVC_EOS    = 2
+
+	FRAME_KEY   = 1
+	FRAME_INTER = 2
+
+	VIDEO_H264 = 7
+)
+
+type Tag struct {
+	Type uint8
+
 	/*
 		SoundFormat: UB[4]
 		0 = Linear PCM, platform endian
@@ -139,85 +120,6 @@ type Audiodata struct {
 	*/
 	AACPacketType uint8
 
-	Data []byte
-}
-
-func (self Audiodata) Type() uint8 {
-	return TAG_AUDIO
-}
-
-func (self Audiodata) ChannelLayout() av.ChannelLayout {
-	if self.SoundType == SOUND_MONO {
-		return av.CH_MONO
-	} else {
-		return av.CH_STEREO
-	}
-}
-
-func (self *Audiodata) ParseHeader(b []byte) (n int, err error) {
-	if len(b) < n+1 {
-		err = fmt.Errorf("audiodata: parse invalid")
-		return
-	}
-
-	flags := b[n]
-	n++
-	self.SoundFormat = flags >> 4
-	self.SoundRate = (flags >> 2) & 0x3
-	self.SoundSize = (flags >> 1) & 0x1
-	self.SoundType = flags & 0x1
-
-	switch self.SoundFormat {
-	case SOUND_AAC:
-		if len(b) < n+1 {
-			err = fmt.Errorf("audiodata: parse invalid")
-			return
-		}
-		self.AACPacketType = b[n]
-		n++
-	}
-
-	return
-}
-
-func (self Audiodata) FillHeader(b []byte) (n int) {
-	var flags uint8
-	flags |= self.SoundFormat << 4
-	flags |= self.SoundRate << 2
-	flags |= self.SoundSize << 1
-	flags |= self.SoundType
-	b[n] = flags
-	n++
-
-	switch self.SoundFormat {
-	case SOUND_AAC:
-		b[n] = self.AACPacketType
-		n++
-	}
-
-	return
-}
-
-func (self Audiodata) GetData() []byte {
-	return self.Data
-}
-
-func (self *Audiodata) SetData(b []byte) {
-	self.Data = b
-}
-
-const (
-	AVC_SEQHDR = 0
-	AVC_NALU   = 1
-	AVC_EOS    = 2
-
-	FRAME_KEY   = 1
-	FRAME_INTER = 2
-
-	VIDEO_H264 = 7
-)
-
-type Videodata struct {
 	/*
 		1: keyframe (for AVC, a seekable frame)
 		2: inter frame (for AVC, a non- seekable frame)
@@ -245,15 +147,64 @@ type Videodata struct {
 	*/
 	AVCPacketType uint8
 
-	Data            []byte
 	CompositionTime int32
+
+	Data []byte
 }
 
-func (self Videodata) Type() uint8 {
-	return TAG_VIDEO
+func (self Tag) ChannelLayout() av.ChannelLayout {
+	if self.SoundType == SOUND_MONO {
+		return av.CH_MONO
+	} else {
+		return av.CH_STEREO
+	}
 }
 
-func (self *Videodata) ParseHeader(b []byte) (n int, err error) {
+func (self *Tag) audioParseHeader(b []byte) (n int, err error) {
+	if len(b) < n+1 {
+		err = fmt.Errorf("audiodata: parse invalid")
+		return
+	}
+
+	flags := b[n]
+	n++
+	self.SoundFormat = flags >> 4
+	self.SoundRate = (flags >> 2) & 0x3
+	self.SoundSize = (flags >> 1) & 0x1
+	self.SoundType = flags & 0x1
+
+	switch self.SoundFormat {
+	case SOUND_AAC:
+		if len(b) < n+1 {
+			err = fmt.Errorf("audiodata: parse invalid")
+			return
+		}
+		self.AACPacketType = b[n]
+		n++
+	}
+
+	return
+}
+
+func (self Tag) audioFillHeader(b []byte) (n int) {
+	var flags uint8
+	flags |= self.SoundFormat << 4
+	flags |= self.SoundRate << 2
+	flags |= self.SoundSize << 1
+	flags |= self.SoundType
+	b[n] = flags
+	n++
+
+	switch self.SoundFormat {
+	case SOUND_AAC:
+		b[n] = self.AACPacketType
+		n++
+	}
+
+	return
+}
+
+func (self *Tag) videoParseHeader(b []byte) (n int, err error) {
 	if len(b) < n+1 {
 		err = fmt.Errorf("videodata: parse invalid")
 		return
@@ -278,7 +229,7 @@ func (self *Videodata) ParseHeader(b []byte) (n int, err error) {
 	return
 }
 
-func (self Videodata) FillHeader(b []byte) (n int) {
+func (self Tag) videoFillHeader(b []byte) (n int) {
 	flags := self.FrameType<<4 | self.CodecID
 	b[n] = flags
 	n++
@@ -289,12 +240,28 @@ func (self Videodata) FillHeader(b []byte) (n int) {
 	return
 }
 
-func (self Videodata) GetData() []byte {
-	return self.Data
+func (self Tag) FillHeader(b []byte) (n int) {
+	switch self.Type {
+	case TAG_AUDIO:
+		return self.audioFillHeader(b)
+
+	case TAG_VIDEO:
+		return self.videoFillHeader(b)
+	}
+
+	return
 }
 
-func (self *Videodata) SetData(b []byte) {
-	self.Data = b
+func (self *Tag) ParseHeader(b []byte) (n int, err error) {
+	switch self.Type {
+	case TAG_AUDIO:
+		return self.audioParseHeader(b)
+
+	case TAG_VIDEO:
+		return self.videoParseHeader(b)
+	}
+
+	return
 }
 
 const (
@@ -313,14 +280,8 @@ func ParseTagHeader(b []byte) (tag Tag, ts int32, datalen int, err error) {
 	tagtype := b[0]
 
 	switch tagtype {
-	case TAG_AUDIO:
-		tag = &Audiodata{}
-
-	case TAG_VIDEO:
-		tag = &Videodata{}
-
-	case TAG_SCRIPTDATA:
-		tag = &Scriptdata{}
+	case TAG_AUDIO, TAG_VIDEO, TAG_SCRIPTDATA:
+		tag = Tag{Type: tagtype}
 
 	default:
 		err = fmt.Errorf("flvio: ReadTag tagtype=%d invalid", tagtype)
@@ -333,7 +294,7 @@ func ParseTagHeader(b []byte) (tag Tag, ts int32, datalen int, err error) {
 	var tshi uint8
 	tslo = pio.U24BE(b[4:7])
 	tshi = b[7]
-	ts = int32(tslo|uint32(tshi)<<24)
+	ts = int32(tslo | uint32(tshi)<<24)
 
 	return
 }
@@ -353,10 +314,10 @@ func ReadTag(r io.Reader, b []byte) (tag Tag, ts int32, err error) {
 	}
 
 	var n int
-	if n, err = tag.ParseHeader(data); err != nil {
+	if n, err = (&tag).ParseHeader(data); err != nil {
 		return
 	}
-	tag.SetData(data[n:])
+	tag.Data = data[n:]
 
 	if _, err = io.ReadFull(r, b[:4]); err != nil {
 		return
@@ -369,7 +330,7 @@ func FillTagHeader(b []byte, tagtype uint8, datalen int, ts int32) (n int) {
 	n++
 	pio.PutU24BE(b[n:], uint32(datalen))
 	n += 3
-	pio.PutU24BE(b[n:], uint32(ts & 0xffffff))
+	pio.PutU24BE(b[n:], uint32(ts&0xffffff))
 	n += 3
 	b[n] = uint8(ts >> 24)
 	n++
@@ -385,12 +346,12 @@ func FillTagTrailer(b []byte, datalen int) (n int) {
 }
 
 func WriteTag(w io.Writer, tag Tag, ts int32, b []byte) (err error) {
-	data := tag.GetData()
+	data := tag.Data
 
 	n := tag.FillHeader(b[TagHeaderLength:])
-	datalen := len(data)+n
+	datalen := len(data) + n
 
-	n += FillTagHeader(b, tag.Type(), datalen, ts)
+	n += FillTagHeader(b, tag.Type, datalen, ts)
 
 	if _, err = w.Write(b[:n]); err != nil {
 		return
@@ -439,7 +400,7 @@ func ParseFileHeader(b []byte) (flags uint8, skip int, err error) {
 
 	flags = b[4]
 
-	skip = int(pio.U32BE(b[5:9]))-9+4
+	skip = int(pio.U32BE(b[5:9])) - 9 + 4
 	if skip < 0 {
 		err = fmt.Errorf("flvio: file header datasize invalid")
 		return
@@ -447,5 +408,3 @@ func ParseFileHeader(b []byte) (flags uint8, skip int, err error) {
 
 	return
 }
-
-
