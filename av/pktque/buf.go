@@ -5,33 +5,31 @@ import (
 )
 
 type Buf struct {
-	Head, Tail    BufPos
-	pkts          []av.Packet
-	size, maxsize int
-	count         int
+	Head, Tail BufPos
+	pkts       []av.Packet
+	Size       int
+	Count      int
 }
 
 func NewBuf() *Buf {
 	return &Buf{
-		pkts:    make([]av.Packet, 64),
-		maxsize: 1024 * 512,
+		pkts: make([]av.Packet, 64),
 	}
 }
 
-func (self *Buf) SetMaxSize(size int) {
-	self.maxsize = size
-	self.shrink()
-}
-
-func (self *Buf) shrink() {
-	for self.size > self.maxsize && self.count > 1 {
-		i := int(self.Head) & (len(self.pkts) - 1)
-		pkt := self.pkts[i]
-		self.pkts[i] = av.Packet{}
-		self.size -= len(pkt.Data)
-		self.Head++
-		self.count--
+func (self *Buf) Pop() av.Packet {
+	if self.Count == 0 {
+		panic("pktque.Buf: Pop() when count == 0")
 	}
+
+	i := int(self.Head) & (len(self.pkts) - 1)
+	pkt := self.pkts[i]
+	self.pkts[i] = av.Packet{}
+	self.Size -= len(pkt.Data)
+	self.Head++
+	self.Count--
+
+	return pkt
 }
 
 func (self *Buf) grow() {
@@ -43,14 +41,13 @@ func (self *Buf) grow() {
 }
 
 func (self *Buf) Push(pkt av.Packet) {
-	if self.count == len(self.pkts) {
+	if self.Count == len(self.pkts) {
 		self.grow()
 	}
 	self.pkts[int(self.Tail)&(len(self.pkts)-1)] = pkt
 	self.Tail++
-	self.count++
-	self.size += len(pkt.Data)
-	self.shrink()
+	self.Count++
+	self.Size += len(pkt.Data)
 }
 
 func (self *Buf) Get(pos BufPos) av.Packet {
