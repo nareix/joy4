@@ -1,55 +1,44 @@
 package ts
 
 import (
-	"time"
-	"bufio"
 	"fmt"
 	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/format/ts/tsio"
-	"github.com/nareix/bits/pio"
 	"github.com/nareix/joy4/codec/aacparser"
 	"github.com/nareix/joy4/codec/h264parser"
+	"github.com/nareix/joy4/format/ts/tsio"
 	"io"
+	"time"
 )
 
 var CodecTypes = []av.CodecType{av.H264, av.AAC}
 
 type Muxer struct {
-	w                        writeFlusher
+	w                        io.Writer
 	streams                  []*Stream
 	PaddingToMakeCounterCont bool
 
 	psidata []byte
-	peshdr []byte
-	tshdr []byte
+	peshdr  []byte
+	tshdr   []byte
 	adtshdr []byte
-	datav [][]byte
-	nalus [][]byte
+	datav   [][]byte
+	nalus   [][]byte
 
 	tswpat, tswpmt *tsio.TSWriter
 }
 
-type writeFlusher interface {
-	io.Writer
-	Flush() error
-}
-
-func NewMuxerWriteFlusher(w writeFlusher) *Muxer {
-	return &Muxer{
-		w: w,
-		psidata: make([]byte, 188),
-		peshdr: make([]byte, tsio.MaxPESHeaderLength),
-		tshdr: make([]byte, tsio.MaxTSHeaderLength),
-		adtshdr: make([]byte, aacparser.ADTSHeaderLength),
-		nalus: make([][]byte, 16),
-		datav: make([][]byte, 16),
-		tswpmt: tsio.NewTSWriter(tsio.PMT_PID),
-		tswpat: tsio.NewTSWriter(tsio.PAT_PID),
-	}
-}
-
 func NewMuxer(w io.Writer) *Muxer {
-	return NewMuxerWriteFlusher(bufio.NewWriterSize(w, pio.RecommendBufioSize))
+	return &Muxer{
+		w:       w,
+		psidata: make([]byte, 188),
+		peshdr:  make([]byte, tsio.MaxPESHeaderLength),
+		tshdr:   make([]byte, tsio.MaxTSHeaderLength),
+		adtshdr: make([]byte, aacparser.ADTSHeaderLength),
+		nalus:   make([][]byte, 16),
+		datav:   make([][]byte, 16),
+		tswpmt:  tsio.NewTSWriter(tsio.PMT_PID),
+		tswpat:  tsio.NewTSWriter(tsio.PAT_PID),
+	}
 }
 
 func (self *Muxer) newStream(codec av.CodecData) (err error) {
@@ -69,8 +58,8 @@ func (self *Muxer) newStream(codec av.CodecData) (err error) {
 	stream := &Stream{
 		muxer:     self,
 		CodecData: codec,
-		pid: pid,
-		tsw: tsio.NewTSWriter(pid),
+		pid:       pid,
+		tsw:       tsio.NewTSWriter(pid),
 	}
 	self.streams = append(self.streams, stream)
 	return
@@ -93,14 +82,11 @@ func (self *Muxer) WriteTrailer() (err error) {
 			}
 		}
 	}
-
-	if err = self.w.Flush(); err != nil {
-		return
-	}
 	return
 }
 
-func (self *Muxer) ChangeWriter(w io.Writer) (err error) {
+func (self *Muxer) SetWriter(w io.Writer) {
+	self.w = w
 	return
 }
 
@@ -111,8 +97,8 @@ func (self *Muxer) WritePATPMT() (err error) {
 		},
 	}
 	patlen := pat.Marshal(self.psidata[tsio.PSIHeaderLength:])
-	tsio.FillPSI(self.psidata, tsio.TableIdPAT, tsio.TableExtPAT, patlen)
-	self.datav[0] = self.psidata[:tsio.PSIHeaderLength+patlen]
+	n := tsio.FillPSI(self.psidata, tsio.TableIdPAT, tsio.TableExtPAT, patlen)
+	self.datav[0] = self.psidata[:n]
 	if err = self.tswpat.WritePackets(self.w, self.datav[:1], 0, false, true); err != nil {
 		return
 	}
@@ -122,12 +108,12 @@ func (self *Muxer) WritePATPMT() (err error) {
 		switch stream.Type() {
 		case av.AAC:
 			elemStreams = append(elemStreams, tsio.ElementaryStreamInfo{
-				StreamType: tsio.ElementaryStreamTypeAdtsAAC,
+				StreamType:    tsio.ElementaryStreamTypeAdtsAAC,
 				ElementaryPID: stream.pid,
 			})
 		case av.H264:
 			elemStreams = append(elemStreams, tsio.ElementaryStreamInfo{
-				StreamType: tsio.ElementaryStreamTypeH264,
+				StreamType:    tsio.ElementaryStreamTypeH264,
 				ElementaryPID: stream.pid,
 			})
 		}
@@ -143,8 +129,8 @@ func (self *Muxer) WritePATPMT() (err error) {
 		return
 	}
 	pmt.Marshal(self.psidata[tsio.PSIHeaderLength:])
-	tsio.FillPSI(self.psidata, tsio.TableIdPMT, tsio.TableExtPMT, pmtlen)
-	self.datav[0] = self.psidata[:tsio.PSIHeaderLength+pmtlen]
+	n = tsio.FillPSI(self.psidata, tsio.TableIdPMT, tsio.TableExtPMT, pmtlen)
+	self.datav[0] = self.psidata[:n]
 	if err = self.tswpmt.WritePackets(self.w, self.datav[:1], 0, false, true); err != nil {
 		return
 	}
