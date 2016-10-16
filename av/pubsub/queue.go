@@ -48,7 +48,7 @@ func (self *Queue) SetMaxGopCount(n int) {
 	return
 }
 
-func (self *Queue) WriteHeader(streams []av.CodecData) {
+func (self *Queue) WriteHeader(streams []av.CodecData) error {
 	self.lock.Lock()
 
 	self.streams = streams
@@ -60,6 +60,12 @@ func (self *Queue) WriteHeader(streams []av.CodecData) {
 	self.cond.Broadcast()
 
 	self.lock.Unlock()
+
+	return nil
+}
+
+func (self *Queue) WriteTrailer() error {
+	return nil
 }
 
 // After Close() called, all QueueCursor's ReadPacket will return io.EOF.

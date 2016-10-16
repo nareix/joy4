@@ -1,15 +1,15 @@
 package main
 
 import (
-	"sync"
 	"fmt"
-	"time"
 	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/format"
 	"github.com/nareix/joy4/av/avutil"
-	"github.com/nareix/joy4/av/pubsub"
 	"github.com/nareix/joy4/av/pktque"
+	"github.com/nareix/joy4/av/pubsub"
+	"github.com/nareix/joy4/format"
 	"github.com/nareix/joy4/format/rtmp"
+	"sync"
+	"time"
 )
 
 func init() {
@@ -17,13 +17,13 @@ func init() {
 }
 
 type FrameDropper struct {
-	Interval int
-	n int
-	skipping bool
-	DelaySkip time.Duration
-	lasttime time.Time
-	lastpkttime time.Duration
-	delay time.Duration
+	Interval     int
+	n            int
+	skipping     bool
+	DelaySkip    time.Duration
+	lasttime     time.Time
+	lastpkttime  time.Duration
+	delay        time.Duration
 	SkipInterval int
 }
 
@@ -125,7 +125,7 @@ func main() {
 			}
 
 			demuxer := &pktque.FilterDemuxer{
-				Filter: filters,
+				Filter:  filters,
 				Demuxer: cursor,
 			}
 
@@ -134,17 +134,16 @@ func main() {
 	}
 
 	server.HandlePublish = func(conn *rtmp.Conn) {
-		streams, _ := conn.Streams()
-
 		l.Lock()
 		ch := channels[conn.URL.Path]
 		if ch == nil {
 			ch = &Channel{}
-			ch.que = pubsub.NewQueue(streams)
+			ch.que = pubsub.NewQueue()
 			query := conn.URL.Query()
-			if q := query.Get("cachetime"); q != "" {
-				dur, _ := time.ParseDuration(q)
-				ch.que.SetMaxDuration(dur)
+			if q := query.Get("cachegop"); q != "" {
+				var n int
+				fmt.Sscanf(q, "%d", &n)
+				ch.que.SetMaxGopCount(n)
 			}
 			channels[conn.URL.Path] = ch
 		} else {
@@ -155,7 +154,7 @@ func main() {
 			return
 		}
 
-		avutil.CopyPackets(ch.que, conn)
+		avutil.CopyFile(ch.que, conn)
 
 		l.Lock()
 		delete(channels, conn.URL.Path)
@@ -176,6 +175,6 @@ func main() {
 	// ffplay rtmp://localhost/movie?delaytime=10s&waitkey=true
 	// ffplay rtmp://localhost/movie?delaytime=20s
 
-	// ffmpeg -re -i movie.flv -c copy -f flv rtmp://localhost/movie?cachetime=30s
-	// ffmpeg -re -i movie.flv -c copy -f flv rtmp://localhost/movie?cachetime=1m
+	// ffmpeg -re -i movie.flv -c copy -f flv rtmp://localhost/movie?cachegop=2
+	// ffmpeg -re -i movie.flv -c copy -f flv rtmp://localhost/movie?cachegop=1
 }
