@@ -459,16 +459,6 @@ func (self *Conn) readConnect() (err error) {
 					cberr = self.OnPlayOrPublish(self.commandname, connectparams)
 				}
 
-				var code string
-				var description string
-				if cberr != nil {
-					code = "NetStream.Publish.Failed"
-					description = cberr.Error()
-				} else {
-					code = "NetStream.Publish.Start"
-					description = "Start publishing"
-				}
-
 				// > onStatus()
 				if err = self.writeCommandMsg(5, self.avmsgsid,
 					"onStatus", self.commandtransid, nil,
