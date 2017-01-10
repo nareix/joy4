@@ -53,8 +53,8 @@ func main() {
 		ch := channels[conn.URL.Path]
 		if ch == nil {
 			ch = &Channel{}
-			ch.que = pubsub.NewQueue(streams)
-			ch.que.SetMaxDuration(time.Minute)
+			ch.que = pubsub.NewQueue()
+			ch.que.WriteHeader(streams)
 			channels[conn.URL.Path] = ch
 		} else {
 			ch = nil
