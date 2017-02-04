@@ -30,6 +30,9 @@ func (self *Muxer) WriteHeader(streams []av.CodecData) (err error) {
 		return
 	}
 	self.config = streams[0].(aacparser.CodecData).Config
+	if self.config.ObjectType > aacparser.AOT_AAC_LTP {
+		err = fmt.Errorf("aac: AOT %d is not allowed in ADTS", self.config.ObjectType)
+	}
 	return
 }
 
