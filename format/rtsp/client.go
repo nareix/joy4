@@ -350,16 +350,18 @@ func (self *Client) handle401(res *Response) (err error) {
 			password, _ = self.url.User.Password()
 
 			self.authHeaders = func(method string) []string {
-				headers := []string{
-					fmt.Sprintf(`Authorization: Basic %s`, base64.StdEncoding.EncodeToString([]byte(username+":"+password))),
-				}
-				if nonce != "" {
+				var headers []string
+				if nonce == "" {
+					headers = []string{
+						fmt.Sprintf(`Authorization: Basic %s`, base64.StdEncoding.EncodeToString([]byte(username+":"+password))),
+					}
+				} else {
 					hs1 := md5hash(username + ":" + realm + ":" + password)
 					hs2 := md5hash(method + ":" + self.requestUri)
 					response := md5hash(hs1 + ":" + nonce + ":" + hs2)
-					headers = append(headers, fmt.Sprintf(
+					headers = []string{fmt.Sprintf(
 						`Authorization: Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s"`,
-						username, realm, nonce, self.requestUri, response))
+						username, realm, nonce, self.requestUri, response)}
 				}
 				return headers
 			}
