@@ -3,7 +3,6 @@ package main
 import (
 	"sync"
 	"io"
-	"time"
 	"net/http"
 	"github.com/nareix/joy4/format"
 	"github.com/nareix/joy4/av/avutil"
@@ -79,7 +78,8 @@ func main() {
 
 		if ch != nil {
 			w.Header().Set("Content-Type", "video/x-flv")
-			w.Header().Set("Transfer-Encoding", "chunked")
+			w.Header().Set("Transfer-Encoding", "chunked")		
+			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.WriteHeader(200)
 			flusher := w.(http.Flusher)
 			flusher.Flush()
