@@ -7,7 +7,7 @@ import (
 	"github.com/nareix/joy4/codec/aacparser"
 	"github.com/nareix/joy4/codec/h264parser"
 	"github.com/nareix/joy4/format/mp4/mp4io"
-	"github.com/nareix/bits/pio"
+	"github.com/nareix/joy4/utils/bits/pio"
 	"io"
 	"bufio"
 )
