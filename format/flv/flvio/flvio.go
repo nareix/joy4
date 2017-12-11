@@ -2,10 +2,11 @@ package flvio
 
 import (
 	"fmt"
-	"github.com/nareix/joy4/utils/bits/pio"
-	"github.com/nareix/joy4/av"
 	"io"
 	"time"
+
+	"github.com/nareix/joy4/av"
+	"github.com/nareix/joy4/utils/bits/pio"
 )
 
 func TsToTime(ts int32) time.Duration {
@@ -308,16 +309,18 @@ func ReadTag(r io.Reader, b []byte) (tag Tag, ts int32, err error) {
 		return
 	}
 
-	data := make([]byte, datalen)
-	if _, err = io.ReadFull(r, data); err != nil {
-		return
-	}
+	if datalen != 0 {
+		data := make([]byte, datalen)
+		if _, err = io.ReadFull(r, data); err != nil {
+			return
+		}
 
-	var n int
-	if n, err = (&tag).ParseHeader(data); err != nil {
-		return
+		var n int
+		if n, err = (&tag).ParseHeader(data); err != nil {
+			return
+		}
+		tag.Data = data[n:]
 	}
-	tag.Data = data[n:]
 
 	if _, err = io.ReadFull(r, b[:4]); err != nil {
 		return
