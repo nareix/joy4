@@ -1,12 +1,14 @@
 package flvio
 
 import (
+	"Gout/joy4/codec/h264parser"
 	"fmt"
 	"io"
 	"time"
 
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/utils/bits/pio"
+	"github.com/davecgh/go-spew/spew"
+	"github.com/jinleileiking/joy4/av"
+	"github.com/jinleileiking/joy4/utils/bits/pio"
 )
 
 func TsToTime(ts int32) time.Duration {
@@ -151,6 +153,8 @@ type Tag struct {
 	CompositionTime int32
 
 	Data []byte
+
+	NALUFormat string
 }
 
 func (self Tag) ChannelLayout() av.ChannelLayout {
@@ -320,11 +324,31 @@ func ReadTag(r io.Reader, b []byte) (tag Tag, ts int32, err error) {
 			return
 		}
 		tag.Data = data[n:]
+
+		if tag.Type == TAG_VIDEO {
+			_, nal_type := h264parser.SplitNALUs(tag.Data)
+
+			if nal_type == h264parser.NALU_AVCC {
+				tag.NALUFormat = "AVCC"
+			}
+
+			if nal_type == h264parser.NALU_RAW {
+				tag.NALUFormat = "RAW"
+			}
+
+			if nal_type == h264parser.NALU_ANNEXB {
+				tag.NALUFormat = "ANNEXB"
+			}
+
+			spew.Dump(tag.NALUFormat)
+		}
 	}
 
+	// b[:4] ---> preTagSize
 	if _, err = io.ReadFull(r, b[:4]); err != nil {
 		return
 	}
+
 	return
 }
 

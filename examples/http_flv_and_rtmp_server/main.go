@@ -4,11 +4,11 @@ import (
 	"sync"
 	"io"
 	"net/http"
-	"github.com/nareix/joy4/format"
-	"github.com/nareix/joy4/av/avutil"
-	"github.com/nareix/joy4/av/pubsub"
-	"github.com/nareix/joy4/format/rtmp"
-	"github.com/nareix/joy4/format/flv"
+	"github.com/jinleileiking/joy4/format"
+	"github.com/jinleileiking/joy4/av/avutil"
+	"github.com/jinleileiking/joy4/av/pubsub"
+	"github.com/jinleileiking/joy4/format/rtmp"
+	"github.com/jinleileiking/joy4/format/flv"
 )
 
 func init() {
