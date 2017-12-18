@@ -1,13 +1,14 @@
 package flvio
 
 import (
-	"Gout/joy4/codec/h264parser"
 	"fmt"
 	"io"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/jinleileiking/joy4/av"
+	"github.com/jinleileiking/joy4/codec/h264parser"
+	"github.com/jinleileiking/joy4/common"
 	"github.com/jinleileiking/joy4/utils/bits/pio"
 )
 
@@ -155,6 +156,7 @@ type Tag struct {
 	Data []byte
 
 	NALUFormat string
+	NALUInfos  []common.TNALUInfo
 }
 
 func (self Tag) ChannelLayout() av.ChannelLayout {
@@ -325,8 +327,9 @@ func ReadTag(r io.Reader, b []byte) (tag Tag, ts int32, err error) {
 		}
 		tag.Data = data[n:]
 
+		// Data is h264 nalus
 		if tag.Type == TAG_VIDEO {
-			_, nal_type := h264parser.SplitNALUs(tag.Data)
+			nalus, nal_type := h264parser.SplitNALUs(tag.Data)
 
 			if nal_type == h264parser.NALU_AVCC {
 				tag.NALUFormat = "AVCC"
@@ -340,7 +343,17 @@ func ReadTag(r io.Reader, b []byte) (tag Tag, ts int32, err error) {
 				tag.NALUFormat = "ANNEXB"
 			}
 
-			spew.Dump(tag.NALUFormat)
+			for _, nalu := range nalus {
+				if _, info, err := h264parser.ParseSliceHeaderFromNALU(nalu); err == nil {
+					// spew.Dump(info)
+					tag.NALUInfos = append(tag.NALUInfos, info)
+				} else {
+					spew.Dump(err)
+				}
+
+			}
+
+			// spew.Dump(tag.NALUInfos)
 		}
 	}
 

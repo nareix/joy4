@@ -4,6 +4,8 @@ package av
 import (
 	"fmt"
 	"time"
+
+	"github.com/jinleileiking/joy4/common"
 )
 
 // Audio sample format.
@@ -231,8 +233,11 @@ type Packet struct {
 	Idx             int8          // stream index in container format
 	CompositionTime time.Duration // packet presentation time minus decode time for H264 B-Frame
 	AVCPacketType   string
-	Time            time.Duration // packet decode time
-	Data            []byte        // packet data
+	NALUFormat      string
+	NALUInfos       []common.TNALUInfo
+
+	Time time.Duration // packet decode time
+	Data []byte        // packet data
 }
 
 // Raw audio frame.
