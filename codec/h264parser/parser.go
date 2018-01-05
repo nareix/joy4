@@ -738,9 +738,9 @@ func ParseSliceHeaderFromNALU(packet []byte) (sliceType SliceType, info common.T
 		sliceType = SLICE_B
 	case 2, 4, 7, 9:
 		sliceType = SLICE_I
-	default:
-		err = fmt.Errorf("h264parser: slice_type=%d invalid", u)
-		return
+		// default:
+		// err = fmt.Errorf("h264parser: slice_type=%d invalid", u)
+		// return
 	}
 
 	return
