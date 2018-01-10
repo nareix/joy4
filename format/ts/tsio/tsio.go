@@ -193,7 +193,7 @@ func (self PMT) parseDescs(b []byte) (descs []Descriptor, err error) {
 			desc.Tag = b[n]
 			desc.Data = make([]byte, b[n+1])
 			n += 2
-			if n+len(desc.Data) < len(b) {
+			if n+len(desc.Data) <= len(b) {
 				copy(desc.Data, b[n:])
 				descs = append(descs, desc)
 				n += len(desc.Data)
