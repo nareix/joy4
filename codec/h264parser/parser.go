@@ -750,11 +750,13 @@ func ParseSliceHeaderFromNALU(packet []byte) (sliceType SliceType, info common.T
 		// err = fmt.Errorf("h264parser: slice_type=%d invalid", u)
 		// return
 	}
+	info.SliceType = MAP_SLICE_TYPE[int(u)]
 
 	return
 }
 
 var MAP_UNIT_TYPE map[int]string
+var MAP_SLICE_TYPE map[int]string
 
 func init() {
 	MAP_UNIT_TYPE = map[int]string{
@@ -777,5 +779,17 @@ func init() {
 		16: "REV 16",
 		17: "REV 17",
 		18: "REV 18",
+	}
+	MAP_SLICE_TYPE = map[int]string{
+		0: "P",
+		1: "B",
+		2: "I",
+		3: "SP",
+		4: "SI",
+		5: "P",
+		6: "B",
+		7: "I",
+		8: "SP",
+		9: "SI",
 	}
 }
