@@ -701,6 +701,14 @@ func ParseSliceHeaderFromNALU(packet []byte) (sliceType SliceType, info common.T
 	info.RefIdc = (int(packet[0]&0x1f) >> 5)
 
 	info.UnitType = MAP_UNIT_TYPE[int(packet[0]&0x1f)]
+	info.NumBytes = len(packet)
+	info.Data = append(info.Data, packet...)
+
+	// if info.UnitType == "FILLER" {
+	// 	if len(packet) > 16 {
+	// 		spew.Dump(packet[0:15])
+	// 	}
+	// }
 
 	if len(packet) <= 1 {
 		err = fmt.Errorf("h264parser: packet too short to parse slice header")
