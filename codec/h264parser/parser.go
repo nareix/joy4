@@ -698,6 +698,7 @@ const (
 
 func ParseSliceHeaderFromNALU(packet []byte) (sliceType SliceType, info common.TNALUInfo, err error) {
 
+	// spew.Printf("%08b\n", packet[0]&0x1f)
 	info.RefIdc = (int(packet[0]&0x1f) >> 5)
 
 	info.UnitType = MAP_UNIT_TYPE[int(packet[0]&0x1f)]

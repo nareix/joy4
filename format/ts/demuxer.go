@@ -13,14 +13,21 @@ import (
 	"github.com/jinleileiking/joy4/utils/bits/pio"
 )
 
+type TPayloadInfos struct {
+	Pts         int
+	Dts         int
+	PayloadInfo []byte
+}
+
 type Demuxer struct {
 	r *bufio.Reader
 
 	pkts []av.Packet
 
-	Pat      *tsio.PAT
-	Pmt      *tsio.PMT
-	Payloads [][]byte
+	Pat          *tsio.PAT
+	Pmt          *tsio.PMT
+	Payloads     [][]byte
+	PayloadInfos []TPayloadInfos
 
 	pat     *tsio.PAT
 	pmt     *tsio.PMT
@@ -243,6 +250,10 @@ func (self *Stream) payloadEnd() (n int, err error) {
 	switch self.streamType {
 	case tsio.ElementaryStreamTypeAdtsAAC:
 		self.demuxer.Payloads = append(self.demuxer.Payloads, payload)
+		payload_info.PayloadInfo = payload
+		self.demuxer.PayloadInfos = append(self.demuxer.PayloadInfos, payload_info)
+
+		// self.demuxer.PayloadInfos.PayloadInfo = append(self.demuxer.PayloadInfos.PayloadInfo, payload)
 		// fmt.Println("Payload aac end")
 		var config aacparser.MPEG4AudioConfig
 
@@ -265,6 +276,10 @@ func (self *Stream) payloadEnd() (n int, err error) {
 
 	case tsio.ElementaryStreamTypeH264:
 		self.demuxer.Payloads = append(self.demuxer.Payloads, payload)
+		// self.demuxer.PayloadInfos.PayloadInfo = append(self.demuxer.PayloadInfos.PayloadInfo, payload)
+		payload_info.PayloadInfo = payload
+		self.demuxer.PayloadInfos = append(self.demuxer.PayloadInfos, payload_info)
+
 		// fmt.Println("Payload h264 end")
 		// nalus, typ := h264parser.SplitNALUs(payload)
 		nalus, _ := h264parser.SplitNALUs(payload)
@@ -304,6 +319,7 @@ func (self *Stream) payloadEnd() (n int, err error) {
 }
 
 var total int
+var payload_info TPayloadInfos
 
 func (self *Stream) handleTSPacket(start bool, iskeyframe bool, payload []byte) (err error) {
 	if start {
@@ -314,6 +330,8 @@ func (self *Stream) handleTSPacket(start bool, iskeyframe bool, payload []byte) 
 		if hdrlen, _, self.datalen, self.pts, self.dts, err = tsio.ParsePESHeader(payload); err != nil {
 			return
 		}
+		payload_info.Pts = int(self.pts)
+		payload_info.Dts = int(self.dts)
 		self.iskeyframe = iskeyframe
 		if self.datalen == 0 {
 			self.data = make([]byte, 0, 4096)
