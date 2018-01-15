@@ -266,7 +266,8 @@ func (self *Stream) payloadEnd() (n int, err error) {
 	case tsio.ElementaryStreamTypeH264:
 		self.demuxer.Payloads = append(self.demuxer.Payloads, payload)
 		// fmt.Println("Payload h264 end")
-		nalus, typ := h264parser.SplitNALUs(payload)
+		// nalus, typ := h264parser.SplitNALUs(payload)
+		nalus, _ := h264parser.SplitNALUs(payload)
 
 		// spew.Dump(typ)
 		var sps, pps []byte
