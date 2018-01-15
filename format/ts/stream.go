@@ -2,6 +2,7 @@ package ts
 
 import (
 	"time"
+
 	"github.com/jinleileiking/joy4/av"
 	"github.com/jinleileiking/joy4/format/ts/tsio"
 )
@@ -12,16 +13,16 @@ type Stream struct {
 	demuxer *Demuxer
 	muxer   *Muxer
 
-	pid    uint16
-	streamId   uint8
-	streamType uint8
+	pid           uint16
+	streamId      uint8
+	streamType    uint8
+	streamTypeDes string
 
-	tsw       *tsio.TSWriter
-	idx  int
+	tsw *tsio.TSWriter
+	idx int
 
 	iskeyframe bool
-	pts, dts time.Duration
-	data []byte
-	datalen int
+	pts, dts   time.Duration
+	data       []byte
+	datalen    int
 }
-

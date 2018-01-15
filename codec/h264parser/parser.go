@@ -755,6 +755,30 @@ func ParseSliceHeaderFromNALU(packet []byte) (sliceType SliceType, info common.T
 	return
 }
 
+func ParseNALUs(b []byte) (info common.TNALUInfos) {
+	nalus, nal_type := SplitNALUs(b)
+
+	if nal_type == NALU_AVCC {
+		info.NALUFormat = "AVCC"
+	} else if nal_type == NALU_RAW {
+		info.NALUFormat = "RAW"
+	} else if nal_type == NALU_ANNEXB {
+		info.NALUFormat = "ANNEXB"
+	} else {
+		info.NALUFormat = "OTHER"
+	}
+
+	for _, nalu := range nalus {
+		if _, inf, err := ParseSliceHeaderFromNALU(nalu); err == nil {
+			info.Infos = append(info.Infos, inf)
+		} else {
+			fmt.Println("Error parse header")
+		}
+
+	}
+	return
+}
+
 var MAP_UNIT_TYPE map[int]string
 var MAP_SLICE_TYPE map[int]string
 
