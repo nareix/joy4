@@ -295,7 +295,7 @@ func (self *AudioEncoder) Setup() (err error) {
 
 	ff.codecCtx.sample_fmt = sampleFormatAV2FF(self.SampleFormat)
 	ff.codecCtx.sample_rate = C.int(self.SampleRate)
-	ff.codecCtx.bit_rate = C.int64_t(self.Bitrate)
+	ff.codecCtx.bit_rate = C.int(self.Bitrate)
 	ff.codecCtx.channel_layout = channelLayoutAV2FF(self.ChannelLayout)
 	ff.codecCtx.strict_std_compliance = C.FF_COMPLIANCE_EXPERIMENTAL
 	ff.codecCtx.flags = C.AV_CODEC_FLAG_GLOBAL_HEADER
