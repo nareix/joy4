@@ -211,6 +211,7 @@ func (self Tag) audioFillHeader(b []byte) (n int) {
 	return
 }
 
+// VIDEODATA + AVCVIDEOPACKET
 func (self *Tag) videoParseHeader(b []byte) (n int, err error) {
 	if len(b) < n+1 {
 		err = fmt.Errorf("videodata: parse invalid")
@@ -283,6 +284,8 @@ const (
 const TagHeaderLength = 11
 const TagTrailerLength = 4
 
+//FLVTAG
+// 09/08 ...  xxxxx
 func ParseTagHeader(b []byte) (tag Tag, ts int32, datalen int, err error) {
 	tagtype := b[0]
 
@@ -328,7 +331,8 @@ func ReadTag(r io.Reader, b []byte) (tag Tag, ts int32, err error) {
 		tag.Data = data[n:]
 
 		// Data is h264 nalus
-		if tag.Type == TAG_VIDEO {
+		if tag.Type == TAG_VIDEO && len(tag.Data) != 0 {
+
 			nalus, nal_type := h264parser.SplitNALUs(tag.Data)
 
 			if nal_type == h264parser.NALU_AVCC {
@@ -344,6 +348,8 @@ func ReadTag(r io.Reader, b []byte) (tag Tag, ts int32, err error) {
 			}
 
 			for _, nalu := range nalus {
+				// spew.Dump(nalus)
+				// os.Exit(1)
 				if _, info, err := h264parser.ParseSliceHeaderFromNALU(nalu); err == nil {
 					// spew.Dump(info)
 					tag.NALUInfos = append(tag.NALUInfos, info)
@@ -355,6 +361,11 @@ func ReadTag(r io.Reader, b []byte) (tag Tag, ts int32, err error) {
 
 			// spew.Dump(tag.NALUInfos)
 		}
+
+		if tag.Type == TAG_VIDEO && len(tag.Data) == 0 {
+			tag.NALUFormat = "N/A"
+		}
+
 	}
 
 	// b[:4] ---> preTagSize

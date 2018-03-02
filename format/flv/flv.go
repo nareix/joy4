@@ -183,6 +183,11 @@ func (self *Prober) TagToPacket(tag flvio.Tag, timestamp int32) (pkt av.Packet, 
 			pkt.AVCPacketType = "SEQHDR"
 			pkt.IsKeyFrame = tag.FrameType == flvio.FRAME_KEY
 			pkt.Data = tag.Data
+		case flvio.AVC_EOS:
+			ok = true
+			pkt.AVCPacketType = "EOS"
+			pkt.IsKeyFrame = tag.FrameType == flvio.FRAME_KEY
+			pkt.Data = tag.Data
 		}
 
 	case flvio.TAG_AUDIO:
