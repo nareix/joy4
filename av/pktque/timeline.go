@@ -19,14 +19,14 @@ type tlSeg struct {
 }
 
 type Timeline struct {
-	segs []tlSeg
+	segs   []tlSeg
 	headtm time.Duration
 }
 
 func (self *Timeline) Push(tm time.Duration, dur time.Duration) {
 	if len(self.segs) > 0 {
 		tail := self.segs[len(self.segs)-1]
-		diff := tm-(tail.tm+tail.dur)
+		diff := tm - (tail.tm + tail.dur)
 		if diff < 0 {
 			tm -= diff
 		}
@@ -58,4 +58,3 @@ func (self *Timeline) Pop(dur time.Duration) (tm time.Duration) {
 
 	return
 }
-
