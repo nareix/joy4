@@ -1,9 +1,10 @@
 package rtsp
 
 import (
+	"time"
+
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/format/rtsp/sdp"
-	"time"
 )
 
 type Stream struct {
@@ -19,11 +20,10 @@ type Stream struct {
 	spsChanged bool
 	ppsChanged bool
 
-	gotpkt    bool
-	pkt       av.Packet
-	timestamp uint32
+	gotpkt         bool
+	pkt            av.Packet
+	timestamp      uint32
 	firsttimestamp uint32
 
 	lasttime time.Duration
 }
-
