@@ -232,6 +232,7 @@ type Packet struct {
 	IsKeyFrame      bool          // video packet is key frame
 	Idx             int8          // stream index in container format
 	CompositionTime time.Duration // packet presentation time minus decode time for H264 B-Frame
+	Timestamp       int32
 	AVCPacketType   string
 	NALUFormat      string
 	NALUInfos       []common.TNALUInfo

@@ -175,6 +175,7 @@ func (self *Prober) TagToPacket(tag flvio.Tag, timestamp int32) (pkt av.Packet, 
 			ok = true
 			pkt.Data = tag.Data
 			pkt.CompositionTime = flvio.TsToTime(tag.CompositionTime)
+			pkt.Timestamp = tag.Timestamp
 			pkt.AVCPacketType = "NALU"
 			pkt.IsKeyFrame = tag.FrameType == flvio.FRAME_KEY
 			pkt.NALUFormat = tag.NALUFormat

@@ -153,7 +153,8 @@ type Tag struct {
 
 	CompositionTime int32
 
-	Data []byte
+	Data      []byte
+	Timestamp int32
 
 	NALUFormat string
 	NALUInfos  []common.TNALUInfo
@@ -329,6 +330,7 @@ func ReadTag(r io.Reader, b []byte) (tag Tag, ts int32, err error) {
 			return
 		}
 		tag.Data = data[n:]
+		tag.Timestamp = ts
 
 		// Data is h264 nalus
 		if tag.Type == TAG_VIDEO && len(tag.Data) != 0 {
