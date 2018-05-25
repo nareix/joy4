@@ -2,8 +2,9 @@ package ts
 
 import (
 	"io"
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/av/avutil"
+
+	"github.com/jinleileiking/joy4/av"
+	"github.com/jinleileiking/joy4/av/avutil"
 )
 
 func Handler(h *avutil.RegisterHandler) {
@@ -13,6 +14,7 @@ func Handler(h *avutil.RegisterHandler) {
 		return b[0] == 0x47 && b[188] == 0x47
 	}
 
+	// fmt.Println("found ts")
 	h.ReaderDemuxer = func(r io.Reader) av.Demuxer {
 		return NewDemuxer(r)
 	}
@@ -23,4 +25,3 @@ func Handler(h *avutil.RegisterHandler) {
 
 	h.CodecTypes = CodecTypes
 }
-

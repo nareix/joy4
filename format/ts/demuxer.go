@@ -3,19 +3,31 @@ package ts
 import (
 	"bufio"
 	"fmt"
-	"time"
-	"github.com/nareix/joy4/utils/bits/pio"
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/format/ts/tsio"
-	"github.com/nareix/joy4/codec/aacparser"
-	"github.com/nareix/joy4/codec/h264parser"
 	"io"
+	"time"
+
+	"github.com/jinleileiking/joy4/av"
+	"github.com/jinleileiking/joy4/codec/aacparser"
+	"github.com/jinleileiking/joy4/codec/h264parser"
+	"github.com/jinleileiking/joy4/format/ts/tsio"
+	"github.com/jinleileiking/joy4/utils/bits/pio"
 )
+
+type TPayloadInfos struct {
+	Pts         int
+	Dts         int
+	PayloadInfo []byte
+}
 
 type Demuxer struct {
 	r *bufio.Reader
 
 	pkts []av.Packet
+
+	Pat          *tsio.PAT
+	Pmt          *tsio.PMT
+	Payloads     [][]byte
+	PayloadInfos []TPayloadInfos
 
 	pat     *tsio.PAT
 	pmt     *tsio.PMT
@@ -28,23 +40,29 @@ type Demuxer struct {
 func NewDemuxer(r io.Reader) *Demuxer {
 	return &Demuxer{
 		tshdr: make([]byte, 188),
-		r: bufio.NewReaderSize(r, pio.RecommendBufioSize),
+		r:     bufio.NewReaderSize(r, pio.RecommendBufioSize),
 	}
 }
 
 func (self *Demuxer) Streams() (streams []av.CodecData, err error) {
 	if err = self.probe(); err != nil {
-		return
+		// fmt.Println("probe error")
+		// spew.Dump("stream probe error", err)
+		// return
 	}
+
+	// dump streams to return
 	for _, stream := range self.streams {
 		streams = append(streams, stream.CodecData)
 	}
 	return
 }
 
+// parse all data
 func (self *Demuxer) probe() (err error) {
 	if self.stage == 0 {
 		for {
+			//found pmt
 			if self.pmt != nil {
 				n := 0
 				for _, stream := range self.streams {
@@ -101,7 +119,7 @@ func (self *Demuxer) initPMT(payload []byte) (err error) {
 		return
 	}
 	self.pmt = &tsio.PMT{}
-	if _, err = self.pmt.Unmarshal(payload[psihdrlen:psihdrlen+datalen]); err != nil {
+	if _, err = self.pmt.Unmarshal(payload[psihdrlen : psihdrlen+datalen]); err != nil {
 		return
 	}
 
@@ -112,6 +130,13 @@ func (self *Demuxer) initPMT(payload []byte) (err error) {
 		stream.demuxer = self
 		stream.pid = info.ElementaryPID
 		stream.streamType = info.StreamType
+		if info.StreamType == 27 {
+			stream.streamTypeDes = "h264"
+		} else if info.StreamType == 15 {
+			stream.streamTypeDes = "avc"
+		} else {
+			stream.streamTypeDes = "other"
+		}
 		switch info.StreamType {
 		case tsio.ElementaryStreamTypeH264:
 			self.streams = append(self.streams, stream)
@@ -133,6 +158,7 @@ func (self *Demuxer) payloadEnd() (n int, err error) {
 	return
 }
 
+// find pat, pmt, and pes
 func (self *Demuxer) readTSPacket() (err error) {
 	var hdrlen int
 	var pid uint16
@@ -146,6 +172,8 @@ func (self *Demuxer) readTSPacket() (err error) {
 	if pid, start, iskeyframe, hdrlen, err = tsio.ParseTSHeader(self.tshdr); err != nil {
 		return
 	}
+
+	// fmt.Println("Got header")
 	payload := self.tshdr[hdrlen:]
 
 	if self.pat == nil {
@@ -156,9 +184,11 @@ func (self *Demuxer) readTSPacket() (err error) {
 				return
 			}
 			self.pat = &tsio.PAT{}
-			if _, err = self.pat.Unmarshal(payload[psihdrlen:psihdrlen+datalen]); err != nil {
+			if _, err = self.pat.Unmarshal(payload[psihdrlen : psihdrlen+datalen]); err != nil {
 				return
 			}
+			// fmt.Println("Got pat")
+			self.Pat = self.pat
 		}
 	} else if self.pmt == nil {
 		for _, entry := range self.pat.Entries {
@@ -166,6 +196,8 @@ func (self *Demuxer) readTSPacket() (err error) {
 				if err = self.initPMT(payload); err != nil {
 					return
 				}
+				// fmt.Println("Got pmt")
+				self.Pmt = self.pmt
 				break
 			}
 		}
@@ -175,6 +207,7 @@ func (self *Demuxer) readTSPacket() (err error) {
 				if err = stream.handleTSPacket(start, iskeyframe, payload); err != nil {
 					return
 				}
+				// fmt.Println("Got ts")
 				break
 			}
 		}
@@ -192,13 +225,13 @@ func (self *Stream) addPacket(payload []byte, timedelta time.Duration) {
 
 	demuxer := self.demuxer
 	pkt := av.Packet{
-		Idx: int8(self.idx),
+		Idx:        int8(self.idx),
 		IsKeyFrame: self.iskeyframe,
-		Time: dts+timedelta,
-		Data: payload,
+		Time:       dts + timedelta,
+		Data:       payload,
 	}
 	if pts != dts {
-		pkt.CompositionTime = pts-dts
+		pkt.CompositionTime = pts - dts
 	}
 	demuxer.pkts = append(demuxer.pkts, pkt)
 }
@@ -216,6 +249,12 @@ func (self *Stream) payloadEnd() (n int, err error) {
 
 	switch self.streamType {
 	case tsio.ElementaryStreamTypeAdtsAAC:
+		self.demuxer.Payloads = append(self.demuxer.Payloads, payload)
+		payload_info.PayloadInfo = payload
+		self.demuxer.PayloadInfos = append(self.demuxer.PayloadInfos, payload_info)
+
+		// self.demuxer.PayloadInfos.PayloadInfo = append(self.demuxer.PayloadInfos.PayloadInfo, payload)
+		// fmt.Println("Payload aac end")
 		var config aacparser.MPEG4AudioConfig
 
 		delta := time.Duration(0)
@@ -236,16 +275,28 @@ func (self *Stream) payloadEnd() (n int, err error) {
 		}
 
 	case tsio.ElementaryStreamTypeH264:
+		self.demuxer.Payloads = append(self.demuxer.Payloads, payload)
+		// self.demuxer.PayloadInfos.PayloadInfo = append(self.demuxer.PayloadInfos.PayloadInfo, payload)
+		payload_info.PayloadInfo = payload
+		self.demuxer.PayloadInfos = append(self.demuxer.PayloadInfos, payload_info)
+
+		// fmt.Println("Payload h264 end")
+		// nalus, typ := h264parser.SplitNALUs(payload)
 		nalus, _ := h264parser.SplitNALUs(payload)
+
+		// spew.Dump(typ)
 		var sps, pps []byte
 		for _, nalu := range nalus {
 			if len(nalu) > 0 {
 				naltype := nalu[0] & 0x1f
+				// spew.Dump(naltype)
 				switch {
 				case naltype == 7:
 					sps = nalu
+					// spew.Dump("got sps")
 				case naltype == 8:
 					pps = nalu
+					// spew.Dump("got pps")
 				case h264parser.IsDataNALU(nalu):
 					// raw nalu to avcc
 					b := make([]byte, 4+len(nalu))
@@ -267,6 +318,9 @@ func (self *Stream) payloadEnd() (n int, err error) {
 	return
 }
 
+var total int
+var payload_info TPayloadInfos
+
 func (self *Stream) handleTSPacket(start bool, iskeyframe bool, payload []byte) (err error) {
 	if start {
 		if _, err = self.payloadEnd(); err != nil {
@@ -276,6 +330,8 @@ func (self *Stream) handleTSPacket(start bool, iskeyframe bool, payload []byte) 
 		if hdrlen, _, self.datalen, self.pts, self.dts, err = tsio.ParsePESHeader(payload); err != nil {
 			return
 		}
+		payload_info.Pts = int(self.pts)
+		payload_info.Dts = int(self.dts)
 		self.iskeyframe = iskeyframe
 		if self.datalen == 0 {
 			self.data = make([]byte, 0, 4096)
@@ -286,5 +342,7 @@ func (self *Stream) handleTSPacket(start bool, iskeyframe bool, payload []byte) 
 	} else {
 		self.data = append(self.data, payload...)
 	}
+	total = total + 1
+	// spew.Dump(total)
 	return
 }

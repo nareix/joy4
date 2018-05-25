@@ -2,10 +2,14 @@ package flvio
 
 import (
 	"fmt"
-	"github.com/nareix/joy4/utils/bits/pio"
-	"github.com/nareix/joy4/av"
 	"io"
 	"time"
+
+	"github.com/davecgh/go-spew/spew"
+	"github.com/jinleileiking/joy4/av"
+	"github.com/jinleileiking/joy4/codec/h264parser"
+	"github.com/jinleileiking/joy4/common"
+	"github.com/jinleileiking/joy4/utils/bits/pio"
 )
 
 func TsToTime(ts int32) time.Duration {
@@ -149,7 +153,11 @@ type Tag struct {
 
 	CompositionTime int32
 
-	Data []byte
+	Data      []byte
+	Timestamp int32
+
+	NALUFormat string
+	NALUInfos  []common.TNALUInfo
 }
 
 func (self Tag) ChannelLayout() av.ChannelLayout {
@@ -204,6 +212,7 @@ func (self Tag) audioFillHeader(b []byte) (n int) {
 	return
 }
 
+// VIDEODATA + AVCVIDEOPACKET
 func (self *Tag) videoParseHeader(b []byte) (n int, err error) {
 	if len(b) < n+1 {
 		err = fmt.Errorf("videodata: parse invalid")
@@ -276,6 +285,8 @@ const (
 const TagHeaderLength = 11
 const TagTrailerLength = 4
 
+//FLVTAG
+// 09/08 ...  xxxxx
 func ParseTagHeader(b []byte) (tag Tag, ts int32, datalen int, err error) {
 	tagtype := b[0]
 
@@ -308,20 +319,62 @@ func ReadTag(r io.Reader, b []byte) (tag Tag, ts int32, err error) {
 		return
 	}
 
-	data := make([]byte, datalen)
-	if _, err = io.ReadFull(r, data); err != nil {
-		return
+	if datalen != 0 {
+		data := make([]byte, datalen)
+		if _, err = io.ReadFull(r, data); err != nil {
+			return
+		}
+
+		var n int
+		if n, err = (&tag).ParseHeader(data); err != nil {
+			return
+		}
+		tag.Data = data[n:]
+		tag.Timestamp = ts
+
+		// Data is h264 nalus
+		if tag.Type == TAG_VIDEO && len(tag.Data) != 0 {
+
+			nalus, nal_type := h264parser.SplitNALUs(tag.Data)
+
+			if nal_type == h264parser.NALU_AVCC {
+				tag.NALUFormat = "AVCC"
+			}
+
+			if nal_type == h264parser.NALU_RAW {
+				tag.NALUFormat = "RAW"
+			}
+
+			if nal_type == h264parser.NALU_ANNEXB {
+				tag.NALUFormat = "ANNEXB"
+			}
+
+			for _, nalu := range nalus {
+				// spew.Dump(nalus)
+				// os.Exit(1)
+				if _, info, err := h264parser.ParseSliceHeaderFromNALU(nalu); err == nil {
+					// spew.Dump(info)
+					tag.NALUInfos = append(tag.NALUInfos, info)
+				} else {
+					spew.Dump(err)
+				}
+
+			}
+
+			// spew.Dump(tag.NALUInfos)
+		}
+
+		if tag.Type == TAG_VIDEO && len(tag.Data) == 0 {
+			tag.NALUFormat = "N/A"
+		}
+
 	}
 
-	var n int
-	if n, err = (&tag).ParseHeader(data); err != nil {
-		return
-	}
-	tag.Data = data[n:]
-
+	// b[:4] ---> preTagSize
 	if _, err = io.ReadFull(r, b[:4]); err != nil {
 		return
 	}
+
 	return
 }
 

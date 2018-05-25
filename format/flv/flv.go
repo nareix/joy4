@@ -3,15 +3,16 @@ package flv
 import (
 	"bufio"
 	"fmt"
-	"github.com/nareix/joy4/utils/bits/pio"
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/av/avutil"
-	"github.com/nareix/joy4/codec"
-	"github.com/nareix/joy4/codec/aacparser"
-	"github.com/nareix/joy4/codec/fake"
-	"github.com/nareix/joy4/codec/h264parser"
-	"github.com/nareix/joy4/format/flv/flvio"
 	"io"
+
+	"github.com/jinleileiking/joy4/av"
+	"github.com/jinleileiking/joy4/av/avutil"
+	"github.com/jinleileiking/joy4/codec"
+	"github.com/jinleileiking/joy4/codec/aacparser"
+	"github.com/jinleileiking/joy4/codec/fake"
+	"github.com/jinleileiking/joy4/codec/h264parser"
+	"github.com/jinleileiking/joy4/format/flv/flvio"
+	"github.com/jinleileiking/joy4/utils/bits/pio"
 )
 
 var MaxProbePacketCount = 20
@@ -91,9 +92,12 @@ func (self *Prober) PushTag(tag flvio.Tag, timestamp int32) (err error) {
 					err = fmt.Errorf("flv: h264 seqhdr invalid")
 					return
 				}
+
+				// spew.Dump(stream)
 				self.VideoStreamIdx = len(self.Streams)
 				self.Streams = append(self.Streams, stream)
 				self.GotVideo = true
+				self.CacheTag(tag, timestamp)
 			}
 
 		case flvio.AVC_NALU:
@@ -171,7 +175,20 @@ func (self *Prober) TagToPacket(tag flvio.Tag, timestamp int32) (pkt av.Packet, 
 			ok = true
 			pkt.Data = tag.Data
 			pkt.CompositionTime = flvio.TsToTime(tag.CompositionTime)
+			pkt.Timestamp = tag.Timestamp
+			pkt.AVCPacketType = "NALU"
 			pkt.IsKeyFrame = tag.FrameType == flvio.FRAME_KEY
+			pkt.NALUFormat = tag.NALUFormat
+			pkt.NALUInfos = tag.NALUInfos
+		case flvio.AVC_SEQHDR:
+			pkt.AVCPacketType = "SEQHDR"
+			pkt.IsKeyFrame = tag.FrameType == flvio.FRAME_KEY
+			pkt.Data = tag.Data
+		case flvio.AVC_EOS:
+			ok = true
+			pkt.AVCPacketType = "EOS"
+			pkt.IsKeyFrame = tag.FrameType == flvio.FRAME_KEY
+			pkt.Data = tag.Data
 		}
 
 	case flvio.TAG_AUDIO:
