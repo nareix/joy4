@@ -124,6 +124,22 @@ func (self *Handlers) NewAudioDecoder(codec av.AudioCodecData) (dec av.AudioDeco
 	return
 }
 
+
+// TODO ??
+
+// func (self *Handlers) NewVideoEncoder(typ av.CodecType) (enc av.VideoEncoder, err error) {
+// 	for _, handler := range self.handlers {
+// 		if handler.VideoEncoder != nil {
+// 			if enc, _ = handler.VideoEncoder(typ); enc != nil {
+// 				return
+// 			}
+// 		}
+// 	}
+// 	err = fmt.Errorf("avutil: encoder", typ, "not found")
+// 	return
+// }
+
+
 func (self *Handlers) Open(uri string) (demuxer av.DemuxCloser, err error) {
 	listen := false
 	if strings.HasPrefix(uri, "listen:") {
@@ -280,9 +296,12 @@ func CopyPackets(dst av.PacketWriter, src av.PacketReader) (err error) {
 		var pkt av.Packet
 		if pkt, err = src.ReadPacket(); err != nil {
 			if err == io.EOF {
+				fmt.Println("reached EOF")
 				break
 			}
-			return
+			fmt.Println("Error while reading packets:", err)
+			fmt.Println()
+			// return
 		}
 		if err = dst.WritePacket(pkt); err != nil {
 			return

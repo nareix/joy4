@@ -5,6 +5,8 @@ package av
 import (
 	"fmt"
 	"time"
+	"image"
+	"os"
 )
 
 // Audio sample format.
@@ -181,6 +183,7 @@ type VideoCodecData interface {
 	CodecData
 	Width() int // Video height
 	Height() int // Video width
+	PacketDuration([]byte) (time.Duration, error) // get video compressed packet duration
 }
 
 type AudioCodecData interface {
@@ -314,3 +317,146 @@ type AudioResampler interface {
 	Resample(AudioFrame) (AudioFrame, error) // convert raw audio frames
 }
 
+
+
+
+// Video frame format.
+type PixelFormat uint8
+
+const (
+	// Planar formats
+	I420 = PixelFormat(iota + 1) // 4:2:0 8 bit, 12 bpp. Y plane followed by 8 bit 2x2 subsampled U and V planes
+	NV12 // 4:2:0 8 bit, 12 bpp. Y plane followed by an interleaved U/V plane with 2x2 subsampling
+	NV21 // 4:2:0 8 bit, 12 bpp. As NV12 with U and V reversed in the interleaved plane
+	//YV12 // 4:2:0 8 bit, 12 bpp. Y plane followed by 8 bit 2x2 subsampled V and U planes
+
+	// Packed formats
+	UYVY // 4:2:2 8-bit, 16 bpp. YUV (Y sample at every pixel, U and V sampled at every second pixel horizontally on each line). A macropixel contains 2 pixels in 1 u_int32.
+	//YUY2 // 4:2:2 8-bit, 16 bpp. Same as UYVY but with different component ordering within the u_int32 macropixel.
+	YUYV // 4:2:2 8-bit, 16 bpp as for UYVY but with different component ordering within the u_int32 macropixel.
+	//V210 // 4:2:2 10-bit, 32 bpp. YCrCb equivalent to the Quicktime format of the same name.
+)
+
+// BytesPerPixel returns the number of bytes (rounded up) used by a pixel in a given format
+func (pixFmt PixelFormat) BytesPerPixel() int {
+	switch pixFmt {
+	case I420, NV12, NV21:
+		return 2
+	case UYVY, YUYV:
+		return 2
+	default:
+		return 0
+	}
+}
+
+func (pixFmt PixelFormat) String() string {
+	switch pixFmt {
+	case I420:
+		return "I420"
+	case NV12:
+		return "NV12"
+	case NV21:
+		return "NV21"
+	case UYVY:
+		return "UYVY"
+	case YUYV:
+		return "YUYV"
+	default:
+		return "?"
+	}
+}
+
+// IsPlanar return true if this pixel format is planar.
+func (pixFmt PixelFormat) IsPlanar() bool {
+	switch pixFmt {
+	case I420, NV12, NV21:
+		return true
+	default:
+		return false
+	}
+}
+
+
+
+// VideoFrameRaw Raw video frame.
+type VideoFrameRaw struct {
+	PixelFormat PixelFormat // video sample format, e.g: YUV,RGB,...
+	Image image.YCbCr
+}
+
+func (v VideoFrameRaw) Width() int {
+	return v.Image.Rect.Dx()
+}
+
+func (v VideoFrameRaw) Height() int {
+	return v.Image.Rect.Dy()
+}
+
+// func (self VideoFrame) Duration() time.Duration {
+// 	return time.Second * time.Duration(self.SampleCount) / time.Duration(self.SampleRate)
+// }
+
+// HasSameFormat returns true if this video frame has the same format as another video frame.
+func (self VideoFrameRaw) HasSameFormat(other VideoFrameRaw) bool {
+	if self.PixelFormat != other.PixelFormat {
+		return false
+	}
+	// TODO
+	// if self.Width != other.Width {
+	// 	return false
+	// }
+	// if self.Height != other.Height {
+	// 	return false
+	// }
+	return true
+}
+
+// Dump writes the video frame to a file
+func (self VideoFrameRaw) Dump(filename string) error {
+	outfile, err := os.Create(filename)
+	if outfile != nil {
+		ny, err := outfile.Write(self.Image.Y)
+		if err != nil {
+			return err
+		}
+
+		ncb, err := outfile.Write(self.Image.Cb)
+		if err != nil {
+			return err
+		}
+
+		ncr, err := outfile.Write(self.Image.Cr)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Dump VideoFrameRaw: '%s': wrote %d bytes\n", filename, ny+ncb+ncr)
+		outfile.Close()
+	} else {
+		fmt.Println("Unable to open outfile:", filename)
+	}
+
+	return err
+}
+
+
+// VideoEncoder can encode raw video frame into compressed video packets.
+// cgo/ffmpeg inplements VideoEncoder, using ffmpeg.NewVideoEncoder to create it.
+type VideoEncoder interface {
+	CodecData() (VideoCodecData, error) // encoder's codec data can put into container
+	Encode(VideoFrameRaw) ([][]byte, error) // encode raw video frame into compressed pakcet(s)
+	Close() // close encoder, free cgo contexts
+	SetResolution(int, int) (error) // set video resolution (width and height)
+	SetPixelFormat(PixelFormat) (error) // set encoder pixel format
+	SetFramerate(int, int) (error) // set frame rate (numerator and denominator)
+	SetGopSize(int) (error) // set gop size in frames
+	SetBitrate(int) (error) // set encoder bitrate
+	SetOption(string,interface{}) (error) // encoder setopt, in ffmpeg is av_opt_set_dict()
+	GetOption(string,interface{}) (error) // encoder getopt
+}
+
+// VideoDecoder can decode compressed video packets into raw video frame.
+// use ffmpeg.NewVideoDecoder to create it.
+type VideoDecoder interface {
+	Decode([]byte) (VideoFrameRaw, error) // decode one compressed video packet
+	Close() // close decode, free cgo contexts
+}

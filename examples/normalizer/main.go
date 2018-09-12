@@ -6,10 +6,13 @@ import (
 	"io"
 	"net/http"
 	"github.com/nareix/joy4/format"
+	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/av/avutil"
 	"github.com/nareix/joy4/av/pubsub"
+	"github.com/nareix/joy4/av/transcode"
 	"github.com/nareix/joy4/format/rtmp"
 	"github.com/nareix/joy4/format/flv"
+	"github.com/nareix/joy4/cgo/ffmpeg"
 )
 
 func init() {
@@ -68,8 +71,29 @@ func main() {
 		}
 
 
-		// TODO decode, scale, encode here
-		avutil.CopyPackets(ch.que, conn)
+		findcodec := func(stream av.VideoCodecData, i int) (need bool, dec av.VideoDecoder, enc av.VideoEncoder, err error) {
+			need = true
+			dec, _ = ffmpeg.NewVideoDecoder(stream)
+			enc, _ = ffmpeg.NewVideoEncoderByCodecType(av.H264)
+			enc.SetBitrate(2000000)
+			enc.SetGopSize(2)
+			// TODO must be set from input stream
+			enc.SetResolution(stream.Width(), stream.Height())
+			enc.SetFramerate(24000, 1000)
+			enc.SetPixelFormat(av.I420)
+			return
+		}
+	
+		trans := &transcode.Demuxer{
+			Options: transcode.Options{
+				FindVideoDecoderEncoder: findcodec,
+			},
+			Demuxer: conn,
+		}
+
+		avutil.CopyFile(ch.que, trans)
+
+		fmt.Println("Leaving HandlePublish()")
 
 		l.Lock()
 		delete(channels, conn.URL.Path)

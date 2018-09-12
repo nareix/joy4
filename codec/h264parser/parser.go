@@ -7,6 +7,7 @@ import (
 	"github.com/nareix/joy4/utils/bits/pio"
 	"fmt"
 	"bytes"
+	"time"
 )
 
 const (
@@ -526,6 +527,12 @@ func (self CodecData) Width() int {
 
 func (self CodecData) Height() int {
 	return int(self.SPSInfo.Height)
+}
+
+func (self CodecData) PacketDuration([]byte) (dur time.Duration, err error) {
+	// fmt.Println("TODO PacketDuration")
+	// dur = time.Duration(40 * time.Millisecond)
+	return
 }
 
 func NewCodecDataFromAVCDecoderConfRecord(record []byte) (self CodecData, err error) {
