@@ -530,8 +530,8 @@ func (self CodecData) Height() int {
 }
 
 func (self CodecData) PacketDuration([]byte) (dur time.Duration, err error) {
-	// fmt.Println("TODO PacketDuration")
-	// dur = time.Duration(40 * time.Millisecond)
+	// FIXME must use the actual frame period, not this default one
+	dur = time.Duration(40 * time.Millisecond)
 	return
 }
 
