@@ -10,9 +10,7 @@ int wrap_avcodec_decode_video2(AVCodecContext *ctx, AVFrame *frame, void *data, 
 import "C"
 import (
 	"unsafe"
-	"runtime"
 	"fmt"
-	"image"
 	"reflect"
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/codec/h264parser"
@@ -126,7 +124,24 @@ func (enc *VideoEncoder) encodeOne(frame av.VideoFrameRaw) (gotpkt bool, pkt []b
 	cpkt := C.AVPacket{}
 	cgotpkt := C.int(0)
 
-	VideoFrameAssignToFF(frame, ff.frame)
+	// VideoFrameAssignToFF(frame, ff.frame)
+	ff.frame.format = C.int32_t(PixelFormatAV2FF(frame.GetPixelFormat()))
+
+	ys, cs := frame.GetStride()
+	ff.frame.linesize[0] = C.int(ys)
+	ff.frame.linesize[1] = C.int(cs)
+	ff.frame.linesize[2] = C.int(cs)
+
+	w, h := frame.GetResolution()
+	ff.frame.width = C.int(w)
+	ff.frame.height = C.int(h)
+	ff.frame.sample_aspect_ratio.num = 0 // TODO
+	ff.frame.sample_aspect_ratio.den = 1
+
+	data0, data1, data2 := frame.GetDataPtr()
+	ff.frame.data[0] = (*C.uchar)(data0)
+	ff.frame.data[1] = (*C.uchar)(data1)
+	ff.frame.data[2] = (*C.uchar)(data2)
 
 	// Increase pts and convert in 90k: pts * 90000 / fps
 	enc.pts++
@@ -313,50 +328,6 @@ func (enc *VideoEncoder) GetOption(key string, val interface{}) (err error) {
 }
 
 
-func VideoFrameAssignToAVParams(f *C.AVFrame, frame *av.VideoFrameRaw) {
-	frame.PixelFormat = PixelFormatFF2AV(int32(f.format))
-	frame.Image.SubsampleRatio = image.YCbCrSubsampleRatio420 // TODO from f.format (AVPixelFormat)
-	frame.Image.YStride = int(f.linesize[0])
-	frame.Image.CStride = int(f.linesize[1])
-	frame.Image.Rect = image.Rectangle{ image.Point{0,0}, image.Point{int(f.width), int(f.height)}}
-}
-
-func VideoFrameAssignToAVData(f *C.AVFrame, frame *av.VideoFrameRaw) {
-	frame.Image.Y  = C.GoBytes(unsafe.Pointer(f.data[0]), f.linesize[0]*f.height)
-	 // TODO chroma subsampling
-	frame.Image.Cb = C.GoBytes(unsafe.Pointer(f.data[1]), f.linesize[1]*f.height/2)
-	frame.Image.Cr = C.GoBytes(unsafe.Pointer(f.data[2]), f.linesize[2]*f.height/2)
-}
-
-func VideoFrameAssignToAV(f *C.AVFrame, frame *av.VideoFrameRaw) {
-	VideoFrameAssignToAVParams(f, frame)
-	VideoFrameAssignToAVData(f, frame)
-}
-
-func VideoFrameAssignToFFParams(frame av.VideoFrameRaw, f *C.AVFrame) {
-	// All the following params are described in ffmpeg: frame.h, in struct AVFrame
-	f.format = C.int(PixelFormatAV2FF(frame.PixelFormat))
-	f.width = C.int(frame.Width())
-	f.height = C.int(frame.Height())
-	f.sample_aspect_ratio.num = 0
-	f.sample_aspect_ratio.den = 1
-}
-
-func VideoFrameAssignToFFData(frame av.VideoFrameRaw, f *C.AVFrame) {
-	f.data[0] = (*C.uchar)(unsafe.Pointer(&frame.Image.Y[0]))
-	f.data[1] = (*C.uchar)(unsafe.Pointer(&frame.Image.Cb[0]))
-	f.data[2] = (*C.uchar)(unsafe.Pointer(&frame.Image.Cr[0]))
-
-	f.linesize[0] = C.int(frame.Image.YStride)
-	f.linesize[1] = C.int(frame.Image.CStride)
-	f.linesize[2] = C.int(frame.Image.CStride)
-}
-
-func VideoFrameAssignToFF(frame av.VideoFrameRaw, f *C.AVFrame) {
-	VideoFrameAssignToFFParams(frame, f)
-	VideoFrameAssignToFFData(frame, f)
-}
-
 
 func NewVideoEncoderByCodecType(typ av.CodecType) (enc *VideoEncoder, err error) {
 	var id uint32
@@ -452,19 +423,6 @@ func fromCPtr(buf unsafe.Pointer, size int) (ret []uint8) {
 	return
 }
 
-type VideoFrame struct {
-	Image image.YCbCr
-	frame *C.AVFrame
-}
-
-func (self *VideoFrame) Free() {
-	self.Image = image.YCbCr{}
-	C.av_frame_free(&self.frame)
-}
-
-func freeVideoFrame(self *VideoFrame) {
-	self.Free()
-}
 
 func (self *VideoDecoder) Decode(pkt []byte) (img av.VideoFrameRaw, err error) {
 	ff := &self.ff.ff
@@ -483,18 +441,13 @@ func (self *VideoDecoder) Decode(pkt []byte) (img av.VideoFrameRaw, err error) {
 		ys := int(frame.linesize[0])
 		cs := int(frame.linesize[1])
 
-		ffimg := &VideoFrame{Image: image.YCbCr{
-			Y: fromCPtr(unsafe.Pointer(frame.data[0]), ys*h),
-			Cb: fromCPtr(unsafe.Pointer(frame.data[1]), cs*h/2), // TODO
-			Cr: fromCPtr(unsafe.Pointer(frame.data[2]), cs*h/2), // TODO
-			YStride: ys,
-			CStride: cs,
-			SubsampleRatio: image.YCbCrSubsampleRatio420, // TODO
-			Rect: image.Rect(0, 0, w, h),
-		}, frame: frame}
-		runtime.SetFinalizer(ffimg, freeVideoFrame)
+		// SubsampleRatio: image.YCbCrSubsampleRatio420, // TODO
 
-		VideoFrameAssignToAV(ffimg.frame, &img)
+		// VideoFrameAssignToAV(ffimg.frame, &img)
+		img.SetPixelFormat(PixelFormatFF2AV(int32(C.AV_PIX_FMT_YUV420P)))
+		img.SetStride(ys, cs)
+		img.SetResolution(w, h)
+		img.SetDataPtr( unsafe.Pointer(frame.data[0]), unsafe.Pointer(frame.data[1]), unsafe.Pointer(frame.data[2]))
 
 	} else {
 		err = fmt.Errorf("ffmpeg: avcodec_decode_video2 returned no frame")

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 	"image"
-	"os"
+	"unsafe"
 )
 
 // Audio sample format.
@@ -183,6 +183,8 @@ type VideoCodecData interface {
 	CodecData
 	Width() int // Video height
 	Height() int // Video width
+	// Framerate() (int, int) // Video FPS num and denom
+	// GetPixelFormat() PixelFormat // Video pixel format
 	PacketDuration([]byte) (time.Duration, error) // get video compressed packet duration
 }
 
@@ -377,24 +379,73 @@ func (pixFmt PixelFormat) IsPlanar() bool {
 }
 
 
-
 // VideoFrameRaw Raw video frame.
 type VideoFrameRaw struct {
-	PixelFormat PixelFormat // video sample format, e.g: YUV,RGB,...
-	Image image.YCbCr
+	PixelFormat    PixelFormat // video sample format, e.g: YUV,RGB,...
+	Y, Cb,Cr       unsafe.Pointer
+	YStride        int
+	CStride        int
+	SubsampleRatio image.YCbCrSubsampleRatio
+	Rect           image.Rectangle
 }
 
 func (v VideoFrameRaw) Width() int {
-	return v.Image.Rect.Dx()
+	return v.Rect.Dx()
 }
 
 func (v VideoFrameRaw) Height() int {
-	return v.Image.Rect.Dy()
+	return v.Rect.Dy()
 }
+
+func (v VideoFrameRaw) GetPixelFormat() PixelFormat {
+	return v.PixelFormat
+}
+
+func (v VideoFrameRaw) GetStride() (yStride, cStride int) {
+	return v.YStride, v.CStride
+}
+
+func (v VideoFrameRaw) GetResolution() (w, h int) {
+	return v.Width(), v.Height()
+}
+
+func (v VideoFrameRaw) GetDataPtr() (y, cb, cr unsafe.Pointer) {
+	return v.Y, v.Cb, v.Cr
+}
+
+// func (v VideoFrameRaw) Framerate() (int, int) {
+// 	return 12345, 6789
+// }
+
+// func (v VideoFrameRaw) GetPixelFormat() PixelFormat {
+// 	return I420
+// }
 
 // func (self VideoFrame) Duration() time.Duration {
 // 	return time.Second * time.Duration(self.SampleCount) / time.Duration(self.SampleRate)
 // }
+
+
+func (v *VideoFrameRaw) SetPixelFormat(format PixelFormat) {
+	v.PixelFormat = format
+	v.SubsampleRatio = image.YCbCrSubsampleRatio420 // TODO from f.format (AVPixelFormat)
+}
+
+func (v *VideoFrameRaw) SetStride(yStride, cStride int) {
+	v.YStride = yStride
+	v.CStride = cStride
+}
+
+func (v *VideoFrameRaw) SetResolution(w, h int) {
+	v.Rect = image.Rectangle{ image.Point{0,0}, image.Point{w, h}}
+}
+
+func (v *VideoFrameRaw) SetDataPtr(y, cb, cr unsafe.Pointer) {
+	v.Y  = y
+	v.Cb = cb
+	v.Cr = cr
+}
+
 
 // HasSameFormat returns true if this video frame has the same format as another video frame.
 func (self VideoFrameRaw) HasSameFormat(other VideoFrameRaw) bool {
@@ -409,33 +460,6 @@ func (self VideoFrameRaw) HasSameFormat(other VideoFrameRaw) bool {
 	// 	return false
 	// }
 	return true
-}
-
-// Dump writes the video frame to a file
-func (self VideoFrameRaw) Dump(filename string) error {
-	outfile, err := os.Create(filename)
-	if outfile != nil {
-		ny, err := outfile.Write(self.Image.Y)
-		if err != nil {
-			return err
-		}
-
-		ncb, err := outfile.Write(self.Image.Cb)
-		if err != nil {
-			return err
-		}
-
-		ncr, err := outfile.Write(self.Image.Cr)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("Dump VideoFrameRaw: '%s': wrote %d bytes\n", filename, ny+ncb+ncr)
-		outfile.Close()
-	} else {
-		fmt.Println("Unable to open outfile:", filename)
-	}
-
-	return err
 }
 
 
