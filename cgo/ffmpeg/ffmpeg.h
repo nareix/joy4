@@ -6,6 +6,7 @@
 #include <libavutil/opt.h>
 #include <string.h>
 #include <libswscale/swscale.h>
+#include <libavutil/imgutils.h>
 
 typedef struct {
 	AVCodec *codec;

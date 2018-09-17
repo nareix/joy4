@@ -77,8 +77,9 @@ func main() {
 			enc, _ = ffmpeg.NewVideoEncoderByCodecType(av.H264)
 			enc.SetBitrate(2000000)
 			enc.SetGopSize(2)
-			// TODO must be set from input stream
-			enc.SetResolution(stream.Width(), stream.Height())
+			// Set from input stream or configurable
+			enc.SetResolution(1280, 720)
+			// TODO video converter needed
 			enc.SetFramerate(24000, 1000)
 			enc.SetPixelFormat(av.I420)
 			return

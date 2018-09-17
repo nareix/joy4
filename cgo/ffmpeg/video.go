@@ -6,15 +6,122 @@ int wrap_avcodec_decode_video2(AVCodecContext *ctx, AVFrame *frame, void *data, 
 	struct AVPacket pkt = {.data = data, .size = size};
 	return avcodec_decode_video2(ctx, frame, got, &pkt);
 }
+int wrap_av_image_alloc(uint8_t *pointers[4], int linesizes[4], int w, int h, enum AVPixelFormat pix_fmt, int align) {
+	return av_image_alloc(pointers, linesizes, w, h, pix_fmt, align);
+}
 */
 import "C"
 import (
 	"unsafe"
 	"fmt"
 	"reflect"
+	"image"
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/codec/h264parser"
 )
+
+
+type VideoScaler struct {
+	inPixelFormat, OutPixelFormat av.PixelFormat
+	inWidth, OutWidth int
+	inHeight, OutHeight int
+	inYStride, OutYStride int
+	inCStride, OutCStride int
+	swsCtx *C.struct_SwsContext
+}
+
+func (self *VideoScaler) Close() {
+	C.sws_freeContext(self.swsCtx);
+}
+
+
+func (self *VideoScaler) AllocOutputImage(strides (*[3]C.int)) (dataPtr ([4]*C.uint8_t), bufSize int, err error) {
+	align := 16 // align buffer size on 16 pixels for the encoder
+
+	// The allocated image buffer has to be freed by using av_freep(&pointers[0]).
+	bufSize = int(C.wrap_av_image_alloc(&dataPtr[0], &strides[0], C.int(self.OutWidth), C.int(self.OutHeight), PixelFormatAV2FF(self.OutPixelFormat), C.int(align)))
+	if bufSize < 0 {
+		err = fmt.Errorf("Could not allocate image\n");
+	}
+	return
+}
+
+func (self *VideoScaler) videoScaleOne(src av.VideoFrameRaw) (dst av.VideoFrameRaw, err error) {
+	var srcPtr ([3]*C.uint8_t)
+	srcPtr[0] = (*C.uint8_t)(src.Y)
+	srcPtr[1] = (*C.uint8_t)(src.Cb)
+	srcPtr[2] = (*C.uint8_t)(src.Cr)
+
+	var inStrides ([3]C.int)
+	inStrides[0] = C.int(src.YStride)
+	inStrides[1] = C.int(src.CStride)
+	inStrides[2] = C.int(src.CStride)
+
+	var outStrides ([3]C.int)
+	outStrides[0] = C.int(self.OutYStride)
+	outStrides[1] = C.int(self.OutCStride)
+	outStrides[2] = C.int(self.OutCStride)
+	
+	dstPtr, _, err := self.AllocOutputImage(&outStrides)
+	if err != nil {
+		return
+	}
+
+
+	// convert to destination format and resolution
+	C.sws_scale(self.swsCtx, &srcPtr[0], &inStrides[0], 0, C.int(self.inHeight), &dstPtr[0], &outStrides[0])
+
+
+	dst.PixelFormat	= PixelFormatFF2AV(int32(self.OutPixelFormat))
+	dst.YStride		= int(outStrides[0])
+	dst.CStride		= int(outStrides[1])
+	// TODO dst.SubsampleRatio =
+	dst.Rect		= image.Rect(0, 0, self.OutWidth, self.OutHeight)
+	dst.Y			= unsafe.Pointer(dstPtr[0])
+	dst.Cb			= unsafe.Pointer(dstPtr[1])
+	dst.Cr			= unsafe.Pointer(dstPtr[2])
+
+
+	// C.memset(dst.Y,  128, C.ulong(dst.YStride * self.OutHeight))
+	// C.memset(dst.Cb, 128, C.ulong(dst.CStride * self.OutHeight/2))
+	// C.memset(dst.Cr, 128, C.ulong(dst.CStride * self.OutHeight/2))
+
+	// fmt.Println("dst.YStride * self.OutHeight:", dst.YStride * self.OutHeight)
+	// fmt.Println("dst.CStride * self.OutHeight/2:", dst.CStride * self.OutHeight/2)
+	// dst.Dump("framescale.yuv")
+
+
+	// fmt.Println("Scaling succeeded: pix_fmt:", self.OutPixelFormat, "resolution:", self.OutWidth, self.OutHeight)
+	// C.av_freep(&dstPtr[0]) // TODO callback to free
+	return
+}
+
+
+func (self *VideoScaler) VideoScale(src av.VideoFrameRaw) (dst av.VideoFrameRaw, err error) {
+	if self.swsCtx == nil {
+		self.inPixelFormat = src.PixelFormat
+		self.inWidth = src.Width()
+		self.inHeight= src.Height()
+		self.inYStride = src.YStride
+		self.inCStride = src.CStride
+
+		self.swsCtx = C.sws_getContext(C.int(self.inWidth), C.int(self.inHeight), PixelFormatAV2FF(self.inPixelFormat),
+			C.int(self.OutWidth), C.int(self.OutHeight), PixelFormatAV2FF(self.OutPixelFormat),
+			C.SWS_BILINEAR, (*C.SwsFilter)(C.NULL), (*C.SwsFilter)(C.NULL), (*C.double)(C.NULL))
+
+		if self.swsCtx == nil {
+			err = fmt.Errorf("Impossible to create scale context for the conversion fmt:%d s:%dx%d -> fmt:%d s:%dx%d\n",
+				/*C.av_get_pix_fmt_name*/(self.inPixelFormat), self.inWidth, self.inHeight,
+				/*C.av_get_pix_fmt_name*/(self.OutPixelFormat), self.OutWidth, self.OutHeight);
+			return
+		}
+
+		fmt.Println("VideoScaler:\n", self)
+	}
+
+	dst, err = self.videoScaleOne(src)
+	return
+}
 
 
 // VideoEncoder contains all params that must be set by user to initialize the video encoder
@@ -29,6 +136,7 @@ type VideoEncoder struct {
 	codecData h264parser.CodecData
 	codecDataInitialised bool
 	pts int64
+	scaler *VideoScaler
 }
 
 // Setup initializes the encoder context and checks user params
@@ -56,6 +164,7 @@ func (enc *VideoEncoder) Setup() (err error) {
 	ff.codecCtx.ticks_per_frame	= 2;
 	ff.codecCtx.gop_size		= C.int(enc.gopSize)
 	ff.codecCtx.bit_rate		= C.int64_t(enc.Bitrate)
+
 
 	if C.avcodec_open2(ff.codecCtx, ff.codec, nil) != 0 {
 		err = fmt.Errorf("ffmpeg: encoder: avcodec_open2 failed")
@@ -206,19 +315,40 @@ func (enc *VideoEncoder) encodeOne(frame av.VideoFrameRaw) (gotpkt bool, pkt []b
 }
 
 
+func (self *VideoEncoder) scale(in av.VideoFrameRaw) (out av.VideoFrameRaw, err error) {
+	if self.scaler == nil {
+		self.scaler = &VideoScaler{
+			inPixelFormat:	in.GetPixelFormat(),
+			inWidth:		in.Width(),
+			inHeight:		in.Height(),
+			inYStride:		in.YStride,
+			inCStride:		in.CStride,
+			OutPixelFormat: in.GetPixelFormat(), // TODO
+			OutWidth:		self.width,
+			OutHeight:		self.height,
+			OutYStride:		self.width, // TODO
+			OutCStride:		self.width/2, // TODO
+		}
+	}
+	if out, err = self.scaler.VideoScale(in); err != nil {
+		return
+	}
+	return
+}
+
+
 func (enc *VideoEncoder) Encode(frame av.VideoFrameRaw) (pkts [][]byte, err error) {
 	var gotpkt bool
 	var pkt []byte
 
-	// TODO add converter/scaler
-	// if frame.PixelFormat != enc.pixelFormat, width, height etc  {
-	// 	if frame, err = enc.resample(frame); err != nil {
-	// 		return
-	// 	}
-	// }
+	if frame.PixelFormat != enc.pixelFormat || frame.Width() != enc.width || frame.Height() != enc.height/* TODO add stride ? */ {
+		if frame, err = enc.scale(frame); err != nil {
+			return nil, err
+		}
+	}
 
 	if gotpkt, pkt, err = enc.encodeOne(frame); err != nil {
-		return
+		return nil, err
 	}
 	if gotpkt {
 		pkts = append(pkts, pkt)
