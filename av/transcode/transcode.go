@@ -155,6 +155,16 @@ func (self *tStream) videoDecodeAndEncode(inpkt av.Packet) (outpkts []av.Packet,
 		return
 	}
 	for _, _outpkt := range _outpkts {
+		if fpsNum, fpsDen := self.vencodec.Framerate(); fpsNum <= 0 || fpsDen <= 0 {
+			// FIXME this is a bit hacky
+			// Read codec data after encoding (because the sps and pps are not ready before the first keyframe is encoded)
+			var codecData av.VideoCodecData
+			codecData, err = self.venc.CodecData()
+			if err != nil {
+				return
+			}
+			self.vencodec = codecData.(av.VideoCodecData)
+		}
 		if dur, err = self.vencodec.PacketDuration(_outpkt); err != nil {
 			err = fmt.Errorf("transcode: PacketDuration() failed for output stream #%d", inpkt.Idx)
 			return
