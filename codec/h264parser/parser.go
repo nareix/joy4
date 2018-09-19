@@ -627,8 +627,7 @@ func ParseSPS(data []byte) (self SPSInfo, err error) {
 				return
 			}
 
-			var fixed_frame_rate_flag uint
-			if fixed_frame_rate_flag, err = r.ReadBit(); err != nil {
+			if _, err = r.ReadBit(); err != nil {
 				return
 			}
 
