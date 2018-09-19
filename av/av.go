@@ -183,7 +183,7 @@ type VideoCodecData interface {
 	CodecData
 	Width() int // Video height
 	Height() int // Video width
-	// Framerate() (int, int) // Video FPS num and denom
+	Framerate() (int, int) // Video FPS num and denom
 	// GetPixelFormat() PixelFormat // Video pixel format
 	PacketDuration([]byte) (time.Duration, error) // get video compressed packet duration
 }
@@ -387,6 +387,7 @@ type VideoFrameRaw struct {
 	CStride        int
 	SubsampleRatio image.YCbCrSubsampleRatio
 	Rect           image.Rectangle
+	FpsNum, FpsDen int
 }
 
 func (v VideoFrameRaw) Width() int {
@@ -413,9 +414,9 @@ func (v VideoFrameRaw) GetDataPtr() (y, cb, cr unsafe.Pointer) {
 	return v.Y, v.Cb, v.Cr
 }
 
-// func (v VideoFrameRaw) Framerate() (int, int) {
-// 	return 12345, 6789
-// }
+func (v VideoFrameRaw) Framerate() (int, int) {
+	return v.FpsNum, v.FpsDen
+}
 
 // func (v VideoFrameRaw) GetPixelFormat() PixelFormat {
 // 	return I420
