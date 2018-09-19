@@ -305,6 +305,9 @@ type SPSInfo struct {
 
 	Width  uint
 	Height uint
+
+	FpsNum uint
+	FpsDen uint
 }
 
 
@@ -522,6 +525,118 @@ func ParseSPS(data []byte) (self SPSInfo, err error) {
 		}
 	}
 
+	// vui_parameters_present_flag
+	var vui_parameters_present_flag uint
+	if vui_parameters_present_flag, err = r.ReadBit(); err != nil {
+		return
+	}
+	if vui_parameters_present_flag != 0 {
+		var aspect_ratio_info_present_flag uint
+		if aspect_ratio_info_present_flag, err = r.ReadBit(); err != nil {
+			return
+		}
+		if aspect_ratio_info_present_flag != 0 {
+			var aspect_ratio_idc uint
+			if aspect_ratio_idc, err = r.ReadBits(8); err != nil {
+				return
+			}
+			if aspect_ratio_idc == 255 {
+				// sar_width
+				if _, err = r.ReadBits(16); err != nil {
+					return
+				}
+				// sar_height
+				if _, err = r.ReadBits(16); err != nil {
+					return
+				}
+			}
+		}
+
+		var overscan_info_present_flag uint
+		if overscan_info_present_flag, err = r.ReadBit(); err != nil {
+			return
+		}
+		if overscan_info_present_flag != 0 {
+			// overscan_appropriate_flag
+			if _, err = r.ReadBit(); err != nil {
+				return
+			}
+		}
+
+		var video_signal_type_present_flag uint
+		if video_signal_type_present_flag, err = r.ReadBit(); err != nil {
+			return
+		}
+		if video_signal_type_present_flag != 0 {
+			// video_format
+			if _, err = r.ReadBits(3); err != nil {
+				return
+			}
+			// video_full_range_flag
+			if _, err = r.ReadBit(); err != nil {
+				return
+			}
+
+			var colour_description_present_flag uint
+			if colour_description_present_flag, err = r.ReadBit(); err != nil {
+				return
+			}
+			if colour_description_present_flag != 0 {
+				// colour_primaries
+				if _, err = r.ReadBits(8); err != nil {
+					return
+				}
+				// transfer_characteristics
+				if _, err = r.ReadBits(8); err != nil {
+					return
+				}
+				// matrix_coefficients
+				if _, err = r.ReadBits(8); err != nil {
+					return
+				}
+			}
+		}
+
+		var chroma_loc_info_present_flag uint
+		if chroma_loc_info_present_flag, err = r.ReadBit(); err != nil {
+			return
+		}
+		if chroma_loc_info_present_flag != 0 {
+			// chroma_sample_loc_type_top_field
+			if _, err = r.ReadExponentialGolombCode(); err != nil {
+				return
+			}
+			// chroma_sample_loc_type_bottom_field
+			if _, err = r.ReadExponentialGolombCode(); err != nil {
+				return
+			}
+		}
+
+		var timing_info_present_flag uint
+		if timing_info_present_flag, err = r.ReadBit(); err != nil {
+			return
+		}
+		if timing_info_present_flag != 0 {
+			var num_units_in_tick uint
+			if num_units_in_tick, err = r.ReadBits(32); err != nil {
+				return
+			}
+
+			var time_scale uint
+			if time_scale, err = r.ReadBits(32); err != nil {
+				return
+			}
+
+			var fixed_frame_rate_flag uint
+			if fixed_frame_rate_flag, err = r.ReadBit(); err != nil {
+				return
+			}
+
+			self.FpsNum = time_scale
+			self.FpsDen = 2 * num_units_in_tick
+		}
+	}
+
 	self.Width = (self.MbWidth * 16) - self.CropLeft*2 - self.CropRight*2
 	self.Height = ((2 - frame_mbs_only_flag) * self.MbHeight * 16) - self.CropTop*2 - self.CropBottom*2
 
@@ -556,6 +671,10 @@ func (self CodecData) Width() int {
 
 func (self CodecData) Height() int {
 	return int(self.SPSInfo.Height)
+}
+
+func (self CodecData) Framerate() (int, int) {
+	return int(self.SPSInfo.FpsNum), int(self.SPSInfo.FpsDen)
 }
 
 func (self CodecData) PacketDuration([]byte) (dur time.Duration, err error) {
