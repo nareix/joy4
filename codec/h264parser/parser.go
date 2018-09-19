@@ -307,7 +307,36 @@ type SPSInfo struct {
 	Height uint
 }
 
+
+func cleanupEmulationPrevention(data []byte) (dataOut []byte, err error) {
+	dataOut = make([]byte, len(data))
+	var rdIdx, wrIdx int
+
+	for ; rdIdx<len(data); rdIdx++ {
+		// Read one byte
+		dataOut[wrIdx] = data[rdIdx]
+		// Check if the next 32 bits match 0x00000300, 0x00000301, 0x00000302, 0x00000303
+		if data[rdIdx] == 0 && rdIdx+3 < len(data) {
+			if data[rdIdx+1] == 0 && data[rdIdx+2] == 3 && (data[rdIdx+3] >= 0 && data[rdIdx+3] < 4) {
+				// Copy byte at rdIdx+1 (0x00)
+				rdIdx++
+				wrIdx++
+				dataOut[wrIdx] = data[rdIdx]
+				// Skip byte at rdIdx+2 (0x03)
+				rdIdx++
+			}
+		}
+		wrIdx++
+	}
+	return dataOut, nil
+}
+
 func ParseSPS(data []byte) (self SPSInfo, err error) {
+	data, err = cleanupEmulationPrevention(data)
+	if err != nil {
+		return
+	}
+
 	r := &bits.GolombBitReader{R: bytes.NewReader(data)}
 
 	if _, err = r.ReadBits(8); err != nil {
