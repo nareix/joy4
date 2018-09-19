@@ -678,8 +678,13 @@ func (self CodecData) Framerate() (int, int) {
 }
 
 func (self CodecData) PacketDuration([]byte) (dur time.Duration, err error) {
-	// FIXME must use the actual frame period, not this default one
-	dur = time.Duration(40 * time.Millisecond)
+	fpsNum, fpsDen := self.Framerate()
+	if fpsNum <= 0 || fpsDen <= 0 {
+		err = fmt.Errorf("invalid framerate: %d/%d", fpsNum, fpsDen)
+		fmt.Println(err)
+		return
+	}
+	dur = (time.Second * time.Duration(fpsDen)) / time.Duration(fpsNum)
 	return
 }
 
