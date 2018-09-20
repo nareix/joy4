@@ -28,10 +28,15 @@ type VideoScaler struct {
 	inYStride, OutYStride int
 	inCStride, OutCStride int
 	swsCtx *C.struct_SwsContext
+	toBeFreed unsafe.Pointer
 }
 
 func (self *VideoScaler) Close() {
 	C.sws_freeContext(self.swsCtx);
+}
+
+func (self *VideoScaler) FreeOutputImage() {
+	C.av_freep(self.toBeFreed)
 }
 
 
@@ -42,7 +47,10 @@ func (self *VideoScaler) AllocOutputImage(strides (*[3]C.int)) (dataPtr ([4]*C.u
 	bufSize = int(C.wrap_av_image_alloc(&dataPtr[0], &strides[0], C.int(self.OutWidth), C.int(self.OutHeight), PixelFormatAV2FF(self.OutPixelFormat), C.int(align)))
 	if bufSize < 0 {
 		err = fmt.Errorf("Could not allocate image\n");
+		return
 	}
+
+	self.toBeFreed = unsafe.Pointer(&dataPtr[0])
 	return
 }
 
@@ -92,7 +100,6 @@ func (self *VideoScaler) videoScaleOne(src av.VideoFrameRaw) (dst av.VideoFrameR
 
 
 	// fmt.Println("Scaling succeeded: pix_fmt:", self.OutPixelFormat, "resolution:", self.OutWidth, self.OutHeight)
-	// C.av_freep(&dstPtr[0]) // TODO callback to free
 	return
 }
 
@@ -115,8 +122,6 @@ func (self *VideoScaler) VideoScale(src av.VideoFrameRaw) (dst av.VideoFrameRaw,
 				/*C.av_get_pix_fmt_name*/(self.OutPixelFormat), self.OutWidth, self.OutHeight);
 			return
 		}
-
-		fmt.Println("VideoScaler:\n", self)
 	}
 
 	dst, err = self.videoScaleOne(src)
@@ -354,6 +359,7 @@ func (enc *VideoEncoder) Encode(frame av.VideoFrameRaw) (pkts [][]byte, err erro
 		pkts = append(pkts, pkt)
 	}
 
+	enc.scaler.FreeOutputImage()
 	return
 }
 
