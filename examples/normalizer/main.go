@@ -78,13 +78,13 @@ func main() {
 			// Must be set from input stream
 			fpsNum, fpsDen := stream.Framerate()
 			fmt.Println("input fps:", fpsNum, fpsDen)
-			enc.SetFramerate(fpsNum, fpsDen)
-			// Configurable (can be converted)
+			enc.SetFramerate(stream.Framerate())
+			// Configurable (can be set from input stream, or set by user and the input video will be converted before encoding)
 			enc.SetResolution(640, 480)
 			enc.SetPixelFormat(av.I420)
 			// Must be configured by user
-			enc.SetBitrate(800000)
-			enc.SetGopSize(2)
+			enc.SetBitrate(8000000)
+			enc.SetGopSize(fpsNum/fpsDen) // 1s gop
 			return
 		}
 	
