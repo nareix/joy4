@@ -75,10 +75,8 @@ func (self *VideoScaler) videoScaleOne(src av.VideoFrameRaw) (dst av.VideoFrameR
 		return
 	}
 
-
 	// convert to destination format and resolution
 	C.sws_scale(self.swsCtx, &srcPtr[0], &inStrides[0], 0, C.int(self.inHeight), &dstPtr[0], &outStrides[0])
-
 
 	dst.PixelFormat	= PixelFormatFF2AV(int32(self.OutPixelFormat))
 	dst.YStride		= int(outStrides[0])
@@ -88,18 +86,6 @@ func (self *VideoScaler) videoScaleOne(src av.VideoFrameRaw) (dst av.VideoFrameR
 	dst.Y			= unsafe.Pointer(dstPtr[0])
 	dst.Cb			= unsafe.Pointer(dstPtr[1])
 	dst.Cr			= unsafe.Pointer(dstPtr[2])
-
-
-	// C.memset(dst.Y,  128, C.ulong(dst.YStride * self.OutHeight))
-	// C.memset(dst.Cb, 128, C.ulong(dst.CStride * self.OutHeight/2))
-	// C.memset(dst.Cr, 128, C.ulong(dst.CStride * self.OutHeight/2))
-
-	// fmt.Println("dst.YStride * self.OutHeight:", dst.YStride * self.OutHeight)
-	// fmt.Println("dst.CStride * self.OutHeight/2:", dst.CStride * self.OutHeight/2)
-	// dst.Dump("framescale.yuv")
-
-
-	// fmt.Println("Scaling succeeded: pix_fmt:", self.OutPixelFormat, "resolution:", self.OutWidth, self.OutHeight)
 	return
 }
 
@@ -147,7 +133,6 @@ type VideoEncoder struct {
 // Setup initializes the encoder context and checks user params
 func (enc *VideoEncoder) Setup() (err error) {
 	ff := &enc.ff.ff
-
 	ff.frame = C.av_frame_alloc()
 
 	// TODO check params (bitrate, etc)
@@ -160,19 +145,24 @@ func (enc *VideoEncoder) Setup() (err error) {
 	//	enc.Bitrate = 80000
 	//}
 
+
 	// All the following params are described in ffmpeg: avcodec.h, in struct AVCodecContext
 	ff.codecCtx.width			= C.int(enc.width)
 	ff.codecCtx.height			= C.int(enc.height)
 	ff.codecCtx.pix_fmt			= PixelFormatAV2FF(enc.pixelFormat)
+	//
 	ff.codecCtx.time_base.num	= C.int(enc.fpsDen)
 	ff.codecCtx.time_base.den	= C.int(enc.fpsNum)
 	ff.codecCtx.ticks_per_frame	= 2;
+	//
 	ff.codecCtx.gop_size		= C.int(enc.gopSize)
+	//
 	ff.codecCtx.bit_rate		= C.int64_t(enc.Bitrate)
 
 
 	if C.avcodec_open2(ff.codecCtx, ff.codec, nil) != 0 {
 		err = fmt.Errorf("ffmpeg: encoder: avcodec_open2 failed")
+		fmt.Println(err)
 		return
 	}
 
@@ -579,7 +569,6 @@ func (self *VideoDecoder) Decode(pkt []byte) (img av.VideoFrameRaw, err error) {
 
 		// SubsampleRatio: image.YCbCrSubsampleRatio420, // TODO
 
-		// VideoFrameAssignToAV(ffimg.frame, &img)
 		img.SetPixelFormat(PixelFormatFF2AV(int32(C.AV_PIX_FMT_YUV420P)))
 		img.SetStride(ys, cs)
 		img.SetResolution(w, h)
