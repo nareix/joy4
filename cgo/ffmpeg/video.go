@@ -135,15 +135,37 @@ func (enc *VideoEncoder) Setup() (err error) {
 	ff := &enc.ff.ff
 	ff.frame = C.av_frame_alloc()
 
-	// TODO check params (bitrate, etc)
+	// Check user parameters
+	if enc.width <= 0 || enc.height <= 0 {
+		fmt.Println("Error: Invalid resolution:", enc.width, enc.height)
+		return
+	}
 
-	// if enc.PixelFormat == av.PixelFormat(0) {
-	// 	enc.PixelFormat = PixelFormatFF2AV(*ff.codec.sample_fmts)
-	// }
+	if enc.pixelFormat == av.PixelFormat(0) {
+		enc.pixelFormat = PixelFormatFF2AV(*ff.codec.sample_fmts)
+		fmt.Println("Warning: Applying default pixel format:", enc.pixelFormat)
+	}
 
-	//if enc.Bitrate == 0 {
-	//	enc.Bitrate = 80000
-	//}
+	if enc.fpsDen <= 0 || enc.fpsNum <= 0 {
+		fmt.Println("Error: Invalid framerate:", enc.fpsNum, "/", enc.fpsDen)
+		return
+	}
+
+	if enc.gopSize <= 0 {
+		fmt.Println("Warning: applying minimum gop size: 2 frames")
+		enc.gopSize = 2
+	} else if enc.gopSize > 240 {
+		fmt.Println("Warning: applying maximum gop size: 240 frames")
+		enc.gopSize = 240
+	}
+
+	if enc.Bitrate == 0 {
+		fmt.Println("Warning: applying minimum bitrate: 100 kbps")
+		enc.Bitrate = 100000
+	} else if enc.Bitrate > 10000000 {
+		fmt.Println("Warning: applying maximum bitrate: 10 Mbps")
+		enc.Bitrate = 10000000
+	}
 
 
 	// All the following params are described in ffmpeg: avcodec.h, in struct AVCodecContext
@@ -156,9 +178,36 @@ func (enc *VideoEncoder) Setup() (err error) {
 	ff.codecCtx.ticks_per_frame	= 2;
 	//
 	ff.codecCtx.gop_size		= C.int(enc.gopSize)
+	ff.codecCtx.max_b_frames	= C.int(2)
+	//keyint_min
+	ff.codecCtx.refs			= C.int(1)
 	//
 	ff.codecCtx.bit_rate		= C.int64_t(enc.Bitrate)
+	ff.codecCtx.rc_max_rate		= ff.codecCtx.bit_rate
+	ff.codecCtx.rc_min_rate		= ff.codecCtx.bit_rate
+	ff.codecCtx.rc_buffer_size	= C.int(ff.codecCtx.bit_rate*2)
+	//
+	// ff.codecCtx.profile			= C.FF_PROFILE_H264_BASELINE
+	// ff.codecCtx.level			= C.int(30)
 
+
+	err = enc.SetOption("preset", "ultrafast")
+
+	if err != nil {
+		fmt.Println("Error while setting preset, err", err)
+	}
+	err = enc.SetOption("tune", "zerolatency")
+	if err != nil {
+		fmt.Println("Error while setting preset, err", err)
+	}
+
+	// disable b-pyramid. CLI options for this is "-b-pyramid 0"
+	// Because Quicktime (ie. iOS) doesn't support this option
+	// cerr = C.av_opt_set(ff.codecCtx.priv_data, "b-pyramid", "0", 0)
+	err = enc.SetOption("b-pyramid", "0")
+	if err != nil {
+		fmt.Println("Error while setting b-pyramid, err", err)
+	}
 
 	if C.avcodec_open2(ff.codecCtx, ff.codec, nil) != 0 {
 		err = fmt.Errorf("ffmpeg: encoder: avcodec_open2 failed")
