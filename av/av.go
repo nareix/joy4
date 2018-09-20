@@ -378,6 +378,33 @@ func (pixFmt PixelFormat) IsPlanar() bool {
 	}
 }
 
+// HorizontalSubsampleRatio returns the ratio of Y bytes over U or V bytes in a row of pixels
+func (pixFmt PixelFormat) HorizontalSubsampleRatio() int {
+	switch pixFmt {
+	case I420:
+	case NV12:
+	case NV21:
+	case UYVY:
+	case YUYV:
+		return 2
+	}
+	return -1
+}
+
+// VerticalSubsampleRatio returns the ratio of Y bytes over U or V bytes in a column of pixels
+func (pixFmt PixelFormat) VerticalSubsampleRatio() int {
+	switch pixFmt {
+	case I420:
+	case NV12:
+	case NV21:
+		return 2
+	case UYVY:
+	case YUYV:
+		return 1
+	}
+	return -1
+}
+
 
 // VideoFrameRaw Raw video frame.
 type VideoFrameRaw struct {
@@ -385,7 +412,6 @@ type VideoFrameRaw struct {
 	Y, Cb,Cr       unsafe.Pointer
 	YStride        int
 	CStride        int
-	SubsampleRatio image.YCbCrSubsampleRatio
 	Rect           image.Rectangle
 	FpsNum, FpsDen int
 }
@@ -429,7 +455,6 @@ func (v VideoFrameRaw) Framerate() (int, int) {
 
 func (v *VideoFrameRaw) SetPixelFormat(format PixelFormat) {
 	v.PixelFormat = format
-	v.SubsampleRatio = image.YCbCrSubsampleRatio420 // TODO from f.format (AVPixelFormat)
 }
 
 func (v *VideoFrameRaw) SetStride(yStride, cStride int) {

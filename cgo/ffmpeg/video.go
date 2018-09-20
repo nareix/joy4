@@ -81,7 +81,6 @@ func (self *VideoScaler) videoScaleOne(src av.VideoFrameRaw) (dst av.VideoFrameR
 	dst.PixelFormat	= PixelFormatFF2AV(int32(self.OutPixelFormat))
 	dst.YStride		= int(outStrides[0])
 	dst.CStride		= int(outStrides[1])
-	// TODO dst.SubsampleRatio =
 	dst.Rect		= image.Rect(0, 0, self.OutWidth, self.OutHeight)
 	dst.Y			= unsafe.Pointer(dstPtr[0])
 	dst.Cb			= unsafe.Pointer(dstPtr[1])
@@ -367,11 +366,11 @@ func (self *VideoEncoder) scale(in av.VideoFrameRaw) (out av.VideoFrameRaw, err 
 			inHeight:		in.Height(),
 			inYStride:		in.YStride,
 			inCStride:		in.CStride,
-			OutPixelFormat: in.GetPixelFormat(), // TODO
+			OutPixelFormat: self.pixelFormat,
 			OutWidth:		self.width,
 			OutHeight:		self.height,
-			OutYStride:		self.width, // TODO
-			OutCStride:		self.width/2, // TODO
+			OutYStride:		self.width,
+			OutCStride:		self.width/in.GetPixelFormat().HorizontalSubsampleRatio(),
 		}
 	}
 	if out, err = self.scaler.VideoScale(in); err != nil {
@@ -615,8 +614,6 @@ func (self *VideoDecoder) Decode(pkt []byte) (img av.VideoFrameRaw, err error) {
 		h := int(frame.height)
 		ys := int(frame.linesize[0])
 		cs := int(frame.linesize[1])
-
-		// SubsampleRatio: image.YCbCrSubsampleRatio420, // TODO
 
 		img.SetPixelFormat(PixelFormatFF2AV(int32(C.AV_PIX_FMT_YUV420P)))
 		img.SetStride(ys, cs)
