@@ -28,7 +28,7 @@ type VideoScaler struct {
 	inYStride, OutYStride int
 	inCStride, OutCStride int
 	swsCtx *C.struct_SwsContext
-	toBeFreed unsafe.Pointer
+	outputImgPtr unsafe.Pointer
 }
 
 func (self *VideoScaler) Close() {
@@ -36,7 +36,9 @@ func (self *VideoScaler) Close() {
 }
 
 func (self *VideoScaler) FreeOutputImage() {
-	C.av_freep(self.toBeFreed)
+	if self != nil && self.outputImgPtr != nil {
+		C.av_freep(self.outputImgPtr)
+	}
 }
 
 
@@ -50,7 +52,7 @@ func (self *VideoScaler) AllocOutputImage(strides (*[3]C.int)) (dataPtr ([4]*C.u
 		return
 	}
 
-	self.toBeFreed = unsafe.Pointer(&dataPtr[0])
+	self.outputImgPtr = unsafe.Pointer(&dataPtr[0])
 	return
 }
 
