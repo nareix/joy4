@@ -29,6 +29,43 @@ func (w writeFlusher) Flush() error {
 	return nil
 }
 
+func findcodec(stream av.VideoCodecData, i int) (need bool, dec av.VideoDecoder, enc av.VideoEncoder, err error) {
+	need = true
+	dec, err = ffmpeg.NewVideoDecoder(stream)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	if dec == nil {
+		err = fmt.Errorf("Video decoder not found")
+		return
+	}
+
+	enc, err = ffmpeg.NewVideoEncoderByCodecType(av.H264)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	if enc == nil {
+		err = fmt.Errorf("Video encoder not found")
+		return
+	}
+
+	fpsNum, fpsDen := stream.Framerate()
+	fmt.Println("input fps:", fpsNum, fpsDen)
+
+	// Encoder config
+	// Must be set from input stream
+	enc.SetFramerate(fpsNum, fpsDen)
+	// Configurable (can be set from input stream, or set by user and the input video will be converted before encoding)
+	enc.SetResolution(352, 240)
+	enc.SetPixelFormat(av.I420)
+	// Must be configured by user
+	enc.SetBitrate(1000000)
+	enc.SetGopSize(fpsNum/fpsDen) // 1s gop
+	return
+}
+
 func main() {
 	fmt.Println("starting server")
 	server := &rtmp.Server{}
@@ -70,24 +107,6 @@ func main() {
 			return
 		}
 
-
-		findcodec := func(stream av.VideoCodecData, i int) (need bool, dec av.VideoDecoder, enc av.VideoEncoder, err error) {
-			need = true
-			dec, _ = ffmpeg.NewVideoDecoder(stream)
-			enc, _ = ffmpeg.NewVideoEncoderByCodecType(av.H264)
-			// Must be set from input stream
-			fpsNum, fpsDen := stream.Framerate()
-			fmt.Println("input fps:", fpsNum, fpsDen)
-			enc.SetFramerate(stream.Framerate())
-			// Configurable (can be set from input stream, or set by user and the input video will be converted before encoding)
-			enc.SetResolution(640, 480)
-			enc.SetPixelFormat(av.I420)
-			// Must be configured by user
-			enc.SetBitrate(8000000)
-			enc.SetGopSize(fpsNum/fpsDen) // 1s gop
-			return
-		}
-	
 		trans := &transcode.Demuxer{
 			Options: transcode.Options{
 				FindVideoDecoderEncoder: findcodec,
@@ -128,10 +147,31 @@ func main() {
 		}
 	})
 
+	http.HandleFunc("/file", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("Request:", r.URL.Path)
+		w.Header().Set("Content-Type", "video/x-flv")
+		w.Header().Set("Transfer-Encoding", "chunked")		
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(200)
+		flusher := w.(http.Flusher)
+		flusher.Flush()
+
+		file, _ := avutil.Open("/Users/Antoine/Documents/02-res/pointedugroin.mp4")
+
+		trans := &transcode.Demuxer{
+			Options: transcode.Options{
+				FindVideoDecoderEncoder: findcodec,
+			},
+			Demuxer: file,
+		}
+
+		muxer := flv.NewMuxerWriteFlusher(writeFlusher{httpflusher: flusher, Writer: w})
+		avutil.CopyFile(muxer, trans)
+		file.Close()
+	})
+
 	go http.ListenAndServe(":8089", nil)
-
 	server.ListenAndServe()
-
 	fmt.Println("Done")
 
 	// ffmpeg -re -i movie.flv -c copy -f flv rtmp://localhost/movie
