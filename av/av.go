@@ -184,7 +184,6 @@ type VideoCodecData interface {
 	Width() int // Video height
 	Height() int // Video width
 	Framerate() (int, int) // Video FPS num and denom
-	// GetPixelFormat() PixelFormat // Video pixel format
 	PacketDuration([]byte) (time.Duration, error) // get video compressed packet duration
 }
 
@@ -443,10 +442,6 @@ func (v VideoFrameRaw) GetDataPtr() (y, cb, cr unsafe.Pointer) {
 func (v VideoFrameRaw) Framerate() (int, int) {
 	return v.FpsNum, v.FpsDen
 }
-
-// func (v VideoFrameRaw) GetPixelFormat() PixelFormat {
-// 	return I420
-// }
 
 // func (self VideoFrame) Duration() time.Duration {
 // 	return time.Second * time.Duration(self.SampleCount) / time.Duration(self.SampleRate)
