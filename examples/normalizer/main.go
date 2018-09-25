@@ -6,13 +6,11 @@ import (
 	"io"
 	"net/http"
 	"github.com/nareix/joy4/format"
-	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/av/avutil"
 	"github.com/nareix/joy4/av/pubsub"
 	"github.com/nareix/joy4/av/transcode"
 	"github.com/nareix/joy4/format/rtmp"
 	"github.com/nareix/joy4/format/flv"
-	"github.com/nareix/joy4/cgo/ffmpeg"
 )
 
 func init() {
@@ -27,43 +25,6 @@ type writeFlusher struct {
 func (w writeFlusher) Flush() error {
 	w.httpflusher.Flush()
 	return nil
-}
-
-func findcodec(stream av.VideoCodecData, i int) (need bool, dec av.VideoDecoder, enc av.VideoEncoder, err error) {
-	need = true
-	dec, err = ffmpeg.NewVideoDecoder(stream)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	if dec == nil {
-		err = fmt.Errorf("Video decoder not found")
-		return
-	}
-
-	enc, err = ffmpeg.NewVideoEncoderByCodecType(av.H264)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	if enc == nil {
-		err = fmt.Errorf("Video encoder not found")
-		return
-	}
-
-	fpsNum, fpsDen := stream.Framerate()
-	fmt.Println("input fps:", fpsNum, fpsDen)
-
-	// Encoder config
-	// Must be set from input stream
-	enc.SetFramerate(fpsNum, fpsDen)
-	// Configurable (can be set from input stream, or set by user and the input video will be converted before encoding)
-	enc.SetResolution(352, 240)
-	enc.SetPixelFormat(av.I420)
-	// Must be configured by user
-	enc.SetBitrate(1000000)
-	enc.SetGopSize(fpsNum/fpsDen) // 1s gop
-	return
 }
 
 func main() {
@@ -109,7 +70,8 @@ func main() {
 
 		trans := &transcode.Demuxer{
 			Options: transcode.Options{
-				FindVideoDecoderEncoder: findcodec,
+				FindAudioDecoderEncoder: findAudioCodec,
+				FindVideoDecoderEncoder: findVideoCodec,
 			},
 			Demuxer: conn,
 		}
@@ -156,11 +118,16 @@ func main() {
 		flusher := w.(http.Flusher)
 		flusher.Flush()
 
-		file, _ := avutil.Open("/Users/Antoine/Documents/02-res/pointedugroin.mp4")
+		// /Users/Antoine/Documents/02-res/Cosmos Laundromat - First Cycle.mp4
+		// /Users/Antoine/Documents/02-res/PIRELLI+-+Refraction.mp4
+		// /Users/Antoine/Documents/02-res/pointedugroin.mp4
+		// /Users/Antoine/replay-09-04.mp4
+		file, _ := avutil.Open("/Users/Antoine/Documents/02-res/PIRELLI+-+Refraction.mp4")
 
 		trans := &transcode.Demuxer{
 			Options: transcode.Options{
-				FindVideoDecoderEncoder: findcodec,
+				FindAudioDecoderEncoder: findAudioCodec,
+				FindVideoDecoderEncoder: findVideoCodec,
 			},
 			Demuxer: file,
 		}
