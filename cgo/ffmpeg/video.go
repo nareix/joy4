@@ -298,8 +298,8 @@ func (enc *VideoEncoder) encodeOne(frame av.VideoFrameRaw) (gotpkt bool, pkt []b
 	ff.frame.data[2] = (*C.uchar)(data2)
 
 	// Increase pts and convert in 90k: pts * 90000 / fps
-	enc.pts++
 	ff.frame.pts = C.int64_t( int(enc.pts) * enc.fpsDen * 90000 / enc.fpsNum)
+	enc.pts++
 
 	cerr := C.avcodec_encode_video2(ff.codecCtx, &cpkt, ff.frame, &cgotpkt)
 	if cerr < C.int(0) {
