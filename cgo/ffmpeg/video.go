@@ -179,28 +179,28 @@ func (enc *VideoEncoder) Setup() (err error) {
 	ff.codecCtx.ticks_per_frame	= 2;
 	//
 	ff.codecCtx.gop_size		= C.int(enc.gopSize)
-	ff.codecCtx.max_b_frames	= C.int(2)
+	ff.codecCtx.max_b_frames	= C.int(3)
 	//keyint_min
 	ff.codecCtx.refs			= C.int(1)
 	//
 	ff.codecCtx.bit_rate		= C.int64_t(enc.Bitrate)
-	ff.codecCtx.rc_max_rate		= ff.codecCtx.bit_rate
-	ff.codecCtx.rc_min_rate		= ff.codecCtx.bit_rate
-	ff.codecCtx.rc_buffer_size	= C.int(ff.codecCtx.bit_rate*2)
+	ff.codecCtx.bit_rate_tolerance = C.int(ff.codecCtx.bit_rate/10);
+	// ff.codecCtx.rc_max_rate		= ff.codecCtx.bit_rate*2
+	// ff.codecCtx.rc_min_rate		= ff.codecCtx.bit_rate/2
+	// ff.codecCtx.rc_buffer_size	= C.int(ff.codecCtx.bit_rate*2)
 	//
 	// ff.codecCtx.profile			= C.FF_PROFILE_H264_BASELINE
-	// ff.codecCtx.level			= C.int(30)
+	// ff.codecCtx.level			= C.int(31)
 
 
-	err = enc.SetOption("preset", "ultrafast")
-
+	err = enc.SetOption("preset", "slow")
 	if err != nil {
 		fmt.Println("Error while setting preset, err", err)
 	}
-	err = enc.SetOption("tune", "zerolatency")
-	if err != nil {
-		fmt.Println("Error while setting preset, err", err)
-	}
+	// err = enc.SetOption("tune", "zerolatency")
+	// if err != nil {
+	// 	fmt.Println("Error while setting preset, err", err)
+	// }
 
 	// disable b-pyramid. CLI options for this is "-b-pyramid 0"
 	// Because Quicktime (ie. iOS) doesn't support this option
