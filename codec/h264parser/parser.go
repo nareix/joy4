@@ -291,6 +291,41 @@ func SplitNALUs(b []byte) (nalus [][]byte, typ int) {
 	return [][]byte{b}, NALU_RAW
 }
 
+// PktToCodecData parses NAL units to find SPS and PPS, and derive codec data from them. h264CodecData can be nil if the SPS and/or PPS is not found
+func PktToCodecData(pkt av.Packet) (h264CodecData av.CodecData, err error) {
+	h264CodecData = nil
+	err = nil
+	if pkt.IsKeyFrame {
+		var sps, pps []byte
+		nalus, _ := SplitNALUs(pkt.Data)
+
+		for _, nalu := range nalus {
+			if len(nalu) > 0 {
+				naltype := nalu[0] & 0x1f
+				switch {
+				case naltype == 7:
+					sps = nalu
+				case naltype == 8:
+					pps = nalu
+				}
+			}
+		}
+
+		if len(sps) > 0 && len(pps) > 0 {
+			h264CodecData, err = NewCodecDataFromSPSAndPPS(sps, pps)
+			if err != nil {
+				fmt.Println("can't init codecData, err:", err)
+				return
+			}
+		} else {
+			err = fmt.Errorf("h264parser: empty sps and/or pps")
+			fmt.Println("can't init codecData, err:", err)
+			return
+		}
+	}
+	return
+}
+
 type SPSInfo struct {
 	ProfileIdc uint
 	LevelIdc   uint
