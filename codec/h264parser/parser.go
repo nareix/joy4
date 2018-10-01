@@ -1,4 +1,3 @@
-
 package h264parser
 
 import (
@@ -307,7 +306,7 @@ type SPSInfo struct {
 }
 
 
-func cleanupEmulationPrevention(data []byte) (dataOut []byte, err error) {
+func cleanupEmulationPrevention(data []byte) (dataOut []byte) {
 	dataOut = make([]byte, len(data))
 	var rdIdx, wrIdx int
 
@@ -327,14 +326,11 @@ func cleanupEmulationPrevention(data []byte) (dataOut []byte, err error) {
 		}
 		wrIdx++
 	}
-	return dataOut, nil
+	return dataOut
 }
 
 func ParseSPS(data []byte) (self SPSInfo, err error) {
-	data, err = cleanupEmulationPrevention(data)
-	if err != nil {
-		return
-	}
+	data = cleanupEmulationPrevention(data)
 
 	r := &bits.GolombBitReader{R: bytes.NewReader(data)}
 
