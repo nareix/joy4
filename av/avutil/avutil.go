@@ -300,7 +300,6 @@ func CopyPackets(dst av.PacketWriter, src av.PacketReader) (err error) {
 				break
 			}
 			fmt.Println("Error while reading packets:", err)
-			fmt.Println()
 			// return
 		}
 		if err = dst.WritePacket(pkt); err != nil {
