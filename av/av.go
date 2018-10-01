@@ -179,8 +179,8 @@ type CodecData interface {
 
 type VideoCodecData interface {
 	CodecData
-	Width() int // Video height
-	Height() int // Video width
+	Width() int // Video width
+	Height() int // Video height
 }
 
 type AudioCodecData interface {
