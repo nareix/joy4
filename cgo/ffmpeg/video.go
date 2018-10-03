@@ -621,7 +621,7 @@ func (self *VideoDecoder) Decode(pkt []byte) (img av.VideoFrameRaw, err error) {
 		img.SetStride(ys, cs)
 		img.SetResolution(w, h)
 		img.SetDataPtr( unsafe.Pointer(frame.data[0]), unsafe.Pointer(frame.data[1]), unsafe.Pointer(frame.data[2]))
-
+		img.SetFramerate( int(ff.codecCtx.framerate.num), int(ff.codecCtx.framerate.den)) // can use framerate or 1/(time_base/2)
 	} else {
 		err = fmt.Errorf("ffmpeg: avcodec_decode_video2 returned no frame")
 	}
