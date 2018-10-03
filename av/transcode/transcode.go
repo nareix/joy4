@@ -313,9 +313,6 @@ func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
 		if rpkt, err = self.Demuxer.ReadPacket(); err != nil {
 			return
 		}
-		if rpkt.Idx == 0 {
-			// fmt.Println("video pkt:", rpkt.CompositionTime, rpkt.Time)
-		}
 		if self.outpkts, err = self.transcoder.Do(rpkt); err != nil {
 			return
 		}
