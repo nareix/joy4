@@ -467,6 +467,10 @@ func (v *VideoFrameRaw) SetDataPtr(y, cb, cr unsafe.Pointer) {
 	v.Cr = cr
 }
 
+func (v *VideoFrameRaw) SetFramerate(num, den int) () {
+	v.FpsNum = num
+	v.FpsDen = den
+}
 
 // HasSameFormat returns true if this video frame has the same format as another video frame.
 func (self VideoFrameRaw) HasSameFormat(other VideoFrameRaw) bool {
