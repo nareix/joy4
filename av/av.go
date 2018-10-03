@@ -6,8 +6,6 @@ import (
 	"C"
 	"fmt"
 	"time"
-	"image"
-	"unsafe"
 )
 
 // Audio sample format.
@@ -395,9 +393,13 @@ func (pixFmt PixelFormat) IsPlanar() bool {
 func (pixFmt PixelFormat) HorizontalSubsampleRatio() int {
 	switch pixFmt {
 	case I420:
+		return 2
 	case NV12:
+		return 2
 	case NV21:
+		return 2
 	case UYVY:
+		return 2
 	case YUYV:
 		return 2
 	}
@@ -418,135 +420,3 @@ func (pixFmt PixelFormat) VerticalSubsampleRatio() int {
 	return -1
 }
 
-
-// VideoFrameRaw Raw video frame.
-type VideoFrameRaw struct {
-	PixelFormat    PixelFormat // video sample format, e.g: YUV,RGB,...
-	Y, Cb,Cr       unsafe.Pointer
-	YStride        int
-	CStride        int
-	Rect           image.Rectangle
-	FpsNum, FpsDen int
-}
-
-func (v VideoFrameRaw) Width() int {
-	return v.Rect.Dx()
-}
-
-func (v VideoFrameRaw) Height() int {
-	return v.Rect.Dy()
-}
-
-func (v VideoFrameRaw) GetPixelFormat() PixelFormat {
-	return v.PixelFormat
-}
-
-func (v VideoFrameRaw) GetStride() (yStride, cStride int) {
-	return v.YStride, v.CStride
-}
-
-func (v VideoFrameRaw) GetResolution() (w, h int) {
-	return v.Width(), v.Height()
-}
-
-func (v VideoFrameRaw) GetDataPtr() (y, cb, cr unsafe.Pointer) {
-	return v.Y, v.Cb, v.Cr
-}
-
-func (v VideoFrameRaw) Framerate() (int, int) {
-	return v.FpsNum, v.FpsDen
-}
-
-// func (self VideoFrame) Duration() time.Duration {
-// 	return time.Second * time.Duration(self.SampleCount) / time.Duration(self.SampleRate)
-// }
-
-
-func (v *VideoFrameRaw) SetPixelFormat(format PixelFormat) {
-	v.PixelFormat = format
-}
-
-func (v *VideoFrameRaw) SetStride(yStride, cStride int) {
-	v.YStride = yStride
-	v.CStride = cStride
-}
-
-func (v *VideoFrameRaw) SetResolution(w, h int) {
-	v.Rect = image.Rectangle{ image.Point{0,0}, image.Point{w, h}}
-}
-
-func (v *VideoFrameRaw) SetDataPtr(y, cb, cr unsafe.Pointer) {
-	v.Y  = y
-	v.Cb = cb
-	v.Cr = cr
-}
-
-func (v *VideoFrameRaw) SetFramerate(num, den int) () {
-	v.FpsNum = num
-	v.FpsDen = den
-}
-
-// HasSameFormat returns true if this video frame has the same format as another video frame.
-func (self VideoFrameRaw) HasSameFormat(other VideoFrameRaw) bool {
-	if self.PixelFormat != other.PixelFormat {
-		return false
-	}
-	// TODO
-	// if self.Width != other.Width {
-	// 	return false
-	// }
-	// if self.Height != other.Height {
-	// 	return false
-	// }
-	return true
-}
-
-
-func (self VideoFrameRaw) ToImage() (image.Image) {
-	r := image.Rectangle{image.Point{0, 0}, image.Point{self.Width(), self.Height()}}
-
-	var ratio image.YCbCrSubsampleRatio
-
-	// If HorizontalSubsampleRatio == 2, YCbCrSubsampleRatio420 matches the value we need in NewYCbCr
-	if self.GetPixelFormat().HorizontalSubsampleRatio() == 2 {
-		ratio = image.YCbCrSubsampleRatio420
-	}
-	img := image.NewYCbCr(r, ratio)
-
-	lumaSize := self.YStride*self.Height()
-	// chromaSize := self.CStride*self.Height()
-
-	img.Y = C.GoBytes(self.Y, C.int(lumaSize))
-	// img.Cb = C.GoBytes(self.Cb, C.int(chromaSize)) // FIXME crash here
-	// img.Cr = C.GoBytes(self.Cr, C.int(chromaSize))
-
-	return img
-}
-
-// func (self VideoFrameRaw) Free() {
-// 	free(self.Y)
-// 	free(self.Cb)
-// 	free(self.Cr)
-// }
-
-// VideoEncoder can encode raw video frame into compressed video packets.
-// cgo/ffmpeg inplements VideoEncoder, using ffmpeg.NewVideoEncoder to create it.
-type VideoEncoder interface {
-	CodecData() (VideoCodecData, error) // encoder's codec data can put into container
-	Encode(VideoFrameRaw) ([][]byte, error) // encode raw video frame into compressed pakcet(s)
-	Close() // close encoder, free cgo contexts
-	SetResolution(int, int) (error) // set video resolution (width and height)
-	SetPixelFormat(PixelFormat) (error) // set encoder pixel format
-	SetFramerate(int, int) (error) // set frame rate (numerator and denominator)
-	SetGopSize(int) (error) // set gop size in frames
-	SetBitrate(int) (error) // set encoder bitrate
-	SetOption(string,interface{}) (error) // encoder setopt, in ffmpeg is av_opt_set_dict()
-	GetOption(string,interface{}) (error) // encoder getopt
-}
-
-// VideoDecoder can decode compressed video packets into raw video frame.
-// use ffmpeg.NewVideoDecoder to create it.
-type VideoDecoder interface {
-	Decode([]byte) (VideoFrameRaw, error) // decode one compressed video packet
-	Close() // close decode, free cgo contexts
-}

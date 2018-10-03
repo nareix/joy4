@@ -7,6 +7,7 @@ import (
 	"time"
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/av/pktque"
+	"github.com/nareix/joy4/cgo/ffmpeg"
 )
 
 var Debug bool
@@ -18,8 +19,8 @@ type tStream struct {
 	aenc av.AudioEncoder
 	adec av.AudioDecoder
 	vencodec, vdecodec av.VideoCodecData
-	venc av.VideoEncoder
-	vdec av.VideoDecoder
+	venc *ffmpeg.VideoEncoder
+	vdec *ffmpeg.VideoDecoder
 }
 
 type Options struct {
@@ -28,7 +29,7 @@ type Options struct {
 		need bool, dec av.AudioDecoder, enc av.AudioEncoder, err error,
 	)
 	FindVideoDecoderEncoder func(codec av.VideoCodecData, config *av.VideoConfig, i int) (
-		need bool, dec av.VideoDecoder, enc av.VideoEncoder, err error,
+		need bool, dec *ffmpeg.VideoDecoder, enc *ffmpeg.VideoEncoder, err error,
 	)
 	AudioConfig *av.AudioConfig
 	VideoConfig *av.VideoConfig
@@ -67,8 +68,8 @@ func NewTranscoder(streams []av.CodecData, options Options) (_self *Transcoder, 
 		} else if stream.Type().IsVideo() {
 			if options.FindVideoDecoderEncoder != nil {
 				var ok bool
-				var enc av.VideoEncoder
-				var dec av.VideoDecoder
+				var enc *ffmpeg.VideoEncoder
+				var dec *ffmpeg.VideoDecoder
 				ok, dec, enc, err = options.FindVideoDecoderEncoder(stream.(av.VideoCodecData), options.VideoConfig,  i)
 				if ok {
 					if err != nil {
@@ -137,7 +138,7 @@ func (self *tStream) audioDecodeAndEncode(inpkt av.Packet) (outpkts []av.Packet,
 
 func (self *tStream) videoDecodeAndEncode(inpkt av.Packet) (outpkts []av.Packet, err error) {
 	var dur time.Duration
-	var frame av.VideoFrameRaw
+	var frame *ffmpeg.VideoFrame
 	if frame, err = self.vdec.Decode(inpkt.Data); err != nil {
 		return
 	}
