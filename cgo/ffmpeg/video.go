@@ -617,7 +617,7 @@ func (self *VideoDecoder) Decode(pkt []byte) (img av.VideoFrameRaw, err error) {
 		ys := int(frame.linesize[0])
 		cs := int(frame.linesize[1])
 
-		img.SetPixelFormat(PixelFormatFF2AV(int32(C.AV_PIX_FMT_YUV420P)))
+		img.SetPixelFormat(PixelFormatFF2AV(int32(frame.format)))
 		img.SetStride(ys, cs)
 		img.SetResolution(w, h)
 		img.SetDataPtr( unsafe.Pointer(frame.data[0]), unsafe.Pointer(frame.data[1]), unsafe.Pointer(frame.data[2]))
