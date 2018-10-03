@@ -6,6 +6,7 @@ import (
 	"C"
 	"fmt"
 	"time"
+	"image"
 )
 
 // Audio sample format.
@@ -196,6 +197,7 @@ type AudioCodecData interface {
 
 type AudioConfig struct {
 	CodecType CodecType
+	Bitrate BitrateMeasure
 	Format SampleFormat
 	SampleRate int
 	Layout ChannelLayout
@@ -203,8 +205,13 @@ type AudioConfig struct {
 
 type VideoConfig struct {
 	CodecType CodecType
+	Bitrate BitrateMeasure
 	Width, Height int
 	FpsNum, FpsDen int
+	YStride, CStride int
+	SubsampleRatio image.YCbCrSubsampleRatio
+	H264CodecDataInit bool
+	H264CodecData CodecData // h264parser.CodecData
 }
 
 type PacketWriter interface {
@@ -420,3 +427,31 @@ func (pixFmt PixelFormat) VerticalSubsampleRatio() int {
 	return -1
 }
 
+
+type BitrateMeasure struct {
+	lastPrint time.Time
+	sumBytes int
+	AvgKbps int
+}
+
+func (bm *BitrateMeasure) Measure(size int) (measureReady bool, bitrateKbps int) {
+	bm.sumBytes += size
+	now := time.Now()
+	if bm.lastPrint.IsZero() {
+		bm.lastPrint = now
+	} else {
+		diff := now.Sub(bm.lastPrint)
+		if diff > 3*time.Second {
+			bitrate := (8 * bm.sumBytes) / int(1000 * diff.Seconds())
+			bm.sumBytes = 0
+			bm.lastPrint = now
+			if bm.AvgKbps == 0 {
+				bm.AvgKbps = bitrate
+			} else {
+				bm.AvgKbps = (bm.AvgKbps + bitrate)/2
+			}
+			return true, bitrate
+		}
+	}
+	return false, 0
+}
