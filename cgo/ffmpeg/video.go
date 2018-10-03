@@ -635,6 +635,17 @@ func (v VideoFrame) GetDataPtr() (y, cb, cr *[]uint8) {
 	return &v.Image.Y, &v.Image.Cb, &v.Image.Cr
 }
 
+func (v VideoFrame) GetScanningMode() (mode av.ScanningMode) {
+	if int(v.frame.interlaced_frame) != 0 {
+		if int(v.frame.top_field_first) != 0 {
+			return av.InterlacedTFF
+		} else {
+			return av.InterlacedBFF
+		}
+	}
+	return av.Progressive
+}
+
 // TODO
 // func (v VideoFrame) GetFramerate() (int, int) {
 // 	return v.frame.framerate.num, v.frame.framerate.den

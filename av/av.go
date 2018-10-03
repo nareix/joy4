@@ -210,8 +210,8 @@ type VideoConfig struct {
 	FpsNum, FpsDen int
 	YStride, CStride int
 	SubsampleRatio image.YCbCrSubsampleRatio
-	H264CodecDataInit bool
 	H264CodecData CodecData // h264parser.CodecData
+	ScanMode ScanningMode
 }
 
 type PacketWriter interface {
@@ -426,6 +426,14 @@ func (pixFmt PixelFormat) VerticalSubsampleRatio() int {
 	}
 	return -1
 }
+
+// Video scanning mode.
+type ScanningMode uint8
+const (
+	Progressive = ScanningMode(iota + 1)
+	InterlacedTFF // Top Field First
+	InterlacedBFF // Bottom Field First
+)
 
 
 type BitrateMeasure struct {
