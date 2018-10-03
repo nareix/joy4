@@ -80,7 +80,7 @@ func (self *VideoScaler) videoScaleOne(src av.VideoFrameRaw) (dst av.VideoFrameR
 	// convert to destination format and resolution
 	C.sws_scale(self.swsCtx, &srcPtr[0], &inStrides[0], 0, C.int(self.inHeight), &dstPtr[0], &outStrides[0])
 
-	dst.PixelFormat	= PixelFormatFF2AV(int32(self.OutPixelFormat))
+	dst.PixelFormat	= self.OutPixelFormat
 	dst.YStride		= int(outStrides[0])
 	dst.CStride		= int(outStrides[1])
 	dst.Rect		= image.Rect(0, 0, self.OutWidth, self.OutHeight)
