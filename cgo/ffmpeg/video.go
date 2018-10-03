@@ -352,7 +352,7 @@ func (enc *VideoEncoder) encodeOne(frame av.VideoFrameRaw) (gotpkt bool, pkt []b
 		}
 
 		C.av_packet_unref(&cpkt)
-	} else {
+	} else if enc.codecDataInitialised {
 		fmt.Println("ffmpeg: no pkt !")
 	}
 
@@ -368,7 +368,7 @@ func (self *VideoEncoder) scale(in av.VideoFrameRaw) (out av.VideoFrameRaw, err 
 			inHeight:		in.Height(),
 			inYStride:		in.YStride,
 			inCStride:		in.CStride,
-			OutPixelFormat: self.pixelFormat,
+			OutPixelFormat:	self.pixelFormat,
 			OutWidth:		self.width,
 			OutHeight:		self.height,
 			OutYStride:		self.width,
