@@ -195,6 +195,19 @@ type AudioCodecData interface {
 	PacketDuration([]byte) (time.Duration, error) // get audio compressed packet duration
 }
 
+type AudioConfig struct {
+	CodecType CodecType
+	Format SampleFormat
+	SampleRate int
+	Layout ChannelLayout
+}
+
+type VideoConfig struct {
+	CodecType CodecType
+	Width, Height int
+	FpsNum, FpsDen int
+}
+
 type PacketWriter interface {
 	WritePacket(Packet) error
 }
