@@ -173,6 +173,12 @@ func gcd(a, b int) int {
 
 func fixFps(num, den int) (n, d int) {
 	g := gcd(num, den)
+
+	if g <= 0 {
+		fmt.Println("Error in fixFps")
+		return 0, 0
+	}
+
 	n = num/g
 	d = den/g
 
@@ -369,7 +375,7 @@ func probeVideoStream(stream av.CodecData) (v VideoStream, err error) {
 
 
 
-func findAudioCodec(stream av.AudioCodecData, i int) (need bool, dec av.AudioDecoder, enc av.AudioEncoder, err error) {
+func findAudioCodec(stream av.AudioCodecData, config *av.AudioConfig, i int) (need bool, dec av.AudioDecoder, enc av.AudioEncoder, err error) {
 	var a AudioStream
 	a, err = probeAudioStream(stream)
 
@@ -413,7 +419,7 @@ func findAudioCodec(stream av.AudioCodecData, i int) (need bool, dec av.AudioDec
 }
 
 
-func findVideoCodec(stream av.VideoCodecData, i int) (need bool, dec av.VideoDecoder, enc av.VideoEncoder, err error) {
+func findVideoCodec(stream av.VideoCodecData, config *av.VideoConfig, i int) (need bool, dec *ffmpeg.VideoDecoder, enc *ffmpeg.VideoEncoder, err error) {
 	var v VideoStream
 	v, err = probeVideoStream(stream)
 
