@@ -3,6 +3,7 @@
 package av
 
 import (
+	"C"
 	"fmt"
 	"time"
 	"image"
@@ -500,6 +501,33 @@ func (self VideoFrameRaw) HasSameFormat(other VideoFrameRaw) bool {
 	return true
 }
 
+
+func (self VideoFrameRaw) ToImage() (image.Image) {
+	r := image.Rectangle{image.Point{0, 0}, image.Point{self.Width(), self.Height()}}
+
+	var ratio image.YCbCrSubsampleRatio
+
+	// If HorizontalSubsampleRatio == 2, YCbCrSubsampleRatio420 matches the value we need in NewYCbCr
+	if self.GetPixelFormat().HorizontalSubsampleRatio() == 2 {
+		ratio = image.YCbCrSubsampleRatio420
+	}
+	img := image.NewYCbCr(r, ratio)
+
+	lumaSize := self.YStride*self.Height()
+	// chromaSize := self.CStride*self.Height()
+
+	img.Y = C.GoBytes(self.Y, C.int(lumaSize))
+	// img.Cb = C.GoBytes(self.Cb, C.int(chromaSize)) // FIXME crash here
+	// img.Cr = C.GoBytes(self.Cr, C.int(chromaSize))
+
+	return img
+}
+
+// func (self VideoFrameRaw) Free() {
+// 	free(self.Y)
+// 	free(self.Cb)
+// 	free(self.Cr)
+// }
 
 // VideoEncoder can encode raw video frame into compressed video packets.
 // cgo/ffmpeg inplements VideoEncoder, using ffmpeg.NewVideoEncoder to create it.
