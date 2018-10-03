@@ -24,12 +24,14 @@ type tStream struct {
 
 type Options struct {
 	// check if transcode is needed, and create the AudioDecoder and AudioEncoder.
-	FindAudioDecoderEncoder func(codec av.AudioCodecData, i int) (
+	FindAudioDecoderEncoder func(codec av.AudioCodecData, config *av.AudioConfig, i int) (
 		need bool, dec av.AudioDecoder, enc av.AudioEncoder, err error,
 	)
-	FindVideoDecoderEncoder func(codec av.VideoCodecData, i int) (
+	FindVideoDecoderEncoder func(codec av.VideoCodecData, config *av.VideoConfig, i int) (
 		need bool, dec av.VideoDecoder, enc av.VideoEncoder, err error,
 	)
+	AudioConfig *av.AudioConfig
+	VideoConfig *av.VideoConfig
 }
 
 type Transcoder struct {
@@ -47,7 +49,7 @@ func NewTranscoder(streams []av.CodecData, options Options) (_self *Transcoder, 
 				var ok bool
 				var enc av.AudioEncoder
 				var dec av.AudioDecoder
-				ok, dec, enc, err = options.FindAudioDecoderEncoder(stream.(av.AudioCodecData), i)
+				ok, dec, enc, err = options.FindAudioDecoderEncoder(stream.(av.AudioCodecData), options.AudioConfig, i)
 				if ok {
 					if err != nil {
 						return
@@ -67,7 +69,7 @@ func NewTranscoder(streams []av.CodecData, options Options) (_self *Transcoder, 
 				var ok bool
 				var enc av.VideoEncoder
 				var dec av.VideoDecoder
-				ok, dec, enc, err = options.FindVideoDecoderEncoder(stream.(av.VideoCodecData), i)
+				ok, dec, enc, err = options.FindVideoDecoderEncoder(stream.(av.VideoCodecData), options.VideoConfig,  i)
 				if ok {
 					if err != nil {
 						return
@@ -310,6 +312,9 @@ func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
 		var rpkt av.Packet
 		if rpkt, err = self.Demuxer.ReadPacket(); err != nil {
 			return
+		}
+		if rpkt.Idx == 0 {
+			// fmt.Println("video pkt:", rpkt.CompositionTime, rpkt.Time)
 		}
 		if self.outpkts, err = self.transcoder.Do(rpkt); err != nil {
 			return
