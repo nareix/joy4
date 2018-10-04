@@ -314,6 +314,7 @@ func PktToCodecData(pkt av.Packet) (h264CodecData av.CodecData, err error) {
 		if len(sps) > 0 && len(pps) > 0 {
 			h264CodecData, err = NewCodecDataFromSPSAndPPS(sps, pps)
 			if err != nil {
+				h264CodecData = nil
 				fmt.Println("can't init codecData, err:", err)
 				return
 			}
