@@ -5,12 +5,15 @@ import (
 	"sync"
 	"io"
 	"net/http"
+
 	"github.com/nareix/joy4/format"
+	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/av/avutil"
 	"github.com/nareix/joy4/av/pubsub"
 	"github.com/nareix/joy4/av/transcode"
 	"github.com/nareix/joy4/format/rtmp"
 	"github.com/nareix/joy4/format/flv"
+	"github.com/nareix/joy4/cgo/ffmpeg"
 )
 
 // TODO probe
@@ -32,7 +35,6 @@ func (w writeFlusher) Flush() error {
 func main() {
 	fmt.Println("starting server")
 	server := &rtmp.Server{}
-	var norm Normalizer
 
 	l := &sync.RWMutex{}
 	type Channel struct {
@@ -73,8 +75,8 @@ func main() {
 
 		trans := &transcode.Demuxer{
 			Options: transcode.Options{
-				FindAudioDecoderEncoder: norm.FindAudioCodec,
-				FindVideoDecoderEncoder: norm.FindVideoCodec,
+				FindAudioDecoderEncoder: FindAudioCodec,
+				FindVideoDecoderEncoder: FindVideoCodec,
 			},
 			Demuxer: conn,
 		}
@@ -129,8 +131,8 @@ func main() {
 
 		trans := &transcode.Demuxer{
 			Options: transcode.Options{
-				FindAudioDecoderEncoder: norm.FindAudioCodec,
-				FindVideoDecoderEncoder: norm.FindVideoCodec,
+				FindAudioDecoderEncoder: FindAudioCodec,
+				FindVideoDecoderEncoder: FindVideoCodec,
 			},
 			Demuxer: file,
 		}
@@ -148,4 +150,65 @@ func main() {
 	// ffmpeg -f avfoundation -i "0:0" .... -f flv rtmp://localhost/screen
 	// ffplay http://localhost:8089/movie
 	// ffplay http://localhost:8089/screen
+}
+
+// FindAudioCodec is a callback used by joy4's transcoder to find an audio codec compatible with the input stream
+func FindAudioCodec(stream av.AudioCodecData, i int) (need bool, dec av.AudioDecoder, enc av.AudioEncoder, err error) {
+	need = true
+	dec, err = ffmpeg.NewAudioDecoder(stream)
+	if err != nil {
+		return
+	}
+	if dec == nil {
+		err = fmt.Errorf("Audio decoder not found")
+		return
+	}
+
+	enc, err = ffmpeg.NewAudioEncoderByCodecType(av.AAC)
+	if err != nil {
+		return
+	}
+	if enc == nil {
+		err = fmt.Errorf("Audio encoder not found")
+		return
+	}
+	enc.SetSampleRate(44100)
+	enc.SetChannelLayout(av.CH_STEREO)
+	enc.SetBitrate(192000)
+	enc.SetOption("profile", "HE-AACv2")
+	return
+}
+
+// FindVideoCodec is a callback used by joy4's transcoder to find a video codec compatible with the input stream
+func FindVideoCodec(stream av.VideoCodecData, i int) (need bool, dec *ffmpeg.VideoDecoder, enc *ffmpeg.VideoEncoder, err error) {
+	need = true
+	dec, err = ffmpeg.NewVideoDecoder(stream)
+	if err != nil {
+		return
+	}
+	if dec == nil {
+		err = fmt.Errorf("Video decoder not found")
+		return
+	}
+
+	enc, err = ffmpeg.NewVideoEncoderByCodecType(av.H264)
+	if err != nil {
+		return
+	}
+	if enc == nil {
+		err = fmt.Errorf("Video encoder not found")
+		return
+	}
+
+	// Encoder config
+	FpsNum := 25000
+	FpsDen := 1000
+	// Configurable (can be set from input stream, or set by user and the input video will be converted before encoding)
+	enc.SetFramerate(FpsNum, FpsDen)
+	enc.SetResolution(640, 480)
+	enc.SetPixelFormat(av.I420)
+	// Must be configured by user
+	enc.SetBitrate(1000000) // 1 Mbps
+	enc.SetGopSize(FpsNum / FpsDen) // 1s gop
+	return
 }
