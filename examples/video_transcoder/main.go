@@ -16,8 +16,6 @@ import (
 	"github.com/nareix/joy4/cgo/ffmpeg"
 )
 
-// TODO probe
-
 func init() {
 	format.RegisterAll()
 }
