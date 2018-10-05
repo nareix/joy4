@@ -5,6 +5,7 @@ import (
 	"sync"
 	"io"
 	"net/http"
+	"os"
 
 	"github.com/nareix/joy4/format"
 	"github.com/nareix/joy4/av"
@@ -30,9 +31,39 @@ func (w writeFlusher) Flush() error {
 	return nil
 }
 
+func printHelp() {
+	fmt.Printf ("Usage: ./video_normalizer <video_file> \n")
+}
+
 func main() {
 	fmt.Println("starting server")
 	server := &rtmp.Server{}
+	videoFile := ""
+
+	if len(os.Args) <= 1 {
+		printHelp()
+		return
+	}
+
+	for i, arg := range os.Args {
+		if i == 0 {
+			// skip program name
+			continue
+		}
+		if arg == "-help" || arg == "-h" {
+			printHelp()
+			return
+		} else {
+			videoFile = os.Args[i]
+		}
+	}
+
+	if videoFile == "" {
+		printHelp()
+		return
+	}
+
+	fmt.Println("Video file:", videoFile, ". Play with: ffplay http://localhost:8089/file")
 
 	l := &sync.RWMutex{}
 	type Channel struct {
@@ -89,29 +120,6 @@ func main() {
 		ch.que.Close()
 	}
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("Request:", r.URL.Path)
-		l.RLock()
-		ch := channels[r.URL.Path]
-		l.RUnlock()
-
-		if ch != nil {
-			w.Header().Set("Content-Type", "video/x-flv")
-			w.Header().Set("Transfer-Encoding", "chunked")		
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.WriteHeader(200)
-			flusher := w.(http.Flusher)
-			flusher.Flush()
-
-			muxer := flv.NewMuxerWriteFlusher(writeFlusher{httpflusher: flusher, Writer: w})
-			cursor := ch.que.Latest()
-
-			avutil.CopyFile(muxer, cursor)
-		} else {
-			http.NotFound(w, r)
-		}
-	})
-
 	http.HandleFunc("/file", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Request:", r.URL.Path)
 		w.Header().Set("Content-Type", "video/x-flv")
@@ -121,11 +129,7 @@ func main() {
 		flusher := w.(http.Flusher)
 		flusher.Flush()
 
-		// /Users/Antoine/Documents/02-res/Cosmos Laundromat - First Cycle.mp4
-		// /Users/Antoine/Documents/02-res/PIRELLI+-+Refraction.mp4
-		// /Users/Antoine/Documents/02-res/pointedugroin.mp4
-		// /Users/Antoine/replay-09-04.mp4
-		file, _ := avutil.Open("/Users/Antoine/Documents/02-res/PIRELLI+-+Refraction.mp4")
+		file, _ := avutil.Open(videoFile)
 
 		trans := &transcode.Demuxer{
 			Options: transcode.Options{
@@ -143,11 +147,6 @@ func main() {
 	go http.ListenAndServe(":8089", nil)
 	server.ListenAndServe()
 	fmt.Println("Done")
-
-	// ffmpeg -re -i movie.flv -c copy -f flv rtmp://localhost/movie
-	// ffmpeg -f avfoundation -i "0:0" .... -f flv rtmp://localhost/screen
-	// ffplay http://localhost:8089/movie
-	// ffplay http://localhost:8089/screen
 }
 
 // FindAudioCodec is a callback used by joy4's transcoder to find an audio codec compatible with the input stream
