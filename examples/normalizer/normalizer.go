@@ -2,39 +2,58 @@ package main
 
 import (
 	"fmt"
+	"image"
 	"math"
 
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/cgo/ffmpeg"
 )
 
+// Normalizer contains the audio an video profiles (input characteristics, and desired output characteristics)
 type Normalizer struct {
 	Audio  audioProfile
 	Video  videoProfile
 }
 
 type audioProfile struct {
-	inputConfig     av.AudioConfig
+	inputConfig     audioConfig
 	needsTranscode  bool
-	transcodeConfig av.AudioConfig
+	transcodeConfig audioConfig
 }
 
 type videoProfile struct {
-	inputConfig     av.VideoConfig
+	inputConfig     videoConfig
 	needsTranscode  bool
-	transcodeConfig av.VideoConfig
+	transcodeConfig videoConfig
 }
 
-// TODO ?
-// type StreamConfig interface {
-// }
+type audioConfig struct {
+	CodecType  av.CodecType
+	Bitrate    av.BitrateMeasure
+	Format     av.SampleFormat
+	SampleRate int
+	Layout     av.ChannelLayout
+}
+
+type videoConfig struct {
+	CodecType        av.CodecType
+	Bitrate          av.BitrateMeasure
+	Width, Height    int
+	FpsNum, FpsDen   int
+	YStride, CStride int
+	SubsampleRatio   image.YCbCrSubsampleRatio
+	H264CodecData    av.CodecData // h264parser.CodecData
+	ScanMode         av.ScanningMode
+}
 
 type resolutionConfig struct {
 	Width, Height  int
 	stride, hAlign int
-	configs        map[string]*av.VideoConfig
+	configs        map[string]*videoConfig
 }
 
+// NormalizeAudioProfile checks compatibility between n.Audio.inputConfig and n.Audio.transcodeConfig.
+// After returning, needsTranscode says if the input stream should be transcoded to the transcodeConfig.
 func (n *Normalizer) NormalizeAudioProfile(stream av.CodecData) (err error) {
 	// Init transcode config with input properties
 	n.Audio.transcodeConfig = n.Audio.inputConfig
@@ -49,25 +68,41 @@ func (n *Normalizer) NormalizeAudioProfile(stream av.CodecData) (err error) {
 	if aInput.CodecType != audioConfig.CodecType {
 		aTranscode.CodecType = audioConfig.CodecType
 		n.Audio.needsTranscode = true
-		fmt.Printf("audio CodecType unsupported: transcode %v => %v\n", aInput.CodecType, aTranscode.CodecType)
+		fmt.Println(
+			"Audio CodecType unsupported",
+			"aInput.CodecType", aInput.CodecType,
+			"aTranscode.CodecType", aTranscode.CodecType,
+		)
 	}
 
 	if aInput.Format != audioConfig.Format {
 		aTranscode.Format = audioConfig.Format
 		n.Audio.needsTranscode = true
-		fmt.Printf("audio Format unsupported: transcode %v => %v\n", aInput.Format, aTranscode.Format)
+		fmt.Println(
+			"Audio Format unsupported",
+			"aInput.Format", aInput.Format,
+			"aTranscode.Format", aTranscode.Format,
+		)
 	}
 
 	if aInput.SampleRate != audioConfig.SampleRate {
 		aTranscode.SampleRate = audioConfig.SampleRate
 		n.Audio.needsTranscode = true
-		fmt.Printf("audio SampleRate unsupported: transcode %v => %v\n", aInput.SampleRate, aTranscode.SampleRate)
+		fmt.Println(
+			"Audio Sample Rate unsupported",
+			"aInput.SampleRate", aInput.SampleRate,
+			"aTranscode.SampleRate", aTranscode.SampleRate,
+		)
 	}
 
 	if aInput.Layout != audioConfig.Layout {
 		aTranscode.Layout = audioConfig.Layout
 		n.Audio.needsTranscode = true
-		fmt.Printf("audio Layout unsupported: transcode %v => %v\n", aInput.Layout, aTranscode.Layout)
+		fmt.Println(
+			"Audio Layout unsupported",
+			"aInput.Layout", aInput.Layout,
+			"aTranscode.Layout", aTranscode.Layout,
+		)
 	}
 
 	// TODO check:
@@ -75,6 +110,8 @@ func (n *Normalizer) NormalizeAudioProfile(stream av.CodecData) (err error) {
 	return
 }
 
+// NormalizeVideoProfile checks compatibility between n.Video.inputConfig and n.Video.transcodeConfig.
+// After returning, needsTranscode says if the input stream should be transcoded to the transcodeConfig.
 func (n *Normalizer) NormalizeVideoProfile(stream av.CodecData) (err error) {
 	// Init transcode config with input properties
 	n.Video.transcodeConfig = n.Video.inputConfig
@@ -86,10 +123,10 @@ func (n *Normalizer) NormalizeVideoProfile(stream av.CodecData) (err error) {
 	vInput := &n.Video.inputConfig
 	vTranscode := &n.Video.transcodeConfig
 
-	vInput.FpsNum, vInput.FpsDen = fixFps(vInput.FpsNum, vInput.FpsDen)
+	vInput.FpsNum, vInput.FpsDen = reduceFpsFraction(vInput.FpsNum, vInput.FpsDen)
 
 	var resolutionConfig *resolutionConfig
-	var videoConfig *av.VideoConfig
+	var videoConfig *videoConfig
 	var mustConvertFramerate bool
 	var bestFpsMatchNum int
 	var bestFpsMatchDen int
@@ -102,7 +139,11 @@ func (n *Normalizer) NormalizeVideoProfile(stream av.CodecData) (err error) {
 	}
 
 	if resolutionConfig == nil {
-		fmt.Printf("\033[43mvideo resolution %vx%v not supported => Force 480p\033[0m\n", vInput.Width, vInput.Height)
+		fmt.Println(
+			"Video Resolution not supported, force 480p",
+			"vInput.Width", vInput.Width,
+			"vInput.Height", vInput.Height,
+		)
 		// TODO define scaling here (including stretching to a supported format)
 
 		resolutionConfig = videoConfigs["480"]
@@ -110,7 +151,11 @@ func (n *Normalizer) NormalizeVideoProfile(stream av.CodecData) (err error) {
 	}
 
 	if resolutionConfig != nil {
-		fmt.Printf("\033[42mvideo resolution %vx%v supported\033[0m\n", resolutionConfig.Width, resolutionConfig.Height)
+		fmt.Println(
+			"Video Resolution supported",
+			"resolutionConfig.Width", resolutionConfig.Width,
+			"resolutionConfig.Height", resolutionConfig.Height,
+		)
 
 		for _, fpsConfig := range resolutionConfig.configs {
 			if vInput.FpsNum == fpsConfig.FpsNum && vInput.FpsDen == fpsConfig.FpsDen {
@@ -136,12 +181,26 @@ func (n *Normalizer) NormalizeVideoProfile(stream av.CodecData) (err error) {
 
 	if videoConfig == nil {
 		err = fmt.Errorf("video standard not supported: %dx%d, %d/%d", vInput.Width, vInput.Height, vInput.FpsNum, vInput.FpsDen)
-		fmt.Println(err)
+		fmt.Println(
+			"Video standard not supported",
+			"vInput.Width", vInput.Width,
+			"vInput.Height", vInput.Height,
+			"vInput.FpsNum", vInput.FpsNum,
+			"vInput.FpsDen", vInput.FpsDen,
+		)
 		n.Video.needsTranscode = true
 		return err
 	} else if mustConvertFramerate {
-		fmt.Printf("\033[43mvideo fps %v/%v not supported for this resolution => convert to %v/%v (fps diff: %v)\033[0m\n", vInput.FpsNum, vInput.FpsDen, bestFpsMatchNum, bestFpsMatchDen, bestFpsMatchDiff)
-		fmt.Printf("\033[43mfps convertion is not ready yet !\033[0m\n") // FIXME
+		fmt.Println(
+			"Video fps not supported for this resolution, must be converted to best fps match",
+			"vInput.FpsNum", vInput.FpsNum,
+			"vInput.FpsDen", vInput.FpsDen,
+			"bestFpsMatchNum", bestFpsMatchNum,
+			"bestFpsMatchDen", bestFpsMatchDen,
+			"bestFpsMatchDiff", bestFpsMatchDiff,
+		)
+		// FIXME
+		fmt.Println("Framerate convertion is not ready yet !")
 		n.Video.transcodeConfig = *videoConfig
 
 		// vTranscode.FpsNum = bestFpsMatchNum
@@ -154,7 +213,11 @@ func (n *Normalizer) NormalizeVideoProfile(stream av.CodecData) (err error) {
 	if vInput.CodecType != videoConfig.CodecType {
 		vTranscode.CodecType = videoConfig.CodecType
 		n.Video.needsTranscode = true
-		fmt.Printf("video CodecType unsupported: transcode %v => %v\n", vInput.CodecType, vTranscode.CodecType)
+		fmt.Println(
+			"Video CodecType unsupported",
+			"vInput.CodecType", vInput.CodecType,
+			"vTranscode.CodecType", vTranscode.CodecType,
+		)
 	}
 
 	// TODO check:
@@ -164,6 +227,7 @@ func (n *Normalizer) NormalizeVideoProfile(stream av.CodecData) (err error) {
 	//	ProfileIdc, LevelIdc uint
 	//	ScanningMode
 	//	Bitdepth, via pixelformat ?
+	// H264CodecData if not nil
 
 	return
 }
@@ -173,21 +237,25 @@ func (n *Normalizer) FindAudioCodec(stream av.AudioCodecData, i int) (need bool,
 	err = n.NormalizeAudioProfile(stream)
 
 	if err != nil {
-		fmt.Println(err)
 		return true, nil, nil, err
 	}
 
 	if !n.Audio.needsTranscode {
-		fmt.Printf( "Audio transcode not needed. config: %+v\n", n.Audio.inputConfig)
+		fmt.Println(
+			"Audio transcode not needed",
+			"config", n.Audio.inputConfig,
+		)
 		return false, nil, nil, err
 	}
 
-	fmt.Printf( "Audio transcode needed. config: %+v\n", n.Audio.inputConfig)
+	fmt.Println(
+		"Audio transcode needed",
+		"config", n.Audio.transcodeConfig,
+	)
 
 	need = true
 	dec, err = ffmpeg.NewAudioDecoder(stream)
 	if err != nil {
-		fmt.Println(err)
 		return
 	}
 	if dec == nil {
@@ -197,7 +265,6 @@ func (n *Normalizer) FindAudioCodec(stream av.AudioCodecData, i int) (need bool,
 
 	enc, err = ffmpeg.NewAudioEncoderByCodecType(n.Audio.transcodeConfig.CodecType)
 	if err != nil {
-		fmt.Println(err)
 		return
 	}
 	if enc == nil {
@@ -213,27 +280,28 @@ func (n *Normalizer) FindAudioCodec(stream av.AudioCodecData, i int) (need bool,
 
 // FindVideoCodec is a callback used by joy4's transcoder to find a video codec compatible with the input stream
 func (n *Normalizer) FindVideoCodec(stream av.VideoCodecData, i int) (need bool, dec *ffmpeg.VideoDecoder, enc *ffmpeg.VideoEncoder, err error) {
-	// TODO replace profile with 'n', too many structs and types !!
-	// TODO config.String() avec la res et le fps, minimum
-
 	err = n.NormalizeVideoProfile(stream)
 
 	if err != nil {
-		fmt.Println(err)
 		return true, nil, nil, err
 	}
 
 	if !n.Video.needsTranscode {
-		fmt.Printf( "Video transcode not needed. config: %+v\n", n.Video.inputConfig)
+		fmt.Println(
+			"Video transcode not needed",
+			"config", n.Video.inputConfig,
+		)
 		return false, nil, nil, err
 	}
 
-	fmt.Printf( "Video transcode needed. config: %+v\n", n.Video.inputConfig)
+	fmt.Println(
+		"Video transcode needed",
+		"config", n.Video.transcodeConfig,
+	)
 
 	need = true
 	dec, err = ffmpeg.NewVideoDecoder(stream)
 	if err != nil {
-		fmt.Println(err)
 		return
 	}
 	if dec == nil {
@@ -243,7 +311,6 @@ func (n *Normalizer) FindVideoCodec(stream av.VideoCodecData, i int) (need bool,
 
 	enc, err = ffmpeg.NewVideoEncoderByCodecType(n.Video.transcodeConfig.CodecType)
 	if err != nil {
-		fmt.Println(err)
 		return
 	}
 	if enc == nil {
@@ -267,93 +334,93 @@ func (n *Normalizer) FindVideoCodec(stream av.VideoCodecData, i int) (need bool,
 }
 
 // TODO configs must be externalized
-func getAVConfigs() (audioConfig av.AudioConfig, videoConfig map[string]*resolutionConfig) {
+func getAVConfigs() (audioConfig audioConfig, videoConfigs map[string]*resolutionConfig) {
 	audioConfig.CodecType = av.AAC
 	audioConfig.Format = av.FLTP
 	audioConfig.SampleRate = 44100
 	audioConfig.Layout = av.CH_STEREO
 
-	videoConfig = make(map[string]*resolutionConfig)
-	videoConfig["1080"] = &resolutionConfig{Width: 1920, Height: 1080, configs: make(map[string]*av.VideoConfig)}
-	videoConfig["720"] = &resolutionConfig{Width: 1280, Height: 720, configs: make(map[string]*av.VideoConfig)}
-	videoConfig["480"] = &resolutionConfig{Width: 640, Height: 480, configs: make(map[string]*av.VideoConfig)}
-	videoConfig["360"] = &resolutionConfig{Width: 640, Height: 360, configs: make(map[string]*av.VideoConfig)}
-	videoConfig["160"] = &resolutionConfig{Width: 240, Height: 160, configs: make(map[string]*av.VideoConfig)}
+	videoConfigs = make(map[string]*resolutionConfig)
+	videoConfigs["1080"] = &resolutionConfig{Width: 1920, Height: 1080, configs: make(map[string]*videoConfig)}
+	videoConfigs["720"] = &resolutionConfig{Width: 1280, Height: 720, configs: make(map[string]*videoConfig)}
+	videoConfigs["480"] = &resolutionConfig{Width: 640, Height: 480, configs: make(map[string]*videoConfig)}
+	videoConfigs["360"] = &resolutionConfig{Width: 640, Height: 360, configs: make(map[string]*videoConfig)}
+	videoConfigs["160"] = &resolutionConfig{Width: 240, Height: 160, configs: make(map[string]*videoConfig)}
 
 	// TODO fill resolutionConfig stride, hAlign
 	// TODO check 480p, 360p and 160p standard
 	// TODO fill one and deep-copy to other instead of init everything
 
-	videoConfig["1080"].configs["60"] = &av.VideoConfig{
+	videoConfigs["1080"].configs["60"] = &videoConfig{
 		CodecType: av.H264,
 		Width:     1920, Height: 1080,
 		FpsNum: 60000, FpsDen: 1000,
 	}
-	videoConfig["1080"].configs["50"] = &av.VideoConfig{
+	videoConfigs["1080"].configs["50"] = &videoConfig{
 		CodecType: av.H264,
 		Width:     1920, Height: 1080,
 		FpsNum: 50000, FpsDen: 1000,
 	}
-	videoConfig["1080"].configs["30"] = &av.VideoConfig{
+	videoConfigs["1080"].configs["30"] = &videoConfig{
 		CodecType: av.H264,
 		Width:     1920, Height: 1080,
 		FpsNum: 30000, FpsDen: 1000,
 	}
-	videoConfig["1080"].configs["25"] = &av.VideoConfig{
+	videoConfigs["1080"].configs["25"] = &videoConfig{
 		CodecType: av.H264,
 		Width:     1920, Height: 1080,
 		FpsNum: 25000, FpsDen: 1000,
 	}
 
-	videoConfig["720"].configs["60"] = &av.VideoConfig{
+	videoConfigs["720"].configs["60"] = &videoConfig{
 		CodecType: av.H264,
 		Width:     1280, Height: 720,
 		FpsNum: 60000, FpsDen: 1000,
 	}
-	videoConfig["720"].configs["50"] = &av.VideoConfig{
+	videoConfigs["720"].configs["50"] = &videoConfig{
 		CodecType: av.H264,
 		Width:     1280, Height: 720,
 		FpsNum: 50000, FpsDen: 1000,
 	}
-	videoConfig["720"].configs["30"] = &av.VideoConfig{
+	videoConfigs["720"].configs["30"] = &videoConfig{
 		CodecType: av.H264,
 		Width:     1280, Height: 720,
 		FpsNum: 30000, FpsDen: 1000,
 	}
-	videoConfig["720"].configs["25"] = &av.VideoConfig{
+	videoConfigs["720"].configs["25"] = &videoConfig{
 		CodecType: av.H264,
 		Width:     1280, Height: 720,
 		FpsNum: 25000, FpsDen: 1000,
 	}
 
-	videoConfig["480"].configs["30"] = &av.VideoConfig{
+	videoConfigs["480"].configs["30"] = &videoConfig{
 		CodecType: av.H264,
 		Width:     640, Height: 480,
 		FpsNum: 30000, FpsDen: 1000,
 	}
-	videoConfig["480"].configs["25"] = &av.VideoConfig{
+	videoConfigs["480"].configs["25"] = &videoConfig{
 		CodecType: av.H264,
 		Width:     640, Height: 480,
 		FpsNum: 25000, FpsDen: 1000,
 	}
 
-	videoConfig["360"].configs["30"] = &av.VideoConfig{
+	videoConfigs["360"].configs["30"] = &videoConfig{
 		CodecType: av.H264,
 		Width:     640, Height: 360,
 		FpsNum: 30000, FpsDen: 1000,
 	}
-	videoConfig["360"].configs["25"] = &av.VideoConfig{
+	videoConfigs["360"].configs["25"] = &videoConfig{
 		CodecType: av.H264,
 		Width:     640, Height: 360,
 		FpsNum: 25000, FpsDen: 1000,
 	}
 
-	videoConfig["160"].configs["30"] = &av.VideoConfig{
+	videoConfigs["160"].configs["30"] = &videoConfig{
 		CodecType: av.H264,
 		Width:     240, Height: 160,
 		FpsNum: 30000, FpsDen: 1000,
 	}
-	videoConfig["160"].configs["25"] = &av.VideoConfig{
+	videoConfigs["160"].configs["25"] = &videoConfig{
 		CodecType: av.H264,
 		Width:     240, Height: 160,
 		FpsNum: 25000, FpsDen: 1000,
@@ -369,8 +436,7 @@ func gcd(a, b int) int {
 	return a
 }
 
-// TODO rename
-func fixFps(num, den int) (n, d int) {
+func reduceFpsFraction(num, den int) (n, d int) {
 	g := gcd(num, den)
 	if g <= 0 {
 		return num, den

@@ -13,6 +13,8 @@ import (
 	"github.com/nareix/joy4/format/flv"
 )
 
+// TODO probe
+
 func init() {
 	format.RegisterAll()
 }
@@ -30,6 +32,7 @@ func (w writeFlusher) Flush() error {
 func main() {
 	fmt.Println("starting server")
 	server := &rtmp.Server{}
+	var norm Normalizer
 
 	l := &sync.RWMutex{}
 	type Channel struct {
@@ -70,8 +73,8 @@ func main() {
 
 		trans := &transcode.Demuxer{
 			Options: transcode.Options{
-				FindAudioDecoderEncoder: findAudioCodec,
-				FindVideoDecoderEncoder: findVideoCodec,
+				FindAudioDecoderEncoder: norm.FindAudioCodec,
+				FindVideoDecoderEncoder: norm.FindVideoCodec,
 			},
 			Demuxer: conn,
 		}
@@ -126,8 +129,8 @@ func main() {
 
 		trans := &transcode.Demuxer{
 			Options: transcode.Options{
-				FindAudioDecoderEncoder: findAudioCodec,
-				FindVideoDecoderEncoder: findVideoCodec,
+				FindAudioDecoderEncoder: norm.FindAudioCodec,
+				FindVideoDecoderEncoder: norm.FindVideoCodec,
 			},
 			Demuxer: file,
 		}

@@ -6,7 +6,6 @@ import (
 	"C"
 	"fmt"
 	"time"
-	"image"
 )
 
 // Audio sample format.
@@ -193,25 +192,6 @@ type AudioCodecData interface {
 	SampleRate() int // audio sample rate
 	ChannelLayout() ChannelLayout // audio channel layout
 	PacketDuration([]byte) (time.Duration, error) // get audio compressed packet duration
-}
-
-type AudioConfig struct {
-	CodecType CodecType
-	Bitrate BitrateMeasure
-	Format SampleFormat
-	SampleRate int
-	Layout ChannelLayout
-}
-
-type VideoConfig struct {
-	CodecType CodecType
-	Bitrate BitrateMeasure
-	Width, Height int
-	FpsNum, FpsDen int
-	YStride, CStride int
-	SubsampleRatio image.YCbCrSubsampleRatio
-	H264CodecData CodecData // h264parser.CodecData
-	ScanMode ScanningMode
 }
 
 type PacketWriter interface {
