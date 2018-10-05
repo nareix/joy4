@@ -336,9 +336,7 @@ const (
 // BytesPerPixel returns the number of bytes (rounded up) used by a pixel in a given format
 func (pixFmt PixelFormat) BytesPerPixel() int {
 	switch pixFmt {
-	case I420, NV12, NV21:
-		return 2
-	case UYVY, YUYV:
+	case I420, NV12, NV21, UYVY, YUYV:
 		return 2
 	default:
 		return 0
@@ -375,15 +373,7 @@ func (pixFmt PixelFormat) IsPlanar() bool {
 // HorizontalSubsampleRatio returns the ratio of Y bytes over U or V bytes in a row of pixels
 func (pixFmt PixelFormat) HorizontalSubsampleRatio() int {
 	switch pixFmt {
-	case I420:
-		return 2
-	case NV12:
-		return 2
-	case NV21:
-		return 2
-	case UYVY:
-		return 2
-	case YUYV:
+	case I420, NV12, NV21, UYVY, YUYV:
 		return 2
 	}
 	return -1
@@ -392,12 +382,9 @@ func (pixFmt PixelFormat) HorizontalSubsampleRatio() int {
 // VerticalSubsampleRatio returns the ratio of Y bytes over U or V bytes in a column of pixels
 func (pixFmt PixelFormat) VerticalSubsampleRatio() int {
 	switch pixFmt {
-	case I420:
-	case NV12:
-	case NV21:
+	case I420, NV12, NV21:
 		return 2
-	case UYVY:
-	case YUYV:
+	case UYVY, YUYV:
 		return 1
 	}
 	return -1
