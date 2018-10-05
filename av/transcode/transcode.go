@@ -25,14 +25,12 @@ type tStream struct {
 
 type Options struct {
 	// check if transcode is needed, and create the AudioDecoder and AudioEncoder.
-	FindAudioDecoderEncoder func(codec av.AudioCodecData, config *av.AudioConfig, i int) (
+	FindAudioDecoderEncoder func(codec av.AudioCodecData, i int) (
 		need bool, dec av.AudioDecoder, enc av.AudioEncoder, err error,
 	)
-	FindVideoDecoderEncoder func(codec av.VideoCodecData, config *av.VideoConfig, i int) (
+	FindVideoDecoderEncoder func(codec av.VideoCodecData, i int) (
 		need bool, dec *ffmpeg.VideoDecoder, enc *ffmpeg.VideoEncoder, err error,
 	)
-	AudioConfig *av.AudioConfig
-	VideoConfig *av.VideoConfig
 }
 
 type Transcoder struct {
@@ -50,7 +48,7 @@ func NewTranscoder(streams []av.CodecData, options Options) (_self *Transcoder, 
 				var ok bool
 				var enc av.AudioEncoder
 				var dec av.AudioDecoder
-				ok, dec, enc, err = options.FindAudioDecoderEncoder(stream.(av.AudioCodecData), options.AudioConfig, i)
+				ok, dec, enc, err = options.FindAudioDecoderEncoder(stream.(av.AudioCodecData), i)
 				if ok {
 					if err != nil {
 						return
@@ -70,7 +68,7 @@ func NewTranscoder(streams []av.CodecData, options Options) (_self *Transcoder, 
 				var ok bool
 				var enc *ffmpeg.VideoEncoder
 				var dec *ffmpeg.VideoDecoder
-				ok, dec, enc, err = options.FindVideoDecoderEncoder(stream.(av.VideoCodecData), options.VideoConfig,  i)
+				ok, dec, enc, err = options.FindVideoDecoderEncoder(stream.(av.VideoCodecData), i)
 				if ok {
 					if err != nil {
 						return
