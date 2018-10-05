@@ -347,11 +347,10 @@ type SPSInfo struct {
 }
 
 
-func cleanupEmulationPrevention(data []byte) (dataOut []byte, err error) {
+func cleanupEmulationPrevention(data []byte) (dataOut []byte) {
 	dataOut = make([]byte, len(data))
 	var rdIdx, wrIdx int
-
-	for ; rdIdx<len(data); rdIdx++ {
+ 	for ; rdIdx<len(data); rdIdx++ {
 		// Read one byte
 		dataOut[wrIdx] = data[rdIdx]
 		// Check if the next 32 bits match 0x00000300, 0x00000301, 0x00000302, 0x00000303
@@ -367,14 +366,12 @@ func cleanupEmulationPrevention(data []byte) (dataOut []byte, err error) {
 		}
 		wrIdx++
 	}
-	return dataOut, nil
+	return dataOut
 }
 
 func ParseSPS(data []byte) (self SPSInfo, err error) {
-	data, err = cleanupEmulationPrevention(data)
-	if err != nil {
-		return
-	}
+	data = cleanupEmulationPrevention(data)
+
 
 	r := &bits.GolombBitReader{R: bytes.NewReader(data)}
 

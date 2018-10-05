@@ -6,21 +6,18 @@ int wrap_avcodec_decode_video2(AVCodecContext *ctx, AVFrame *frame, void *data, 
 	struct AVPacket pkt = {.data = data, .size = size};
 	return avcodec_decode_video2(ctx, frame, got, &pkt);
 }
-int wrap_av_image_alloc(uint8_t *pointers[4], int linesizes[4], int w, int h, enum AVPixelFormat pix_fmt, int align) {
-	return av_image_alloc(pointers, linesizes, w, h, pix_fmt, align);
-}
 */
 import "C"
 import (
 	"unsafe"
 	"runtime"
 	"fmt"
-	"reflect"
 	"image"
+	"reflect"
+
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/codec/h264parser"
 )
-
 
 type VideoScaler struct {
 	inPixelFormat, OutPixelFormat av.PixelFormat
@@ -46,7 +43,6 @@ func (self *VideoScaler) FreeOutputImage() {
 		self.outputImgPtrs[2]= nil
 	}
 }
-
 
 func (self *VideoScaler) videoScaleOne(src *VideoFrame) (dst *VideoFrame, err error) {
 	var srcPtr ([3]*C.uint8_t)
@@ -108,8 +104,8 @@ func (self *VideoScaler) VideoScale(src *VideoFrame) (dst *VideoFrame, err error
 
 		if self.swsCtx == nil {
 			err = fmt.Errorf("Impossible to create scale context for the conversion fmt:%d s:%dx%d -> fmt:%d s:%dx%d\n",
-				/*C.av_get_pix_fmt_name*/(self.inPixelFormat), self.inWidth, self.inHeight,
-				/*C.av_get_pix_fmt_name*/(self.OutPixelFormat), self.OutWidth, self.OutHeight);
+				self.inPixelFormat, self.inWidth, self.inHeight,
+				self.OutPixelFormat, self.OutWidth, self.OutHeight);
 			return
 		}
 	}
@@ -132,6 +128,7 @@ type VideoEncoder struct {
 	codecDataInitialised bool
 	pts int64
 	scaler *VideoScaler
+	bm av.BitrateMeasure
 }
 
 // Setup initializes the encoder context and checks user params
@@ -176,30 +173,30 @@ func (enc *VideoEncoder) Setup() (err error) {
 	ff.codecCtx.width			= C.int(enc.width)
 	ff.codecCtx.height			= C.int(enc.height)
 	ff.codecCtx.pix_fmt			= PixelFormatAV2FF(enc.pixelFormat)
-	//
+
 	ff.codecCtx.time_base.num	= C.int(enc.fpsDen)
 	ff.codecCtx.time_base.den	= C.int(enc.fpsNum)
-	ff.codecCtx.ticks_per_frame	= 2;
-	//
-	ff.codecCtx.gop_size		= C.int(enc.gopSize)
-	ff.codecCtx.max_b_frames	= C.int(3)
-	//keyint_min
-	ff.codecCtx.refs			= C.int(1)
-	//
-	ff.codecCtx.bit_rate		= C.int64_t(enc.Bitrate)
-	ff.codecCtx.bit_rate_tolerance = C.int(ff.codecCtx.bit_rate/10);
-	// ff.codecCtx.rc_max_rate		= ff.codecCtx.bit_rate*2
-	// ff.codecCtx.rc_min_rate		= ff.codecCtx.bit_rate/2
-	// ff.codecCtx.rc_buffer_size	= C.int(ff.codecCtx.bit_rate*2)
-	//
+	// ff.codecCtx.ticks_per_frame	= 2;
+
+	// ff.codecCtx.gop_size		= C.int(enc.gopSize)
+	// ff.codecCtx.max_b_frames	= C.int(3)
+	// keyint_min
+	// ff.codecCtx.refs			= C.int(1)
+
+	// ff.codecCtx.bit_rate		= C.int64_t(enc.Bitrate)
+	// ff.codecCtx.bit_rate_tolerance = C.int(ff.codecCtx.bit_rate/10);
+	// ff.codecCtx.rc_max_rate		= ff.codecCtx.bit_rate
+	// ff.codecCtx.rc_min_rate		= ff.codecCtx.bit_rate
+	// ff.codecCtx.rc_buffer_size	= C.int(ff.codecCtx.bit_rate)
+
 	// ff.codecCtx.profile			= C.FF_PROFILE_H264_BASELINE
 	// ff.codecCtx.level			= C.int(31)
 
 
-	err = enc.SetOption("preset", "slow")
-	if err != nil {
-		fmt.Println("Error while setting preset, err", err)
-	}
+	// err = enc.SetOption("preset", "slow")
+	// if err != nil {
+	// 	fmt.Println("Error while setting preset, err", err)
+	// }
 	// err = enc.SetOption("tune", "zerolatency")
 	// if err != nil {
 	// 	fmt.Println("Error while setting preset, err", err)
@@ -208,10 +205,10 @@ func (enc *VideoEncoder) Setup() (err error) {
 	// disable b-pyramid. CLI options for this is "-b-pyramid 0"
 	// Because Quicktime (ie. iOS) doesn't support this option
 	// cerr = C.av_opt_set(ff.codecCtx.priv_data, "b-pyramid", "0", 0)
-	err = enc.SetOption("b-pyramid", "0")
-	if err != nil {
-		fmt.Println("Error while setting b-pyramid, err", err)
-	}
+	// err = enc.SetOption("b-pyramid", "0")
+	// if err != nil {
+	// 	fmt.Println("Error while setting b-pyramid, err", err)
+	// }
 
 	if C.avcodec_open2(ff.codecCtx, ff.codec, nil) != 0 {
 		err = fmt.Errorf("ffmpeg: encoder: avcodec_open2 failed")
@@ -307,47 +304,27 @@ func (enc *VideoEncoder) encodeOne(img *VideoFrame) (gotpkt bool, pkt []byte, er
 		return
 	}
 
+	var avpkt av.Packet
 	if cgotpkt != 0 {
 		gotpkt = true
-		pkt = C.GoBytes(unsafe.Pointer(cpkt.data), cpkt.size)
 
 		if debug {
 			fmt.Println("encoded frame with pts:", cpkt.pts," dts:", cpkt.dts, "duration:", cpkt.duration, "flags:", cpkt.flags)
 		}
 
+		avpkt.Data = C.GoBytes(unsafe.Pointer(cpkt.data), cpkt.size)
+		avpkt.IsKeyFrame = (cpkt.flags & C.AV_PKT_FLAG_KEY) == C.AV_PKT_FLAG_KEY
+
 		// Initialize codecData from SPS and PPS
 		// This is done only once, when the first key frame is encoded
 		if !enc.codecDataInitialised {
-			if (cpkt.flags & C.AV_PKT_FLAG_KEY) != C.AV_PKT_FLAG_KEY {
-				fmt.Println("not a keyframe")
+			var codecData av.CodecData
+			codecData, err = h264parser.PktToCodecData(avpkt)
+			if err != nil {
+				fmt.Println(err)
 			} else {
-				var sps, pps []byte
-				nalus, _ := h264parser.SplitNALUs(pkt)
-
-				for _, nalu := range nalus {
-					if len(nalu) > 0 {
-						naltype := nalu[0] & 0x1f
-						switch {
-						case naltype == 7:
-							sps = nalu
-						case naltype == 8:
-							pps = nalu
-						}
-					}
-				}
-
-				if len(sps) > 0 && len(pps) > 0 {
-					enc.codecData, err = h264parser.NewCodecDataFromSPSAndPPS(sps, pps)
-					if err != nil {
-						fmt.Println("can't init codecData, err:", err)
-						return
-					}
-					enc.codecDataInitialised = true
-				} else {
-					err = fmt.Errorf("h264parser: empty sps and/or pps")
-					fmt.Println("can't init codecData, err:", err)
-					return
-				}
+				enc.codecData = codecData.(h264parser.CodecData)
+				enc.codecDataInitialised = true
 			}
 		}
 
@@ -356,7 +333,11 @@ func (enc *VideoEncoder) encodeOne(img *VideoFrame) (gotpkt bool, pkt []byte, er
 		fmt.Println("ffmpeg: no pkt !")
 	}
 
-	return
+	if ok, kbps := enc.bm.Measure(len(avpkt.Data)); ok {
+		fmt.Println("Encoded video bitrate (kbps):", kbps)
+	}
+
+	return gotpkt, avpkt.Data, err
 }
 
 
@@ -550,29 +531,6 @@ func NewVideoEncoderByName(name string) (enc *VideoEncoder, err error) {
 	return
 }
 
-
-// TODO
-// func VideoCodecHandler(h *avutil.RegisterHandler) {
-// 	h.VideoDecoder = func(codec av.VideoCodecData) (av.VideoDecoder, error) {
-// 		if dec, err := NewVideoDecoder(codec); err != nil {
-// 			return nil, nil
-// 		} else {
-// 			return dec, err
-// 		}
-// 	}
-
-// 	h.VideoEncoder = func(typ av.CodecType) (av.VideoEncoder, error) {
-// 		if enc, err := NewVideoEncoderByCodecType(typ); err != nil {
-// 			return nil, nil
-// 		} else {
-// 			return enc, err
-// 		}
-// 	}
-// }
-
-
-
-
 type VideoDecoder struct {
 	ff *ffctx
 	Extradata []byte
@@ -602,12 +560,14 @@ func fromCPtr(buf unsafe.Pointer, size int) (ret []uint8) {
 type VideoFrame struct {	
 	Image image.YCbCr	
 	frame *C.AVFrame	
-}	
- func (self *VideoFrame) Free() {	
+}
+
+func (self *VideoFrame) Free() {
 	self.Image = image.YCbCr{}	
 	C.av_frame_free(&self.frame)	
-}	
- func freeVideoFrame(self *VideoFrame) {	
+}
+
+func freeVideoFrame(self *VideoFrame) {
 	self.Free()	
 }
 

@@ -3,7 +3,6 @@
 package av
 
 import (
-	"C"
 	"fmt"
 	"time"
 )
@@ -316,9 +315,6 @@ type AudioDecoder interface {
 type AudioResampler interface {
 	Resample(AudioFrame) (AudioFrame, error) // convert raw audio frames
 }
-
-
-
 
 // Video frame format.
 type PixelFormat uint8
