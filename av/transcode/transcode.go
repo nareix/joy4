@@ -137,7 +137,7 @@ func (self *tStream) audioDecodeAndEncode(inpkt av.Packet) (outpkts []av.Packet,
 func (self *tStream) videoDecodeAndEncode(inpkt av.Packet) (outpkts []av.Packet, err error) {
 	var dur time.Duration
 	var frame *ffmpeg.VideoFrame
-	if frame, err = self.vdec.Decode(inpkt.Data); err != nil {
+	if frame, err = self.vdec.Decode(inpkt.Data); err != nil || frame == nil {
 		return
 	}
 

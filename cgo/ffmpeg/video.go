@@ -542,8 +542,6 @@ func (self *VideoDecoder) Decode(pkt []byte) (img *VideoFrame, err error) {
 			Rect: image.Rect(0, 0, w, h),
 		}, frame: frame}
 		runtime.SetFinalizer(img, freeVideoFrame)
-	} else {
-		err = fmt.Errorf("ffmpeg: avcodec_decode_video2 returned no frame")
 	}
 
 	return
