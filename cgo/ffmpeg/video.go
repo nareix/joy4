@@ -18,18 +18,18 @@ import (
 	"github.com/nareix/joy4/codec/h264parser"
 )
 
-type VideoFrame struct {	
-	Image image.YCbCr	
-	frame *C.AVFrame	
+type VideoFrame struct {
+	Image image.YCbCr
+	frame *C.AVFrame
 }
 
 func (self *VideoFrame) Free() {
-	self.Image = image.YCbCr{}	
-	C.av_frame_free(&self.frame)	
+	self.Image = image.YCbCr{}
+	C.av_frame_free(&self.frame)
 }
 
 func freeVideoFrame(self *VideoFrame) {
-	self.Free()	
+	self.Free()
 }
 
 func (v VideoFrame) Width() int {
@@ -120,7 +120,6 @@ func (self *VideoScaler) videoScaleOne(src *VideoFrame) (dst *VideoFrame, err er
 	outStrides[0] = C.int(self.OutYStride)
 	outStrides[1] = C.int(self.OutCStride)
 	outStrides[2] = C.int(self.OutCStride)
-	
 
 	// TODO 420 only
 	lsize := self.OutYStride * self.OutHeight
@@ -130,7 +129,7 @@ func (self *VideoScaler) videoScaleOne(src *VideoFrame) (dst *VideoFrame, err er
 	dataPtr[0]= (*C.uint8_t)(C.malloc(C.size_t(lsize)))
 	dataPtr[1]= (*C.uint8_t)(C.malloc(C.size_t(csize)))
 	dataPtr[2]= (*C.uint8_t)(C.malloc(C.size_t(csize)))
-	
+
 	self.outputImgPtrs[0] = dataPtr[0]
 	self.outputImgPtrs[1] = dataPtr[1]
 	self.outputImgPtrs[2] = dataPtr[2]
@@ -140,7 +139,7 @@ func (self *VideoScaler) videoScaleOne(src *VideoFrame) (dst *VideoFrame, err er
 
 	dst					= &VideoFrame{}
 	dst.frame			= &C.AVFrame{} // TODO deep copy input to keep frame properties
-	dst.frame.format	= C.int32_t(PixelFormatAV2FF(self.OutPixelFormat))	
+	dst.frame.format	= C.int32_t(PixelFormatAV2FF(self.OutPixelFormat))
 	dst.Image.Y			= fromCPtr(unsafe.Pointer(dataPtr[0]), lsize)
 	dst.Image.Cb		= fromCPtr(unsafe.Pointer(dataPtr[1]), csize)
 	dst.Image.Cr		= fromCPtr(unsafe.Pointer(dataPtr[2]), csize)
@@ -559,7 +558,7 @@ func (dec VideoDecoder) GetFramerate() (num, den int) {
 	num = int(ff.codecCtx.framerate.num)
 	den = int(ff.codecCtx.framerate.den)
 	return
-} 
+}
 
 func NewVideoDecoder(stream av.CodecData) (dec *VideoDecoder, err error) {
 	_dec := &VideoDecoder{}
