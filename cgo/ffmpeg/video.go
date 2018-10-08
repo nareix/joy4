@@ -18,6 +18,68 @@ import (
 	"github.com/nareix/joy4/codec/h264parser"
 )
 
+type VideoFrame struct {	
+	Image image.YCbCr	
+	frame *C.AVFrame	
+}
+
+func (self *VideoFrame) Free() {
+	self.Image = image.YCbCr{}	
+	C.av_frame_free(&self.frame)	
+}
+
+func freeVideoFrame(self *VideoFrame) {
+	self.Free()	
+}
+
+func (v VideoFrame) Width() int {
+	return v.Image.Rect.Dx()
+}
+
+func (v VideoFrame) Height() int {
+	return v.Image.Rect.Dy()
+}
+
+func (v VideoFrame) GetPixelFormat() av.PixelFormat {
+	return PixelFormatFF2AV(int32(v.frame.format))
+}
+
+func (v VideoFrame) GetStride() (yStride, cStride int) {
+	return v.Image.YStride, v.Image.CStride
+}
+
+func (v VideoFrame) GetResolution() (w, h int) {
+	return v.Width(), v.Height()
+}
+
+func (v VideoFrame) GetDataPtr() (y, cb, cr *[]uint8) {
+	return &v.Image.Y, &v.Image.Cb, &v.Image.Cr
+}
+
+func (v VideoFrame) GetScanningMode() (mode av.ScanningMode) {
+	if int(v.frame.interlaced_frame) != 0 {
+		if int(v.frame.top_field_first) != 0 {
+			return av.InterlacedTFF
+		} else {
+			return av.InterlacedBFF
+		}
+	}
+	return av.Progressive
+}
+
+func (v *VideoFrame) SetPixelFormat(format av.PixelFormat) {
+	v.frame.format = C.int32_t(PixelFormatAV2FF(format))
+}
+
+func (v *VideoFrame) SetStride(yStride, cStride int) {
+	v.Image.YStride = yStride
+	v.Image.CStride = cStride
+}
+
+func (v *VideoFrame) SetResolution(w, h int) {
+	v.Image.Rect = image.Rectangle{ image.Point{0,0}, image.Point{w, h}}
+}
+
 type VideoScaler struct {
 	inPixelFormat, OutPixelFormat av.PixelFormat
 	inWidth, OutWidth int
@@ -326,39 +388,6 @@ func (enc *VideoEncoder) Close() {
 	freeFFCtx(enc.ff)
 }
 
-
-func PixelFormatAV2FF(pixelFormat av.PixelFormat) (ffpixelfmt int32) {
-	switch pixelFormat {
-	case av.I420:
-		ffpixelfmt = C.AV_PIX_FMT_YUV420P
-	case av.NV12:
-		ffpixelfmt = C.AV_PIX_FMT_NV12
-	case av.NV21:
-		ffpixelfmt = C.AV_PIX_FMT_NV21
-	case av.UYVY:
-		ffpixelfmt = C.AV_PIX_FMT_UYVY422
-	case av.YUYV:
-		ffpixelfmt = C.AV_PIX_FMT_YUYV422
-	}
-	return
-}
-
-func PixelFormatFF2AV(ffpixelfmt int32) (pixelFormat av.PixelFormat) {
-	switch ffpixelfmt {
-	case C.AV_PIX_FMT_YUV420P:
-		pixelFormat = av.I420
-	case C.AV_PIX_FMT_NV12:
-		pixelFormat = av.NV12
-	case C.AV_PIX_FMT_NV21:
-		pixelFormat = av.NV21
-	case C.AV_PIX_FMT_UYVY422:
-		pixelFormat = av.UYVY
-	case C.AV_PIX_FMT_YUYV422:
-		pixelFormat = av.YUYV
-	}
-	return
-}
-
 func (enc *VideoEncoder) SetPixelFormat(fmt av.PixelFormat) (err error) {
 	enc.pixelFormat = fmt
 	return
@@ -487,76 +516,6 @@ func (self *VideoDecoder) Setup() (err error) {
 	return
 }
 
-func fromCPtr(buf unsafe.Pointer, size int) (ret []uint8) {
-	hdr := (*reflect.SliceHeader)((unsafe.Pointer(&ret)))
-	hdr.Cap = size
-	hdr.Len = size
-	hdr.Data = uintptr(buf)
-	return
-}
-
-type VideoFrame struct {	
-	Image image.YCbCr	
-	frame *C.AVFrame	
-}
-
-func (self *VideoFrame) Free() {
-	self.Image = image.YCbCr{}	
-	C.av_frame_free(&self.frame)	
-}
-
-func freeVideoFrame(self *VideoFrame) {
-	self.Free()	
-}
-
-func (v VideoFrame) Width() int {
-	return v.Image.Rect.Dx()
-}
-
-func (v VideoFrame) Height() int {
-	return v.Image.Rect.Dy()
-}
-
-func (v VideoFrame) GetPixelFormat() av.PixelFormat {
-	return PixelFormatFF2AV(int32(v.frame.format))
-}
-
-func (v VideoFrame) GetStride() (yStride, cStride int) {
-	return v.Image.YStride, v.Image.CStride
-}
-
-func (v VideoFrame) GetResolution() (w, h int) {
-	return v.Width(), v.Height()
-}
-
-func (v VideoFrame) GetDataPtr() (y, cb, cr *[]uint8) {
-	return &v.Image.Y, &v.Image.Cb, &v.Image.Cr
-}
-
-func (v VideoFrame) GetScanningMode() (mode av.ScanningMode) {
-	if int(v.frame.interlaced_frame) != 0 {
-		if int(v.frame.top_field_first) != 0 {
-			return av.InterlacedTFF
-		} else {
-			return av.InterlacedBFF
-		}
-	}
-	return av.Progressive
-}
-
-func (v *VideoFrame) SetPixelFormat(format av.PixelFormat) {
-	v.frame.format = C.int32_t(PixelFormatAV2FF(format))
-}
-
-func (v *VideoFrame) SetStride(yStride, cStride int) {
-	v.Image.YStride = yStride
-	v.Image.CStride = cStride
-}
-
-func (v *VideoFrame) SetResolution(w, h int) {
-	v.Image.Rect = image.Rectangle{ image.Point{0,0}, image.Point{w, h}}
-}
-
 func (self *VideoDecoder) Decode(pkt []byte) (img *VideoFrame, err error) {
 	ff := &self.ff.ff
 
@@ -634,3 +593,42 @@ func NewVideoDecoder(stream av.CodecData) (dec *VideoDecoder, err error) {
 	return
 }
 
+func fromCPtr(buf unsafe.Pointer, size int) (ret []uint8) {
+	hdr := (*reflect.SliceHeader)((unsafe.Pointer(&ret)))
+	hdr.Cap = size
+	hdr.Len = size
+	hdr.Data = uintptr(buf)
+	return
+}
+
+func PixelFormatAV2FF(pixelFormat av.PixelFormat) (ffpixelfmt int32) {
+	switch pixelFormat {
+	case av.I420:
+		ffpixelfmt = C.AV_PIX_FMT_YUV420P
+	case av.NV12:
+		ffpixelfmt = C.AV_PIX_FMT_NV12
+	case av.NV21:
+		ffpixelfmt = C.AV_PIX_FMT_NV21
+	case av.UYVY:
+		ffpixelfmt = C.AV_PIX_FMT_UYVY422
+	case av.YUYV:
+		ffpixelfmt = C.AV_PIX_FMT_YUYV422
+	}
+	return
+}
+
+func PixelFormatFF2AV(ffpixelfmt int32) (pixelFormat av.PixelFormat) {
+	switch ffpixelfmt {
+	case C.AV_PIX_FMT_YUV420P:
+		pixelFormat = av.I420
+	case C.AV_PIX_FMT_NV12:
+		pixelFormat = av.NV12
+	case C.AV_PIX_FMT_NV21:
+		pixelFormat = av.NV21
+	case C.AV_PIX_FMT_UYVY422:
+		pixelFormat = av.UYVY
+	case C.AV_PIX_FMT_YUYV422:
+		pixelFormat = av.YUYV
+	}
+	return
+}
