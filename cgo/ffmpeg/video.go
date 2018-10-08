@@ -198,7 +198,7 @@ func (enc *VideoEncoder) Setup() (err error) {
 
 	// Check user parameters
 	if enc.width <= 0 || enc.height <= 0 {
-		fmt.Println("Error: Invalid resolution:", enc.width, enc.height)
+		err = fmt.Errorf("Error: Invalid resolution: %d x %d", enc.width, enc.height)
 		return
 	}
 
@@ -208,7 +208,7 @@ func (enc *VideoEncoder) Setup() (err error) {
 	}
 
 	if enc.fpsDen <= 0 || enc.fpsNum <= 0 {
-		fmt.Println("Error: Invalid framerate:", enc.fpsNum, "/", enc.fpsDen)
+		err = fmt.Errorf("Error: Invalid framerate: %d / %d", enc.fpsNum, enc.fpsDen)
 		return
 	}
 
@@ -241,7 +241,6 @@ func (enc *VideoEncoder) Setup() (err error) {
 
 	if C.avcodec_open2(ff.codecCtx, ff.codec, nil) != 0 {
 		err = fmt.Errorf("ffmpeg: encoder: avcodec_open2 failed")
-		fmt.Println(err)
 		return
 	}
 
@@ -319,9 +318,7 @@ func (enc *VideoEncoder) encodeOne(img *VideoFrame) (gotpkt bool, pkt []byte, er
 		if !enc.codecDataInitialised {
 			var codecData av.CodecData
 			codecData, err = h264parser.PktToCodecData(avpkt)
-			if err != nil {
-				fmt.Println(err)
-			} else {
+			if err == nil {
 				enc.codecData = codecData.(h264parser.CodecData)
 				enc.codecDataInitialised = true
 			}
@@ -460,24 +457,23 @@ func NewVideoEncoderByCodecType(typ av.CodecType) (enc *VideoEncoder, err error)
 		id = C.AV_CODEC_ID_H264
 
 	default:
-		fmt.Println("ffmpeg: cannot find encoder codecType=", typ)
+		err = fmt.Errorf("ffmpeg: cannot find encoder codecType=%v", typ)
 		return
 	}
 
 	codec := C.avcodec_find_encoder(id)
 	if codec == nil || C.avcodec_get_type(id) != C.AVMEDIA_TYPE_VIDEO {
-		fmt.Println("ffmpeg: cannot find video encoder codecId=", id)
+		err = fmt.Errorf("ffmpeg: cannot find video encoder codecId=%v", id)
 		return
 	}
 
 	_enc := &VideoEncoder{}
 	if _enc.ff, err = newFFCtxByCodec(codec); err != nil {
-		fmt.Println("could not instantiate enc. err = ", err)
+		err = fmt.Errorf("could not instantiate enc. err = %v", err)
 		return
 	}
 	enc = _enc
 
-	fmt.Println("found enc")
 	return
 }
 
