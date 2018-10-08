@@ -280,10 +280,8 @@ func CopyPackets(dst av.PacketWriter, src av.PacketReader) (err error) {
 		var pkt av.Packet
 		if pkt, err = src.ReadPacket(); err != nil {
 			if err == io.EOF {
-				fmt.Println("reached EOF")
 				break
 			}
-			fmt.Println("Error while reading packets:", err)
 			return
 		}
 		if err = dst.WritePacket(pkt); err != nil {
