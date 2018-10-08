@@ -250,8 +250,9 @@ func (enc *VideoEncoder) encodeOne(img *VideoFrame) (gotpkt bool, pkt []byte, er
 	cpkt := C.AVPacket{}
 	cgotpkt := C.int(0)
 
-	// TODO deep copy img to keep frame properties
-	ff.frame.format = img.frame.format
+	ff.frame.data[0] = (*C.uchar)(unsafe.Pointer(&img.Image.Y[0]))
+	ff.frame.data[1] = (*C.uchar)(unsafe.Pointer(&img.Image.Cb[0]))
+	ff.frame.data[2] = (*C.uchar)(unsafe.Pointer(&img.Image.Cr[0]))
 
 	ff.frame.linesize[0] = C.int(img.Image.YStride)
 	ff.frame.linesize[1] = C.int(img.Image.CStride)
@@ -259,12 +260,9 @@ func (enc *VideoEncoder) encodeOne(img *VideoFrame) (gotpkt bool, pkt []byte, er
 
 	ff.frame.width  = C.int(img.Image.Rect.Dx())
 	ff.frame.height = C.int(img.Image.Rect.Dy())
+	ff.frame.format = img.frame.format
 	ff.frame.sample_aspect_ratio.num = 0 // TODO
 	ff.frame.sample_aspect_ratio.den = 1
-
-	ff.frame.data[0] = (*C.uchar)(unsafe.Pointer(&img.Image.Y[0]))
-	ff.frame.data[1] = (*C.uchar)(unsafe.Pointer(&img.Image.Cb[0]))
-	ff.frame.data[2] = (*C.uchar)(unsafe.Pointer(&img.Image.Cr[0]))
 
 	// Increase pts and convert in 90k: pts * 90000 / fps
 	ff.frame.pts = C.int64_t( int(enc.pts) * enc.fpsDen * 90000 / enc.fpsNum)
@@ -339,7 +337,7 @@ func (enc *VideoEncoder) Encode(img *VideoFrame) (pkts [][]byte, err error) {
 	var gotpkt bool
 	var pkt []byte
 
-	if PixelFormatFF2AV(int32(img.frame.format)) != enc.pixelFormat || img.Width() != enc.width || img.Height() != enc.height/* TODO add stride ? */ {
+	if PixelFormatFF2AV(int32(img.frame.format)) != enc.pixelFormat || img.Width() != enc.width || img.Height() != enc.height {
 		if img, err = enc.scale(img); err != nil {
 			return nil, err
 		}
