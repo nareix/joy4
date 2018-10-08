@@ -216,36 +216,8 @@ func (enc *VideoEncoder) Setup() (err error) {
 		return
 	}
 
-	// TODO read some possibly changed params
-	// enc.pixelFormat = PixelFormatFF2AV(ff.codecCtx.sample_fmt)
-	// enc.FrameSampleCount = int(ff.codecCtx.frame_size)
-
-
-	// extradata := C.GoBytes(unsafe.Pointer(ff.codecCtx.extradata), ff.codecCtx.extradata_size)
-	// fmt.Println("extradata:\n", hex.Dump(extradata))
-	// fmt.Println("extradata_size:", len(extradata))
-
-
 	// Leave codecData uninitialized until SPS and PPS are received (see in encodeOne())
-	switch ff.codecCtx.codec_id {
-	// case C.AV_CODEC_ID_H264:
-	// 	// if enc.codecData, err = h264parser.NewCodecDataFromAVCDecoderConfRecord(extradata[3:]); err != nil {
-	// 		fmt.Println("can't init codecData, err:", err)
-	// 		return
-	// 	}
-
-	default:
-		// TODO
-		enc.codecData = h264parser.CodecData{
-			// codecId: ff.codecCtx.codec_id,
-			// pixelFormat: enc.pixelFormat,
-			// width: enc.width,
-			// height: enc.height,
-			// fpsNum: enc.fpsNum,
-			// fpsDen: enc.fpsDen,
-			// extradata: extradata,
-		}
-	}
+	enc.codecData = h264parser.CodecData{}
 
 	return
 }
@@ -606,16 +578,6 @@ func (v VideoFrame) GetScanningMode() (mode av.ScanningMode) {
 	return av.Progressive
 }
 
-// TODO
-// func (v VideoFrame) GetFramerate() (int, int) {
-// 	return v.frame.framerate.num, v.frame.framerate.den
-// }
-
-// func (self VideoFrame) Duration() time.Duration {
-// 	return time.Second * time.Duration(self.SampleCount) / time.Duration(self.SampleRate)
-// }
-
-
 func (v *VideoFrame) SetPixelFormat(format av.PixelFormat) {
 	v.frame.format = C.int32_t(PixelFormatAV2FF(format))
 }
@@ -628,13 +590,6 @@ func (v *VideoFrame) SetStride(yStride, cStride int) {
 func (v *VideoFrame) SetResolution(w, h int) {
 	v.Image.Rect = image.Rectangle{ image.Point{0,0}, image.Point{w, h}}
 }
-
-// TODO
-// func (v *VideoFrame) SetFramerate(num, den int) () {
-// 	v.FpsNum = num
-// 	v.FpsDen = den
-// }
-
 
 func (self *VideoDecoder) Decode(pkt []byte) (img *VideoFrame, err error) {
 	ff := &self.ff.ff
