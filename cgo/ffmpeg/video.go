@@ -81,11 +81,12 @@ func (v *VideoFrame) SetResolution(w, h int) {
 }
 
 type VideoScaler struct {
-	inPixelFormat, OutPixelFormat av.PixelFormat
-	inWidth, OutWidth int
-	inHeight, OutHeight int
-	inYStride, OutYStride int
-	inCStride, OutCStride int
+	inHeight int
+	OutPixelFormat av.PixelFormat
+	OutWidth int
+	OutHeight int
+	OutYStride int
+	OutCStride int
 	swsCtx *C.struct_SwsContext
 	outputImgPtrs [3]*C.uint8_t
 }
@@ -152,19 +153,15 @@ func (self *VideoScaler) videoScaleOne(src *VideoFrame) (dst *VideoFrame, err er
 
 func (self *VideoScaler) VideoScale(src *VideoFrame) (dst *VideoFrame, err error) {
 	if self.swsCtx == nil {
-		self.inPixelFormat	= PixelFormatFF2AV(int32(src.frame.format))
-		self.inWidth		= src.Image.Rect.Dx()
-		self.inHeight		= src.Image.Rect.Dy()
-		self.inYStride		= src.Image.YStride
-		self.inCStride		= src.Image.CStride
+		self.inHeight = src.Image.Rect.Dy()
 
-		self.swsCtx = C.sws_getContext(C.int(self.inWidth), C.int(self.inHeight), PixelFormatAV2FF(self.inPixelFormat),
+		self.swsCtx = C.sws_getContext(C.int(src.Image.Rect.Dx()), C.int(self.inHeight), int32(src.frame.format),
 			C.int(self.OutWidth), C.int(self.OutHeight), PixelFormatAV2FF(self.OutPixelFormat),
 			C.SWS_BILINEAR, (*C.SwsFilter)(C.NULL), (*C.SwsFilter)(C.NULL), (*C.double)(C.NULL))
 
 		if self.swsCtx == nil {
 			err = fmt.Errorf("Impossible to create scale context for the conversion fmt:%d s:%dx%d -> fmt:%d s:%dx%d\n",
-				self.inPixelFormat, self.inWidth, self.inHeight,
+				PixelFormatFF2AV(int32(src.frame.format)), src.Image.Rect.Dx(), self.inHeight,
 				self.OutPixelFormat, self.OutWidth, self.OutHeight);
 			return
 		}
@@ -236,8 +233,13 @@ func (enc *VideoEncoder) Setup() (err error) {
 
 	ff.codecCtx.time_base.num	= C.int(enc.fpsDen)
 	ff.codecCtx.time_base.den	= C.int(enc.fpsNum)
+	ff.codecCtx.ticks_per_frame	= C.int(2)
 	ff.codecCtx.gop_size		= C.int(enc.gopSize)
 	ff.codecCtx.bit_rate		= C.int64_t(enc.Bitrate)
+	ff.codecCtx.bit_rate_tolerance = C.int(ff.codecCtx.bit_rate/10);
+	ff.codecCtx.rc_max_rate		= ff.codecCtx.bit_rate
+	// ff.codecCtx.rc_min_rate		= ff.codecCtx.bit_rate/2
+	ff.codecCtx.rc_buffer_size	= C.int(ff.codecCtx.bit_rate)
 
 	if C.avcodec_open2(ff.codecCtx, ff.codec, nil) != 0 {
 		err = fmt.Errorf("ffmpeg: encoder: avcodec_open2 failed")
@@ -340,11 +342,6 @@ func (enc *VideoEncoder) encodeOne(img *VideoFrame) (gotpkt bool, pkt []byte, er
 func (self *VideoEncoder) scale(img *VideoFrame) (out *VideoFrame, err error) {
 	if self.scaler == nil {
 		self.scaler = &VideoScaler{
-			inPixelFormat:	PixelFormatFF2AV(int32(img.frame.format)),
-			inWidth:		img.Image.Rect.Dx(),
-			inHeight:		img.Image.Rect.Dy(),
-			inYStride:		img.Image.YStride,
-			inCStride:		img.Image.CStride,
 			OutPixelFormat:	self.pixelFormat,
 			OutWidth:		self.width,
 			OutHeight:		self.height,
