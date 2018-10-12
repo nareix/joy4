@@ -315,12 +315,10 @@ func PktToCodecData(pkt av.Packet) (h264CodecData av.CodecData, err error) {
 			h264CodecData, err = NewCodecDataFromSPSAndPPS(sps, pps)
 			if err != nil {
 				h264CodecData = nil
-				fmt.Println("can't init codecData, err:", err)
 				return
 			}
 		} else {
 			err = fmt.Errorf("h264parser: empty sps and/or pps")
-			fmt.Println("can't init codecData, err:", err)
 			return
 		}
 	}
