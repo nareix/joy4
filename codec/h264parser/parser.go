@@ -711,7 +711,6 @@ func (self CodecData) PacketDuration([]byte) (dur time.Duration, err error) {
 	fpsNum, fpsDen := self.Framerate()
 	if fpsNum <= 0 || fpsDen <= 0 {
 		err = fmt.Errorf("invalid framerate: %d/%d", fpsNum, fpsDen)
-		fmt.Println(err)
 		return
 	}
 	dur = (time.Second * time.Duration(fpsDen)) / time.Duration(fpsNum)
