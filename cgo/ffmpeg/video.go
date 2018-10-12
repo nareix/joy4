@@ -233,13 +233,8 @@ func (enc *VideoEncoder) Setup() (err error) {
 
 	ff.codecCtx.time_base.num	= C.int(enc.fpsDen)
 	ff.codecCtx.time_base.den	= C.int(enc.fpsNum)
-	ff.codecCtx.ticks_per_frame	= C.int(2)
 	ff.codecCtx.gop_size		= C.int(enc.gopSize)
 	ff.codecCtx.bit_rate		= C.int64_t(enc.Bitrate)
-	ff.codecCtx.bit_rate_tolerance = C.int(ff.codecCtx.bit_rate/10);
-	ff.codecCtx.rc_max_rate		= ff.codecCtx.bit_rate
-	// ff.codecCtx.rc_min_rate		= ff.codecCtx.bit_rate/2
-	ff.codecCtx.rc_buffer_size	= C.int(ff.codecCtx.bit_rate)
 
 	if C.avcodec_open2(ff.codecCtx, ff.codec, nil) != 0 {
 		err = fmt.Errorf("ffmpeg: encoder: avcodec_open2 failed")
