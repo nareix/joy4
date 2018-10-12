@@ -105,6 +105,12 @@ func (self *Queue) WritePacket(pkt av.Packet) (err error) {
 	return
 }
 
+
+// GetVideoIdx returns the internal index of the video stream
+func (self *Queue) GetVideoIdx() (idx int8) {
+	return int8(self.videoidx)
+}
+
 type QueueCursor struct {
 	que    *Queue
 	pos    pktque.BufPos
