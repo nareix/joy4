@@ -8,6 +8,8 @@ type GolombBitReader struct {
 	R    io.Reader
 	buf  [1]byte
 	left byte
+	prev_two_bytes uint
+	emulation_prevention_bytes uint
 }
 
 func (self *GolombBitReader) ReadBit() (res uint, err error) {
@@ -15,7 +17,24 @@ func (self *GolombBitReader) ReadBit() (res uint, err error) {
 		if _, err = self.R.Read(self.buf[:]); err != nil {
 			return
 		}
+		/*
+		// Emulation prevention three-byte detection.
+		// If a sequence of 0x000003 is found, skip (ignore) the last byte (0x03).
+		*/
+		if self.buf[0] == 0x03 && (self.prev_two_bytes & 0xffff) == 0 {
+			// Detected 0x000003, skip last byte.
+			if _, err = self.R.Read(self.buf[:]); err != nil {
+				return
+			}
+
+			self.emulation_prevention_bytes++
+			/*
+			// Need another full three bytes before we can detect the sequence again.
+			*/
+			self.prev_two_bytes = 0xffff
+		}
 		self.left = 8
+		self.prev_two_bytes = (self.prev_two_bytes << 8) | uint(self.buf[0])
 	}
 	self.left--
 	res = uint(self.buf[0]>>self.left) & 1
@@ -62,4 +81,8 @@ func (self *GolombBitReader) ReadSE() (res uint, err error) {
 		res = -res / 2
 	}
 	return
+}
+
+func (self *GolombBitReader) NumEmulationPreventionBytesRead() uint {
+	return self.emulation_prevention_bytes
 }
