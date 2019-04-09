@@ -697,7 +697,7 @@ func (self *Conn) connectPublish() (err error) {
 	if Debug {
 		fmt.Printf("rtmp: > publish('%s')\n", publishpath)
 	}
-	if err = self.writeCommandMsg(8, self.avmsgsid, "publish", transid, nil, publishpath); err != nil {
+	if err = self.writeCommandMsg(8, self.avmsgsid, "publish", transid, nil, publishpath, "live"); err != nil {
 		return
 	}
 	transid++
