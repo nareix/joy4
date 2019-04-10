@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 	"github.com/nareix/bits/pio"
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/format/ts/tsio"
-	"github.com/nareix/joy4/codec/aacparser"
-	"github.com/nareix/joy4/codec/h264parser"
+	"github.com/youminxue/joy4/av"
+	"github.com/youminxue/joy4/format/ts/tsio"
+	"github.com/youminxue/joy4/codec/aacparser"
+	"github.com/youminxue/joy4/codec/h264parser"
 	"io"
 )
 
