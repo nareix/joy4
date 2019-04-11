@@ -8,16 +8,17 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/nareix/bits/pio"
-	"github.com/youminxue/joy4/av"
-	"github.com/youminxue/joy4/av/avutil"
-	"github.com/youminxue/joy4/format/flv"
-	"github.com/youminxue/joy4/format/flv/flvio"
 	"io"
 	"net"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/nareix/bits/pio"
+	"github.com/youminxue/joy4/av"
+	"github.com/youminxue/joy4/av/avutil"
+	"github.com/youminxue/joy4/format/flv"
+	"github.com/youminxue/joy4/format/flv/flvio"
 )
 
 var Debug bool
@@ -598,6 +599,9 @@ func (self *Conn) writeConnect(path string) (err error) {
 		return
 	}
 
+	if err = self.flushWrite(); err != nil {
+		return
+	}
 	// > connect("app")
 	if Debug {
 		fmt.Printf("rtmp: > connect('%s') host=%s\n", path, self.URL.Host)
