@@ -599,9 +599,6 @@ func (self *Conn) writeConnect(path string) (err error) {
 		return
 	}
 
-	if err = self.flushWrite(); err != nil {
-		return
-	}
 	// > connect("app")
 	if Debug {
 		fmt.Printf("rtmp: > connect('%s') host=%s\n", path, self.URL.Host)

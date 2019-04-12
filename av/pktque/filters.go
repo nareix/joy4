@@ -1,9 +1,9 @@
-
 // Package pktque provides packet Filter interface and structures used by other components.
 package pktque
 
 import (
 	"time"
+
 	"github.com/youminxue/joy4/av"
 )
 
@@ -30,8 +30,8 @@ func (self Filters) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoid
 // Wrap origin Demuxer and Filter into a new Demuxer, when read this Demuxer filters will be called.
 type FilterDemuxer struct {
 	av.Demuxer
-	Filter Filter
-	streams []av.CodecData
+	Filter   Filter
+	streams  []av.CodecData
 	videoidx int
 	audioidx int
 }
@@ -81,9 +81,9 @@ func (self *WaitKeyFrame) ModifyPacket(pkt *av.Packet, streams []av.CodecData, v
 
 // Fix incorrect packet timestamps.
 type FixTime struct {
-	zerobase time.Duration
-	incrbase time.Duration
-	lasttime time.Duration
+	zerobase      time.Duration
+	incrbase      time.Duration
+	lasttime      time.Duration
 	StartFromZero bool // make timestamp start from zero
 	MakeIncrement bool // force timestamp increment
 }
@@ -114,14 +114,14 @@ func (self *FixTime) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoi
 // Drop incorrect packets to make A/V sync.
 type AVSync struct {
 	MaxTimeDiff time.Duration
-	time []time.Duration
+	time        []time.Duration
 }
 
 func (self *AVSync) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoidx int, audioidx int) (drop bool, err error) {
 	if self.time == nil {
 		self.time = make([]time.Duration, len(streams))
 		if self.MaxTimeDiff == 0 {
-			self.MaxTimeDiff = time.Millisecond*500
+			self.MaxTimeDiff = time.Millisecond * 500
 		}
 	}
 
@@ -172,15 +172,19 @@ func (self *AVSync) check(i int) (start time.Duration, end time.Duration, correc
 
 // Make packets reading speed as same as walltime, effect like ffmpeg -re option.
 type Walltime struct {
-	firsttime time.Time
+	firsttime  time.Time
+	firstSleep time.Duration
 }
 
 func (self *Walltime) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoidx int, audioidx int) (drop bool, err error) {
 	if pkt.Idx == 0 {
 		if self.firsttime.IsZero() {
 			self.firsttime = time.Now()
+			self.firstSleep = pkt.Time
+			return
 		}
-		pkttime := self.firsttime.Add(pkt.Time)
+		sub := (pkt.Time.Nanoseconds() - self.firstSleep.Nanoseconds()) / 1000
+		pkttime := self.firsttime.Add(time.Duration(sub) * time.Microsecond)
 		delta := pkttime.Sub(time.Now())
 		if delta > 0 {
 			time.Sleep(delta)
@@ -188,4 +192,3 @@ func (self *Walltime) ModifyPacket(pkt *av.Packet, streams []av.CodecData, video
 	}
 	return
 }
-
