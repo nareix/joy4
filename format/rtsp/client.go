@@ -436,6 +436,11 @@ func (self *Client) findRTSP() (block []byte, data []byte, err error) {
 			}
 			if blocklen, _, ok := self.parseBlockHeader(peek); ok {
 				left := blocklen + 4 - len(peek)
+
+				if left <= 0 {
+					return
+				}
+
 				block = append(peek, make([]byte, left)...)
 				if _, err = io.ReadFull(self.brconn, block[len(peek):]); err != nil {
 					return
