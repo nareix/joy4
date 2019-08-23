@@ -834,16 +834,19 @@ func (self *Stream) handleH264Payload(timestamp uint32, packet []byte) (err erro
 		29       FU-B      Fragmentation unit                 5.8
 		30-31    reserved                                     -
 	*/
+
+	self.pkt.FrameType = 123
 	switch {
 	case naluType >= 1 && naluType <= 5:
-		if naluType == 5 {
-			self.pkt.IsKeyFrame = true
-		}
+
+		self.pkt.FrameType = packet[4]
+
 		self.gotpkt = true
 		// raw nalu to avcc
 		b := make([]byte, 4+len(packet))
 		pio.PutU32BE(b[0:4], uint32(len(packet)))
 		copy(b[4:], packet)
+
 		self.pkt.Data = b
 		self.timestamp = timestamp
 
