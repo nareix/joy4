@@ -2,10 +2,30 @@ package ffmpeg
 
 /*
 #include "ffmpeg.h"
-int wrap_avcodec_decode_video2(AVCodecContext *ctx, AVFrame *frame, void *data, int size, int *got) {
+int wrap_avcodec_decode_video2(AVCodecContext *avctx, AVFrame *frame,void *data, int size, int *got_frame)
+{
+    int ret;
 	struct AVPacket pkt = {.data = data, .size = size};
-	return avcodec_decode_video2(ctx, frame, got, &pkt);
+
+    *got_frame = 0;
+
+    if (data) {
+        ret = avcodec_send_packet(avctx, &pkt);
+        // In particular, we don't expect AVERROR(EAGAIN), because we read all
+        // decoded frames with avcodec_receive_frame() until done.
+        if (ret < 0)
+            return ret == AVERROR_EOF ? 0 : ret;
+    }
+
+    ret = avcodec_receive_frame(avctx, frame);
+    if (ret < 0 && ret != AVERROR(EAGAIN) && ret != AVERROR_EOF)
+        return ret;
+    if (ret >= 0)
+        *got_frame = 1;
+
+    return 0;
 }
+
 */
 import "C"
 import (
