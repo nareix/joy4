@@ -86,7 +86,6 @@ int wrap_avcodec_encode_jpeg(AVCodecContext *pCodecCtx, AVFrame *pFrame,AVPacket
         avcodec_close(jpegContext);
         return -1;
     }
-        
     avcodec_close(jpegContext);
     return 0;
 }

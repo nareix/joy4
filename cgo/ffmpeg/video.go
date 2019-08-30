@@ -42,14 +42,13 @@ func fromCPtr(buf unsafe.Pointer, size int) (ret []uint8) {
 
 type VideoFrame struct {
 	Image image.YCbCr
-	frame *C.AVFrame
 	Raw   []byte
 	Size  int
 }
 
 func (self *VideoFrame) Free() {
 	self.Image = image.YCbCr{}
-	C.av_frame_free(&self.frame)
+	self.Raw = make([]byte, 0)
 }
 
 func freeVideoFrame(self *VideoFrame) {
@@ -81,7 +80,7 @@ func (self *VideoDecoder) Decode(pkt []byte) (img *VideoFrame, err error) {
 			CStride:        cs,
 			SubsampleRatio: image.YCbCrSubsampleRatio420,
 			Rect:           image.Rect(0, 0, w, h),
-		}, frame: frame}
+		}}
 		runtime.SetFinalizer(img, freeVideoFrame)
 
 		packet := C.AVPacket{}
@@ -93,8 +92,10 @@ func (self *VideoDecoder) Decode(pkt []byte) (img *VideoFrame, err error) {
 			tmp := *(*[]byte)(unsafe.Pointer(&packet.data))
 			img.Raw = make([]byte, img.Size)
 			copy(img.Raw, tmp)
+			tmp = nil
 		}
-
+		C.av_frame_free(&frame)
+		C.av_free_packet(&packet)
 	}
 
 	return
