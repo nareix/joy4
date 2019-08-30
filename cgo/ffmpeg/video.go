@@ -1,32 +1,7 @@
 package ffmpeg
 
-/*
-#include "ffmpeg.h"
-int wrap_avcodec_decode_video2(AVCodecContext *avctx, AVFrame *frame,void *data, int size, int *got_frame)
-{
-    int ret;
-	struct AVPacket pkt = {.data = data, .size = size};
-
-    *got_frame = 0;
-
-    if (data) {
-        ret = avcodec_send_packet(avctx, &pkt);
-        // In particular, we don't expect AVERROR(EAGAIN), because we read all
-        // decoded frames with avcodec_receive_frame() until done.
-        if (ret < 0)
-            return ret == AVERROR_EOF ? 0 : ret;
-    }
-
-    ret = avcodec_receive_frame(avctx, frame);
-    if (ret < 0 && ret != AVERROR(EAGAIN) && ret != AVERROR_EOF)
-        return ret;
-    if (ret >= 0)
-        *got_frame = 1;
-
-    return 0;
-}
-
-*/
+//#cgo LDFLAGS: -lavformat -lavutil -lavcodec -lavresample -lswscale
+// #include "ffmpeg.h"
 import "C"
 import (
 	"fmt"
@@ -68,6 +43,8 @@ func fromCPtr(buf unsafe.Pointer, size int) (ret []uint8) {
 type VideoFrame struct {
 	Image image.YCbCr
 	frame *C.AVFrame
+	Raw   []byte
+	Size  int
 }
 
 func (self *VideoFrame) Free() {
@@ -84,7 +61,7 @@ func (self *VideoDecoder) Decode(pkt []byte) (img *VideoFrame, err error) {
 
 	cgotimg := C.int(0)
 	frame := C.av_frame_alloc()
-	cerr := C.wrap_avcodec_decode_video2(ff.codecCtx, frame, unsafe.Pointer(&pkt[0]), C.int(len(pkt)), &cgotimg)
+	cerr := C.wrap_avcodec_decode_video2(ff.codecCtx, frame, (*C.uchar)(unsafe.Pointer(&pkt[0])), C.int(len(pkt)), &cgotimg)
 	if cerr < C.int(0) {
 		err = fmt.Errorf("ffmpeg: avcodec_decode_video2 failed: %d", cerr)
 		return
@@ -106,6 +83,20 @@ func (self *VideoDecoder) Decode(pkt []byte) (img *VideoFrame, err error) {
 			Rect:           image.Rect(0, 0, w, h),
 		}, frame: frame}
 		runtime.SetFinalizer(img, freeVideoFrame)
+
+		var packet C.AVPacket
+		C.av_init_packet(&packet)
+		defer C.av_free_packet(&packet)
+
+		err := C.wrap_avcodec_encode_jpeg(ff.codecCtx, frame, &packet)
+
+		if err == C.int(0) {
+			img.Size = int(packet.size)
+			tmp := *(*[]byte)(unsafe.Pointer(&packet.data))
+			img.Raw = make([]byte, img.Size)
+			copy(img.Raw, tmp)
+		}
+
 	}
 
 	return
