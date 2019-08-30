@@ -7,15 +7,14 @@
 #include <libswscale/swscale.h>
 #include "ffmpeg.h"
 
-int wrap_avcodec_decode_video2(AVCodecContext *avctx, AVFrame *frame,uint8_t *data, int size, int *got_frame)
+int decode(AVCodecContext *avctx, AVFrame *frame, int *got_frame, AVPacket *pkt)
 {
     int ret;
-	struct AVPacket pkt = {.data = data, .size = size};
 
     *got_frame = 0;
 
-    if (data) {
-        ret = avcodec_send_packet(avctx, &pkt);
+    if (pkt) {
+        ret = avcodec_send_packet(avctx, pkt);
         // In particular, we don't expect AVERROR(EAGAIN), because we read all
         // decoded frames with avcodec_receive_frame() until done.
         if (ret < 0)
@@ -29,6 +28,32 @@ int wrap_avcodec_decode_video2(AVCodecContext *avctx, AVFrame *frame,uint8_t *da
         *got_frame = 1;
 
     return 0;
+}
+
+int encode(AVCodecContext *avctx, AVPacket *pkt, int *got_packet, AVFrame *frame)
+{
+    int ret;
+
+    *got_packet = 0;
+
+    ret = avcodec_send_frame(avctx, frame);
+    if (ret < 0)
+        return ret;
+
+    ret = avcodec_receive_packet(avctx, pkt);
+    if (!ret)
+        *got_packet = 1;
+    if (ret == AVERROR(EAGAIN))
+        return 0;
+
+    return ret;
+}
+
+
+int wrap_avcodec_decode(AVCodecContext *avctx, AVFrame *frame,uint8_t *data, int size, int *got_frame)
+{
+	struct AVPacket pkt = {.data = data, .size = size};
+    return decode(avctx, frame, got_frame, &pkt);
 }
 
 int wrap_avcodec_encode_jpeg(AVCodecContext *pCodecCtx, AVFrame *pFrame,AVPacket *packet) {
@@ -56,12 +81,16 @@ int wrap_avcodec_encode_jpeg(AVCodecContext *pCodecCtx, AVFrame *pFrame,AVPacket
     }
     
     int gotFrame;
-
-    if (avcodec_encode_video2(jpegContext, packet, pFrame, &gotFrame) < 0) {
+    
+    if (encode(jpegContext, packet, &gotFrame, pFrame) < 0) {
         avcodec_close(jpegContext);
         return -1;
     }
         
     avcodec_close(jpegContext);
     return 0;
+}
+
+int wrap_avresample_convert(AVAudioResampleContext *avr, int *out, int outsize, int outcount, int *in, int insize, int incount) {
+	return avresample_convert(avr, (void *)out, outsize, outcount, (void *)in, insize, incount);
 }

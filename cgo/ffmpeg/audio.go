@@ -3,57 +3,7 @@ package ffmpeg
 /*
 #include "ffmpeg.h"
 
-int wrap_avcodec_decode_audio4(AVCodecContext *avctx, AVFrame *frame,void *data, int size, int *got_frame)
-{
-    int ret;
-	struct AVPacket pkt = {.data = data, .size = size};
 
-    *got_frame = 0;
-
-    if (data) {
-        ret = avcodec_send_packet(avctx, &pkt);
-        // In particular, we don't expect AVERROR(EAGAIN), because we read all
-        // decoded frames with avcodec_receive_frame() until done.
-        if (ret < 0)
-            return ret == AVERROR_EOF ? 0 : ret;
-    }
-
-    ret = avcodec_receive_frame(avctx, frame);
-    if (ret < 0 && ret != AVERROR(EAGAIN) && ret != AVERROR_EOF)
-        return ret;
-    if (ret >= 0)
-        *got_frame = 1;
-
-    return 0;
-}
-
-int wrap_avcodec_encode_audio2(AVCodecContext *avctx,AVPacket *pkt, AVFrame *frame, int *got_frame)
-{
-    int ret;
-    *got_frame = 0;
-
-    if (pkt) {
-        ret = avcodec_send_packet(avctx, pkt);
-        // In particular, we don't expect AVERROR(EAGAIN), because we read all
-        // decoded frames with avcodec_receive_frame() until done.
-        if (ret < 0)
-            return ret == AVERROR_EOF ? 0 : ret;
-    }
-
-    ret = avcodec_receive_frame(avctx, frame);
-    if (ret < 0 && ret != AVERROR(EAGAIN) && ret != AVERROR_EOF)
-        return ret;
-    if (ret >= 0)
-        *got_frame = 1;
-
-    return 0;
-}
-
-
-
-int wrap_avresample_convert(AVAudioResampleContext *avr, int *out, int outsize, int outcount, int *in, int insize, int incount) {
-	return avresample_convert(avr, (void *)out, outsize, outcount, (void *)in, insize, incount);
-}
 */
 import "C"
 import (
@@ -414,7 +364,7 @@ func (self *AudioEncoder) encodeOne(frame av.AudioFrame) (gotpkt bool, pkt []byt
 		}
 		fmt.Println(farr)
 	}
-	cerr := C.wrap_avcodec_encode_audio2(ff.codecCtx, &cpkt, ff.frame, &cgotpkt)
+	cerr := C.encode(ff.codecCtx, &cpkt, &cgotpkt, ff.frame)
 	if cerr < C.int(0) {
 		err = fmt.Errorf("ffmpeg: avcodec_encode_audio2 failed: %d", cerr)
 		return
@@ -635,7 +585,7 @@ func (self *AudioDecoder) Decode(pkt []byte) (gotframe bool, frame av.AudioFrame
 	ff := &self.ff.ff
 
 	cgotframe := C.int(0)
-	cerr := C.wrap_avcodec_decode_audio4(ff.codecCtx, ff.frame, unsafe.Pointer(&pkt[0]), C.int(len(pkt)), &cgotframe)
+	cerr := C.wrap_avcodec_decode(ff.codecCtx, ff.frame, (*C.uchar)(unsafe.Pointer(&pkt[0])), C.int(len(pkt)), &cgotframe)
 	if cerr < C.int(0) {
 		err = fmt.Errorf("ffmpeg: avcodec_decode_audio4 failed: %d", cerr)
 		return

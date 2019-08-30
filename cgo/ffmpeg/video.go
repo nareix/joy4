@@ -61,7 +61,7 @@ func (self *VideoDecoder) Decode(pkt []byte) (img *VideoFrame, err error) {
 
 	cgotimg := C.int(0)
 	frame := C.av_frame_alloc()
-	cerr := C.wrap_avcodec_decode_video2(ff.codecCtx, frame, (*C.uchar)(unsafe.Pointer(&pkt[0])), C.int(len(pkt)), &cgotimg)
+	cerr := C.wrap_avcodec_decode(ff.codecCtx, frame, (*C.uchar)(unsafe.Pointer(&pkt[0])), C.int(len(pkt)), &cgotimg)
 	if cerr < C.int(0) {
 		err = fmt.Errorf("ffmpeg: avcodec_decode_video2 failed: %d", cerr)
 		return
@@ -84,9 +84,7 @@ func (self *VideoDecoder) Decode(pkt []byte) (img *VideoFrame, err error) {
 		}, frame: frame}
 		runtime.SetFinalizer(img, freeVideoFrame)
 
-		var packet C.AVPacket
-		C.av_init_packet(&packet)
-		defer C.av_free_packet(&packet)
+		packet := C.AVPacket{}
 
 		err := C.wrap_avcodec_encode_jpeg(ff.codecCtx, frame, &packet)
 

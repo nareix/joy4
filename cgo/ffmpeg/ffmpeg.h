@@ -22,6 +22,8 @@ static inline int avcodec_profile_name_to_int(AVCodec *codec, const char *name) 
 			return p->profile;
 	return FF_PROFILE_UNKNOWN;
 }
-
-int wrap_avcodec_decode_video2(AVCodecContext *avctx, AVFrame *frame,uint8_t *data, int size, int *got_frame);
+int encode(AVCodecContext *avctx, AVPacket *pkt, int *got_packet, AVFrame *frame);
+int decode(AVCodecContext *avctx, AVFrame *frame, int *got_frame, AVPacket *pkt);
+int wrap_avcodec_decode(AVCodecContext *avctx, AVFrame *frame,uint8_t *data, int size, int *got_frame);
 int wrap_avcodec_encode_jpeg(AVCodecContext *pCodecCtx, AVFrame *pFrame,AVPacket *packet);
+int wrap_avresample_convert(AVAudioResampleContext *avr, int *out, int outsize, int outcount, int *in, int insize, int incount);
