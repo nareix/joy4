@@ -1,10 +1,12 @@
 package main
 
 import (
-	"github.com/nareix/joy4/av/pktque"
-	"github.com/nareix/joy4/format"
-	"github.com/nareix/joy4/av/avutil"
-	"github.com/nareix/joy4/format/rtmp"
+	"flag"
+
+	"github.com/tyrese/joy4/av/avutil"
+	"github.com/tyrese/joy4/av/pktque"
+	"github.com/tyrese/joy4/format"
+	"github.com/tyrese/joy4/format/rtmp"
 )
 
 func init() {
@@ -14,8 +16,13 @@ func init() {
 // as same as: ffmpeg -re -i projectindex.flv -c copy -f flv rtmp://localhost:1936/app/publish
 
 func main() {
-	file, _ := avutil.Open("projectindex.flv")
-	conn, _ := rtmp.Dial("rtmp://localhost:1936/app/publish")
+	inputFile := flag.String("i", "projectindex.flv", "input file")
+	dstUrl := flag.String("o", "rtmp://localhost:1936/app/publish", "output url")
+	debug := flag.Bool("v", false, "verbose")
+	flag.Parse()
+	rtmp.Debug = *debug
+	file, _ := avutil.Open(*inputFile)
+	conn, _ := rtmp.Dial(*dstUrl)
 	// conn, _ := avutil.Create("rtmp://localhost:1936/app/publish")
 
 	demuxer := &pktque.FilterDemuxer{Demuxer: file, Filter: &pktque.Walltime{}}
@@ -24,4 +31,3 @@ func main() {
 	file.Close()
 	conn.Close()
 }
-

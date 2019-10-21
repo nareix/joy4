@@ -1,15 +1,17 @@
 package main
 
 import (
+	"flag"
 	"fmt"
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/av/avutil"
-	"github.com/nareix/joy4/av/pktque"
-	"github.com/nareix/joy4/av/pubsub"
-	"github.com/nareix/joy4/format"
-	"github.com/nareix/joy4/format/rtmp"
 	"sync"
 	"time"
+
+	"github.com/tyrese/joy4/av"
+	"github.com/tyrese/joy4/av/avutil"
+	"github.com/tyrese/joy4/av/pktque"
+	"github.com/tyrese/joy4/av/pubsub"
+	"github.com/tyrese/joy4/format"
+	"github.com/tyrese/joy4/format/rtmp"
 )
 
 func init() {
@@ -73,7 +75,12 @@ func (self *FrameDropper) ModifyPacket(pkt *av.Packet, streams []av.CodecData, v
 }
 
 func main() {
-	server := &rtmp.Server{}
+	quic := flag.Bool("quic", false, "false")
+	debug := flag.Bool("v", false, "verbose")
+	flag.Parse()
+	rtmp.Debug = *debug
+
+	server := &rtmp.Server{Quic: *quic}
 
 	l := &sync.RWMutex{}
 	type Channel struct {

@@ -1,8 +1,8 @@
 package mp4
 
 import (
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/format/mp4/mp4io"
+	"github.com/tyrese/joy4/av"
+	"github.com/tyrese/joy4/format/mp4/mp4io"
 	"time"
 )
 

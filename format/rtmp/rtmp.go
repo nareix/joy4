@@ -5,19 +5,27 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
+	"encoding/pem"
 	"fmt"
-	"github.com/nareix/joy4/utils/bits/pio"
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/av/avutil"
-	"github.com/nareix/joy4/format/flv"
-	"github.com/nareix/joy4/format/flv/flvio"
 	"io"
+	"math/big"
 	"net"
 	"net/url"
 	"strings"
 	"time"
+
+	quicconn "github.com/marten-seemann/quic-conn"
+
+	"github.com/tyrese/joy4/av"
+	"github.com/tyrese/joy4/av/avutil"
+	"github.com/tyrese/joy4/format/flv"
+	"github.com/tyrese/joy4/format/flv/flvio"
+	"github.com/tyrese/joy4/utils/bits/pio"
 )
 
 var Debug bool
@@ -42,13 +50,26 @@ func DialTimeout(uri string, timeout time.Duration) (conn *Conn, err error) {
 		return
 	}
 
-	dailer := net.Dialer{Timeout: timeout}
-	var netconn net.Conn
-	if netconn, err = dailer.Dial("tcp", u.Host); err != nil {
-		return
+	if strings.Contains(uri, "quic=1") {
+		tlsConf := &tls.Config{InsecureSkipVerify: true}
+		netconn, err := quicconn.Dial(u.Host, tlsConf)
+		if err != nil {
+			panic(err)
+		}
+
+		conn = NewConn(netconn)
+
+		fmt.Println("quic connect to " + u.Host)
+	} else {
+		dailer := net.Dialer{Timeout: timeout}
+		var netconn net.Conn
+		if netconn, err = dailer.Dial("tcp", u.Host); err != nil {
+			return
+		}
+
+		conn = NewConn(netconn)
 	}
 
-	conn = NewConn(netconn)
 	conn.URL = u
 	return
 }
@@ -58,6 +79,7 @@ type Server struct {
 	HandlePublish func(*Conn)
 	HandlePlay    func(*Conn)
 	HandleConn    func(*Conn)
+	Quic          bool
 }
 
 func (self *Server) handleConn(conn *Conn) (err error) {
@@ -82,11 +104,78 @@ func (self *Server) handleConn(conn *Conn) (err error) {
 	return
 }
 
+func generateTLSConfig() (*tls.Config, error) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, err
+	}
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{
+		Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key),
+	})
+	b := pem.Block{Type: "CERTIFICATE", Bytes: certDER}
+	certPEM := pem.EncodeToMemory(&b)
+
+	tlsCert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tls.Config{
+		Certificates: []tls.Certificate{tlsCert},
+	}, nil
+}
+
 func (self *Server) ListenAndServe() (err error) {
 	addr := self.Addr
 	if addr == "" {
 		addr = ":1935"
 	}
+
+	if self.Quic {
+		tlsConf, err := generateTLSConfig()
+		if err != nil {
+			panic(err)
+		}
+
+		quicListener, err := quicconn.Listen("udp", addr, tlsConf)
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Println("quic listen on" + addr)
+
+		go func() {
+			for {
+				var netconn net.Conn
+				if netconn, err = quicListener.Accept(); err != nil {
+					return
+				}
+
+				fmt.Println("rtmp: server: quic accepted")
+
+				conn := NewConn(netconn)
+				conn.isserver = true
+				go func() {
+					err := self.handleConn(conn)
+					if Debug {
+						fmt.Println("rtmp: server: client closed err:", err)
+					}
+				}()
+			}
+		}()
+	}
+
 	var tcpaddr *net.TCPAddr
 	if tcpaddr, err = net.ResolveTCPAddr("tcp", addr); err != nil {
 		err = fmt.Errorf("rtmp: ListenAndServe: %s", err)
