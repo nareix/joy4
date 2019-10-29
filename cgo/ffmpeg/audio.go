@@ -585,7 +585,9 @@ func (self *AudioDecoder) Decode(pkt []byte) (gotframe bool, frame av.AudioFrame
 	ff := &self.ff.ff
 
 	cgotframe := C.int(0)
-	cerr := C.wrap_avcodec_decode(ff.codecCtx, ff.frame, (*C.uchar)(unsafe.Pointer(&pkt[0])), C.int(len(pkt)), &cgotframe)
+
+	cerr := C.wrap_decode(ff.codecCtx, ff.frame, (*C.uchar)(unsafe.Pointer(&pkt[0])), C.int(len(pkt)), &cgotframe)
+
 	if cerr < C.int(0) {
 		err = fmt.Errorf("ffmpeg: avcodec_decode_audio4 failed: %d", cerr)
 		return

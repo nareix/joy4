@@ -60,7 +60,60 @@ func (self *VideoDecoder) Decode(pkt []byte) (img *VideoFrame, err error) {
 
 	cgotimg := C.int(0)
 	frame := C.av_frame_alloc()
-	cerr := C.wrap_avcodec_decode(ff.codecCtx, frame, (*C.uchar)(unsafe.Pointer(&pkt[0])), C.int(len(pkt)), &cgotimg)
+	defer C.av_frame_free(&frame)
+
+	cerr := C.wrap_decode(ff.codecCtx, frame, (*C.uchar)(unsafe.Pointer(&pkt[0])), C.int(len(pkt)), &cgotimg)
+
+	if cerr < C.int(0) {
+		err = fmt.Errorf("ffmpeg: avcodec_decode_video2 failed: %d", cerr)
+		return
+	}
+
+	if cgotimg != C.int(0) {
+		w := int(frame.width)
+		h := int(frame.height)
+		ys := int(frame.linesize[0])
+		cs := int(frame.linesize[1])
+
+		img = &VideoFrame{Image: image.YCbCr{
+			Y:              fromCPtr(unsafe.Pointer(frame.data[0]), ys*h),
+			Cb:             fromCPtr(unsafe.Pointer(frame.data[1]), cs*h/2),
+			Cr:             fromCPtr(unsafe.Pointer(frame.data[2]), cs*h/2),
+			YStride:        ys,
+			CStride:        cs,
+			SubsampleRatio: image.YCbCrSubsampleRatio420,
+			Rect:           image.Rect(0, 0, w, h),
+		}}
+
+		runtime.SetFinalizer(img, freeVideoFrame)
+
+		packet := C.AVPacket{}
+		defer C.av_packet_unref(&packet)
+
+		cerr := C.wrap_avcodec_encode_jpeg(ff.codecCtx, frame, &packet)
+
+		if cerr != C.int(0) {
+			err = fmt.Errorf("ffmpeg: avcodec_decode_video2 failed: %d", cerr)
+			return
+		}
+
+		img.Size = int(packet.size)
+		img.Raw = make([]byte, img.Size)
+		copy(img.Raw, *(*[]byte)(unsafe.Pointer(&packet.data)))
+	}
+
+	return
+}
+
+func (self *VideoDecoder) DecodeBac(pkt []byte) (img *VideoFrame, err error) {
+	ff := &self.ff.ff
+
+	cgotimg := C.int(0)
+	frame := C.av_frame_alloc()
+	defer C.av_frame_free(&frame)
+
+	cerr := C.wrap_decode(ff.codecCtx, frame, (*C.uchar)(unsafe.Pointer(&pkt[0])), C.int(len(pkt)), &cgotimg)
+
 	if cerr < C.int(0) {
 		err = fmt.Errorf("ffmpeg: avcodec_decode_video2 failed: %d", cerr)
 		return
@@ -84,18 +137,18 @@ func (self *VideoDecoder) Decode(pkt []byte) (img *VideoFrame, err error) {
 		runtime.SetFinalizer(img, freeVideoFrame)
 
 		packet := C.AVPacket{}
+		defer C.av_packet_unref(&packet)
 
-		err := C.wrap_avcodec_encode_jpeg(ff.codecCtx, frame, &packet)
+		cerr := C.wrap_avcodec_encode_jpeg(ff.codecCtx, frame, &packet)
 
-		if err == C.int(0) {
-			img.Size = int(packet.size)
-			tmp := *(*[]byte)(unsafe.Pointer(&packet.data))
-			img.Raw = make([]byte, img.Size)
-			copy(img.Raw, tmp)
-			tmp = nil
+		if cerr != C.int(0) {
+			err = fmt.Errorf("ffmpeg: avcodec_decode_video2 failed: %d", cerr)
+			return
 		}
-		C.av_frame_free(&frame)
-		C.av_free_packet(&packet)
+
+		img.Size = int(packet.size)
+		img.Raw = make([]byte, img.Size)
+		copy(img.Raw, *(*[]byte)(unsafe.Pointer(&packet.data)))
 	}
 
 	return
