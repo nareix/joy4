@@ -7,19 +7,20 @@
 #include <libswscale/swscale.h>
 #include "ffmpeg.h"
 
-int decode(AVCodecContext *avctx, AVFrame *frame, int *got_frame, AVPacket *pkt)
+int decode(AVCodecContext *avctx, AVFrame *frame, uint8_t *data, int size, int *got_frame)
 {
     int ret;
+	struct AVPacket pkt = {.data = data, .size = size};
 
     *got_frame = 0;
-
-    if (pkt) {
-        ret = avcodec_send_packet(avctx, pkt);
-        av_packet_unref(pkt);
-        
-        if (ret < 0)
-            return ret == AVERROR_EOF ? 0 : ret;
-    }
+    
+    ret = avcodec_send_packet(avctx, &pkt);
+    
+    av_packet_unref(&pkt);
+    
+    if (ret < 0)
+      return ret == AVERROR_EOF ? 0 : ret;
+    
 
     ret = avcodec_receive_frame(avctx, frame);
     if (ret < 0 && ret != AVERROR(EAGAIN) && ret != AVERROR_EOF)
@@ -50,13 +51,8 @@ int encode(AVCodecContext *avctx, AVPacket *pkt, int *got_packet, AVFrame *frame
 }
 
 
-int wrap_decode(AVCodecContext *avctx, AVFrame *frame,uint8_t *data, int size, int *got_frame)
-{
-	struct AVPacket pkt = {.data = data, .size = size};
-    return decode(avctx, frame, got_frame,&pkt);
-}
 
-int wrap_avcodec_encode_jpeg(AVCodecContext *pCodecCtx, AVFrame *pFrame,AVPacket *packet) {
+int avcodec_encode_jpeg(AVCodecContext *pCodecCtx, AVFrame *pFrame,AVPacket *packet) {
     AVCodec *jpegCodec = avcodec_find_encoder(AV_CODEC_ID_MJPEG);
     int ret = -1;
      
@@ -95,6 +91,3 @@ int wrap_avcodec_encode_jpeg(AVCodecContext *pCodecCtx, AVFrame *pFrame,AVPacket
     return ret;
 }
 
-int wrap_swresample_convert(SwrContext *avr, int *out, int outsize, int outcount, int *in, int insize, int incount) {
-	return swr_convert(avr, (uint8_t **)out, outcount, (const uint8_t  **)out, incount) ;
-}

@@ -49,11 +49,12 @@ func (self *Resampler) Resample(in av.AudioFrame) (out av.AudioFrame, err error)
 			flush.SampleFormat = self.OutSampleFormat
 			flush.SampleRate = self.OutSampleRate
 
-			convertSamples := int(C.wrap_swresample_convert(
+			convertSamples := int(C.swr_convert(
 				self.avr,
-				(*C.int)(unsafe.Pointer(&outData[0])), C.int(outLinesize), C.int(outSampleCount),
-				nil, C.int(0), C.int(0),
+				(**C.uint8_t)(unsafe.Pointer(&outData[0])), C.int(outSampleCount),
+				nil, C.int(0),
 			))
+
 			if convertSamples < 0 {
 				err = fmt.Errorf("ffmpeg: avresample_convert_frame failed")
 				return
@@ -87,14 +88,12 @@ func (self *Resampler) Resample(in av.AudioFrame) (out av.AudioFrame, err error)
 		self.avr = avr
 	}
 
-	var inChannels, inLinesize int
+	var inChannels int
 	inSampleCount := in.SampleCount
 	if !self.inSampleFormat.IsPlanar() {
 		inChannels = 1
-		inLinesize = inSampleCount * in.SampleFormat.BytesPerSample() * self.inChannelLayout.Count()
 	} else {
 		inChannels = self.inChannelLayout.Count()
-		inLinesize = inSampleCount * in.SampleFormat.BytesPerSample()
 	}
 	inData := make([]*C.uint8_t, inChannels)
 	for i := 0; i < inChannels; i++ {
@@ -122,10 +121,10 @@ func (self *Resampler) Resample(in av.AudioFrame) (out av.AudioFrame, err error)
 	out.SampleFormat = self.OutSampleFormat
 	out.SampleRate = self.OutSampleRate
 
-	convertSamples := int(C.wrap_swresample_convert(
+	convertSamples := int(C.swr_convert(
 		self.avr,
-		(*C.int)(unsafe.Pointer(&outData[0])), C.int(outLinesize), C.int(outSampleCount),
-		(*C.int)(unsafe.Pointer(&inData[0])), C.int(inLinesize), C.int(inSampleCount),
+		(**C.uint8_t)(unsafe.Pointer(&outData[0])), C.int(outSampleCount),
+		(**C.uint8_t)(unsafe.Pointer(&inData[0])), C.int(inSampleCount),
 	))
 	if convertSamples < 0 {
 		err = fmt.Errorf("ffmpeg: avresample_convert_frame failed")
@@ -586,7 +585,7 @@ func (self *AudioDecoder) Decode(pkt []byte) (gotframe bool, frame av.AudioFrame
 
 	cgotframe := C.int(0)
 
-	cerr := C.wrap_decode(ff.codecCtx, ff.frame, (*C.uchar)(unsafe.Pointer(&pkt[0])), C.int(len(pkt)), &cgotframe)
+	cerr := C.decode(ff.codecCtx, ff.frame, (*C.uchar)(unsafe.Pointer(&pkt[0])), C.int(len(pkt)), &cgotframe)
 
 	if cerr < C.int(0) {
 		err = fmt.Errorf("ffmpeg: avcodec_decode_audio4 failed: %d", cerr)
