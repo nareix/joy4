@@ -1,7 +1,7 @@
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/avutil.h>
-#include <libavresample/avresample.h>
+#include <libswresample/swresample.h>
 #include <libavutil/opt.h>
 #include <string.h>
 #include <libswscale/swscale.h>
@@ -26,4 +26,4 @@ int encode(AVCodecContext *avctx, AVPacket *pkt, int *got_packet, AVFrame *frame
 int decode(AVCodecContext *avctx, AVFrame *frame, int *got_frame, AVPacket *pkt);
 int wrap_avcodec_encode_jpeg(AVCodecContext *pCodecCtx, AVFrame *pFrame,AVPacket *packet);
 int wrap_decode(AVCodecContext *avctx, AVFrame *frame,uint8_t *data, int size, int *got_frame);
-int wrap_avresample_convert(AVAudioResampleContext *avr, int *out, int outsize, int outcount, int *in, int insize, int incount);
+int wrap_swresample_convert(SwrContext *avr, int *out, int outsize, int outcount, int *in, int insize, int incount) ;

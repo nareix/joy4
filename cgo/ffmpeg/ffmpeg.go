@@ -1,7 +1,7 @@
 package ffmpeg
 
 /*
-#cgo LDFLAGS: -lavformat -lavutil -lavcodec -lavresample -lswscale
+#cgo LDFLAGS: -lavformat -lavutil -lavcodec -lswresample -lswscale
 #include "ffmpeg.h"
 void ffinit() {
 	#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 9, 100)

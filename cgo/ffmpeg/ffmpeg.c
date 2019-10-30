@@ -1,7 +1,7 @@
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/avutil.h>
-#include <libavresample/avresample.h>
+#include <libswresample/swresample.h>
 #include <libavutil/opt.h>
 #include <string.h>
 #include <libswscale/swscale.h>
@@ -16,8 +16,7 @@ int decode(AVCodecContext *avctx, AVFrame *frame, int *got_frame, AVPacket *pkt)
     if (pkt) {
         ret = avcodec_send_packet(avctx, pkt);
         av_packet_unref(pkt);
-        // In particular, we don't expect AVERROR(EAGAIN), because we read all
-        // decoded frames with avcodec_receive_frame() until done.
+        
         if (ret < 0)
             return ret == AVERROR_EOF ? 0 : ret;
     }
@@ -96,6 +95,6 @@ int wrap_avcodec_encode_jpeg(AVCodecContext *pCodecCtx, AVFrame *pFrame,AVPacket
     return ret;
 }
 
-int wrap_avresample_convert(AVAudioResampleContext *avr, int *out, int outsize, int outcount, int *in, int insize, int incount) {
-	return avresample_convert(avr, (void *)out, outsize, outcount, (void *)in, insize, incount);
+int wrap_swresample_convert(SwrContext *avr, int *out, int outsize, int outcount, int *in, int insize, int incount) {
+	return swr_convert(avr, (uint8_t **)out, outcount, (const uint8_t  **)out, incount) ;
 }
