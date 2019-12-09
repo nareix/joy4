@@ -50,6 +50,7 @@ func (self *Demuxer) probe() (err error) {
 	}
 
 	var moov *mp4io.Movie
+	var mdat *mp4io.Dummy
 	var atoms []mp4io.Atom
 
 	if atoms, err = mp4io.ReadFileAtoms(self.r); err != nil {
@@ -62,6 +63,8 @@ func (self *Demuxer) probe() (err error) {
 	for _, atom := range atoms {
 		if atom.Tag() == mp4io.MOOV {
 			moov = atom.(*mp4io.Movie)
+		} else if atom.Tag() == mp4io.MDAT {
+			mdat = atom.(*mp4io.Dummy)
 		}
 	}
 
@@ -85,6 +88,10 @@ func (self *Demuxer) probe() (err error) {
 			return
 		}
 
+		if stream.sample.ChunkOffset == nil {
+			stream.restoreChunkOffsets(mdat)
+		}
+
 		if avc1 := atrack.GetAVC1Conf(); avc1 != nil {
 			if stream.CodecData, err = h264parser.NewCodecDataFromAVCDecoderConfRecord(avc1.Data); err != nil {
 				return
@@ -100,6 +107,38 @@ func (self *Demuxer) probe() (err error) {
 
 	self.movieAtom = moov
 	return
+}
+
+func (self *Stream) restoreChunkOffsets(mdat *mp4io.Dummy) {
+	var dataOffset uint32
+	if mdat.Size == 1 {
+		dataOffset = uint32(mdat.Offset + 16) // account for extended size field
+	} else {
+		dataOffset = uint32(mdat.Offset + 8)
+	}
+
+	offset := dataOffset
+	chunkGroupIndex := 0
+	chunkOffsets := []uint32{offset}
+	chunkIndex := uint32(1)
+	sampleIndexInChunk := uint32(0)
+	for _, sampleSize := range self.sample.SampleSize.Entries {
+		offset += sampleSize
+		sampleIndexInChunk++
+		if sampleIndexInChunk >= self.sample.SampleToChunk.Entries[chunkGroupIndex].SamplesPerChunk {
+			chunkOffsets = append(chunkOffsets, offset)
+			chunkIndex++
+			sampleIndexInChunk = 0
+		}
+		if chunkGroupIndex+1 < len(self.sample.SampleToChunk.Entries) &&
+			chunkIndex == self.sample.SampleToChunk.Entries[chunkGroupIndex+1].FirstChunk {
+			chunkGroupIndex++
+		}
+	}
+
+	self.sample.ChunkOffset = &mp4io.ChunkOffset{
+		Entries: chunkOffsets,
+	}
 }
 
 func (self *Stream) setSampleIndex(index int) (err error) {
