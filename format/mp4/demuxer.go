@@ -110,20 +110,20 @@ func (self *Demuxer) probe() (err error) {
 }
 
 func (self *Stream) restoreChunkOffsets(mdat *mp4io.Dummy) {
-	var dataOffset uint32
+	var dataOffset int64
 	if mdat.Size == 1 {
-		dataOffset = uint32(mdat.Offset + 16) // account for extended size field
+		dataOffset = int64(mdat.Offset + 16) // account for extended size field
 	} else {
-		dataOffset = uint32(mdat.Offset + 8)
+		dataOffset = int64(mdat.Offset + 8)
 	}
 
 	offset := dataOffset
 	chunkGroupIndex := 0
-	chunkOffsets := []uint32{offset}
+	chunkOffsets := []int64{offset}
 	chunkIndex := uint32(1)
 	sampleIndexInChunk := uint32(0)
 	for _, sampleSize := range self.sample.SampleSize.Entries {
-		offset += sampleSize
+		offset += int64(sampleSize)
 		sampleIndexInChunk++
 		if sampleIndexInChunk >= self.sample.SampleToChunk.Entries[chunkGroupIndex].SamplesPerChunk {
 			chunkOffsets = append(chunkOffsets, offset)
@@ -410,7 +410,7 @@ func (self *Stream) readPacket() (pkt av.Packet, err error) {
 		sampleSize = self.sample.SampleSize.Entries[self.sampleIndex]
 	}
 
-	sampleOffset := int64(chunkOffset) + self.sampleOffsetInChunk
+	sampleOffset := chunkOffset + self.sampleOffsetInChunk
 	pkt.Data = make([]byte, sampleSize)
 	if err = self.demuxer.readat(sampleOffset, pkt.Data); err != nil {
 		return
