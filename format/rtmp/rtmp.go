@@ -54,6 +54,8 @@ func DialTimeout(uri string, timeout time.Duration) (conn *Conn, err error) {
 }
 
 type Server struct {
+	listener      *net.TCPListener
+
 	Addr          string
 	HandlePublish func(*Conn)
 	HandlePlay    func(*Conn)
@@ -93,8 +95,7 @@ func (self *Server) ListenAndServe() (err error) {
 		return
 	}
 
-	var listener *net.TCPListener
-	if listener, err = net.ListenTCP("tcp", tcpaddr); err != nil {
+	if self.listener, err = net.ListenTCP("tcp", tcpaddr); err != nil {
 		return
 	}
 
@@ -104,7 +105,7 @@ func (self *Server) ListenAndServe() (err error) {
 
 	for {
 		var netconn net.Conn
-		if netconn, err = listener.Accept(); err != nil {
+		if netconn, err = self.listener.Accept(); err != nil {
 			return
 		}
 
@@ -121,6 +122,13 @@ func (self *Server) ListenAndServe() (err error) {
 			}
 		}()
 	}
+}
+
+func (self *Server) Close() error {
+	if self.listener == nil {
+		return fmt.Errorf("server is not listening")
+	}
+	return self.listener.Close()
 }
 
 const (
