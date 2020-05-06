@@ -1,7 +1,10 @@
 package mp4io
 
-import "github.com/nareix/joy4/utils/bits/pio"
-import "time"
+import (
+	"time"
+
+	"github.com/nareix/joy4/utils/bits/pio"
+)
 
 const MOOF = Tag(0x6d6f6f66)
 
@@ -252,22 +255,22 @@ func (self Movie) Len() (n int) {
 	}
 	return
 }
-func (self *Movie) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *Movie) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	for n+8 < len(b) {
 		tag := Tag(pio.U32BE(b[n+4:]))
 		size := int(pio.U32BE(b[n:]))
 		if len(b) < n+size {
-			err = parseErr("TagSizeInvalid", n+offset, err)
+			err = parseErr("TagSizeInvalid", int64(n)+offset, err)
 			return
 		}
 		switch tag {
 		case MVHD:
 			{
 				atom := &MovieHeader{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("mvhd", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("mvhd", int64(n)+offset, err)
 					return
 				}
 				self.Header = atom
@@ -275,8 +278,8 @@ func (self *Movie) Unmarshal(b []byte, offset int) (n int, err error) {
 		case MVEX:
 			{
 				atom := &MovieExtend{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("mvex", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("mvex", int64(n)+offset, err)
 					return
 				}
 				self.MovieExtend = atom
@@ -284,8 +287,8 @@ func (self *Movie) Unmarshal(b []byte, offset int) (n int, err error) {
 		case TRAK:
 			{
 				atom := &Track{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("trak", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("trak", int64(n)+offset, err)
 					return
 				}
 				self.Tracks = append(self.Tracks, atom)
@@ -293,8 +296,8 @@ func (self *Movie) Unmarshal(b []byte, offset int) (n int, err error) {
 		default:
 			{
 				atom := &Dummy{Tag_: tag, Data: b[n : n+size]}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("", int64(n)+offset, err)
 					return
 				}
 				self.Unknowns = append(self.Unknowns, atom)
@@ -403,60 +406,60 @@ func (self MovieHeader) Len() (n int) {
 	n += 4
 	return
 }
-func (self *MovieHeader) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *MovieHeader) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
 	n += 3
 	if len(b) < n+4 {
-		err = parseErr("CreateTime", n+offset, err)
+		err = parseErr("CreateTime", int64(n)+offset, err)
 		return
 	}
 	self.CreateTime = GetTime32(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("ModifyTime", n+offset, err)
+		err = parseErr("ModifyTime", int64(n)+offset, err)
 		return
 	}
 	self.ModifyTime = GetTime32(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("TimeScale", n+offset, err)
+		err = parseErr("TimeScale", int64(n)+offset, err)
 		return
 	}
 	self.TimeScale = pio.I32BE(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("Duration", n+offset, err)
+		err = parseErr("Duration", int64(n)+offset, err)
 		return
 	}
 	self.Duration = pio.I32BE(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("PreferredRate", n+offset, err)
+		err = parseErr("PreferredRate", int64(n)+offset, err)
 		return
 	}
 	self.PreferredRate = GetFixed32(b[n:])
 	n += 4
 	if len(b) < n+2 {
-		err = parseErr("PreferredVolume", n+offset, err)
+		err = parseErr("PreferredVolume", int64(n)+offset, err)
 		return
 	}
 	self.PreferredVolume = GetFixed16(b[n:])
 	n += 2
 	n += 10
 	if len(b) < n+4*len(self.Matrix) {
-		err = parseErr("Matrix", n+offset, err)
+		err = parseErr("Matrix", int64(n)+offset, err)
 		return
 	}
 	for i := range self.Matrix {
@@ -464,43 +467,43 @@ func (self *MovieHeader) Unmarshal(b []byte, offset int) (n int, err error) {
 		n += 4
 	}
 	if len(b) < n+4 {
-		err = parseErr("PreviewTime", n+offset, err)
+		err = parseErr("PreviewTime", int64(n)+offset, err)
 		return
 	}
 	self.PreviewTime = GetTime32(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("PreviewDuration", n+offset, err)
+		err = parseErr("PreviewDuration", int64(n)+offset, err)
 		return
 	}
 	self.PreviewDuration = GetTime32(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("PosterTime", n+offset, err)
+		err = parseErr("PosterTime", int64(n)+offset, err)
 		return
 	}
 	self.PosterTime = GetTime32(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("SelectionTime", n+offset, err)
+		err = parseErr("SelectionTime", int64(n)+offset, err)
 		return
 	}
 	self.SelectionTime = GetTime32(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("SelectionDuration", n+offset, err)
+		err = parseErr("SelectionDuration", int64(n)+offset, err)
 		return
 	}
 	self.SelectionDuration = GetTime32(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("CurrentTime", n+offset, err)
+		err = parseErr("CurrentTime", int64(n)+offset, err)
 		return
 	}
 	self.CurrentTime = GetTime32(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("NextTrackId", n+offset, err)
+		err = parseErr("NextTrackId", int64(n)+offset, err)
 		return
 	}
 	self.NextTrackId = pio.I32BE(b[n:])
@@ -549,22 +552,22 @@ func (self Track) Len() (n int) {
 	}
 	return
 }
-func (self *Track) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *Track) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	for n+8 < len(b) {
 		tag := Tag(pio.U32BE(b[n+4:]))
 		size := int(pio.U32BE(b[n:]))
 		if len(b) < n+size {
-			err = parseErr("TagSizeInvalid", n+offset, err)
+			err = parseErr("TagSizeInvalid", int64(n)+offset, err)
 			return
 		}
 		switch tag {
 		case TKHD:
 			{
 				atom := &TrackHeader{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("tkhd", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("tkhd", int64(n)+offset, err)
 					return
 				}
 				self.Header = atom
@@ -572,8 +575,8 @@ func (self *Track) Unmarshal(b []byte, offset int) (n int, err error) {
 		case MDIA:
 			{
 				atom := &Media{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("mdia", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("mdia", int64(n)+offset, err)
 					return
 				}
 				self.Media = atom
@@ -581,8 +584,8 @@ func (self *Track) Unmarshal(b []byte, offset int) (n int, err error) {
 		default:
 			{
 				atom := &Dummy{Tag_: tag, Data: b[n : n+size]}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("", int64(n)+offset, err)
 					return
 				}
 				self.Unknowns = append(self.Unknowns, atom)
@@ -676,68 +679,68 @@ func (self TrackHeader) Len() (n int) {
 	n += 4
 	return
 }
-func (self *TrackHeader) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *TrackHeader) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
 	n += 3
 	if len(b) < n+4 {
-		err = parseErr("CreateTime", n+offset, err)
+		err = parseErr("CreateTime", int64(n)+offset, err)
 		return
 	}
 	self.CreateTime = GetTime32(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("ModifyTime", n+offset, err)
+		err = parseErr("ModifyTime", int64(n)+offset, err)
 		return
 	}
 	self.ModifyTime = GetTime32(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("TrackId", n+offset, err)
+		err = parseErr("TrackId", int64(n)+offset, err)
 		return
 	}
 	self.TrackId = pio.I32BE(b[n:])
 	n += 4
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("Duration", n+offset, err)
+		err = parseErr("Duration", int64(n)+offset, err)
 		return
 	}
 	self.Duration = pio.I32BE(b[n:])
 	n += 4
 	n += 8
 	if len(b) < n+2 {
-		err = parseErr("Layer", n+offset, err)
+		err = parseErr("Layer", int64(n)+offset, err)
 		return
 	}
 	self.Layer = pio.I16BE(b[n:])
 	n += 2
 	if len(b) < n+2 {
-		err = parseErr("AlternateGroup", n+offset, err)
+		err = parseErr("AlternateGroup", int64(n)+offset, err)
 		return
 	}
 	self.AlternateGroup = pio.I16BE(b[n:])
 	n += 2
 	if len(b) < n+2 {
-		err = parseErr("Volume", n+offset, err)
+		err = parseErr("Volume", int64(n)+offset, err)
 		return
 	}
 	self.Volume = GetFixed16(b[n:])
 	n += 2
 	n += 2
 	if len(b) < n+4*len(self.Matrix) {
-		err = parseErr("Matrix", n+offset, err)
+		err = parseErr("Matrix", int64(n)+offset, err)
 		return
 	}
 	for i := range self.Matrix {
@@ -745,13 +748,13 @@ func (self *TrackHeader) Unmarshal(b []byte, offset int) (n int, err error) {
 		n += 4
 	}
 	if len(b) < n+4 {
-		err = parseErr("TrackWidth", n+offset, err)
+		err = parseErr("TrackWidth", int64(n)+offset, err)
 		return
 	}
 	self.TrackWidth = GetFixed32(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("TrackHeight", n+offset, err)
+		err = parseErr("TrackHeight", int64(n)+offset, err)
 		return
 	}
 	self.TrackHeight = GetFixed32(b[n:])
@@ -799,29 +802,29 @@ func (self HandlerRefer) Len() (n int) {
 	n += len(self.Name[:])
 	return
 }
-func (self *HandlerRefer) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *HandlerRefer) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
 	n += 3
 	if len(b) < n+len(self.Type) {
-		err = parseErr("Type", n+offset, err)
+		err = parseErr("Type", int64(n)+offset, err)
 		return
 	}
 	copy(self.Type[:], b[n:])
 	n += len(self.Type)
 	if len(b) < n+len(self.SubType) {
-		err = parseErr("SubType", n+offset, err)
+		err = parseErr("SubType", int64(n)+offset, err)
 		return
 	}
 	copy(self.SubType[:], b[n:])
@@ -879,22 +882,22 @@ func (self Media) Len() (n int) {
 	}
 	return
 }
-func (self *Media) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *Media) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	for n+8 < len(b) {
 		tag := Tag(pio.U32BE(b[n+4:]))
 		size := int(pio.U32BE(b[n:]))
 		if len(b) < n+size {
-			err = parseErr("TagSizeInvalid", n+offset, err)
+			err = parseErr("TagSizeInvalid", int64(n)+offset, err)
 			return
 		}
 		switch tag {
 		case MDHD:
 			{
 				atom := &MediaHeader{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("mdhd", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("mdhd", int64(n)+offset, err)
 					return
 				}
 				self.Header = atom
@@ -902,8 +905,8 @@ func (self *Media) Unmarshal(b []byte, offset int) (n int, err error) {
 		case HDLR:
 			{
 				atom := &HandlerRefer{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("hdlr", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("hdlr", int64(n)+offset, err)
 					return
 				}
 				self.Handler = atom
@@ -911,8 +914,8 @@ func (self *Media) Unmarshal(b []byte, offset int) (n int, err error) {
 		case MINF:
 			{
 				atom := &MediaInfo{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("minf", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("minf", int64(n)+offset, err)
 					return
 				}
 				self.Info = atom
@@ -920,8 +923,8 @@ func (self *Media) Unmarshal(b []byte, offset int) (n int, err error) {
 		default:
 			{
 				atom := &Dummy{Tag_: tag, Data: b[n : n+size]}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("", int64(n)+offset, err)
 					return
 				}
 				self.Unknowns = append(self.Unknowns, atom)
@@ -994,53 +997,53 @@ func (self MediaHeader) Len() (n int) {
 	n += 2
 	return
 }
-func (self *MediaHeader) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *MediaHeader) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
 	n += 3
 	if len(b) < n+4 {
-		err = parseErr("CreateTime", n+offset, err)
+		err = parseErr("CreateTime", int64(n)+offset, err)
 		return
 	}
 	self.CreateTime = GetTime32(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("ModifyTime", n+offset, err)
+		err = parseErr("ModifyTime", int64(n)+offset, err)
 		return
 	}
 	self.ModifyTime = GetTime32(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("TimeScale", n+offset, err)
+		err = parseErr("TimeScale", int64(n)+offset, err)
 		return
 	}
 	self.TimeScale = pio.I32BE(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("Duration", n+offset, err)
+		err = parseErr("Duration", int64(n)+offset, err)
 		return
 	}
 	self.Duration = pio.I32BE(b[n:])
 	n += 4
 	if len(b) < n+2 {
-		err = parseErr("Language", n+offset, err)
+		err = parseErr("Language", int64(n)+offset, err)
 		return
 	}
 	self.Language = pio.I16BE(b[n:])
 	n += 2
 	if len(b) < n+2 {
-		err = parseErr("Quality", n+offset, err)
+		err = parseErr("Quality", int64(n)+offset, err)
 		return
 	}
 	self.Quality = pio.I16BE(b[n:])
@@ -1103,22 +1106,22 @@ func (self MediaInfo) Len() (n int) {
 	}
 	return
 }
-func (self *MediaInfo) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *MediaInfo) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	for n+8 < len(b) {
 		tag := Tag(pio.U32BE(b[n+4:]))
 		size := int(pio.U32BE(b[n:]))
 		if len(b) < n+size {
-			err = parseErr("TagSizeInvalid", n+offset, err)
+			err = parseErr("TagSizeInvalid", int64(n)+offset, err)
 			return
 		}
 		switch tag {
 		case SMHD:
 			{
 				atom := &SoundMediaInfo{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("smhd", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("smhd", int64(n)+offset, err)
 					return
 				}
 				self.Sound = atom
@@ -1126,8 +1129,8 @@ func (self *MediaInfo) Unmarshal(b []byte, offset int) (n int, err error) {
 		case VMHD:
 			{
 				atom := &VideoMediaInfo{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("vmhd", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("vmhd", int64(n)+offset, err)
 					return
 				}
 				self.Video = atom
@@ -1135,8 +1138,8 @@ func (self *MediaInfo) Unmarshal(b []byte, offset int) (n int, err error) {
 		case DINF:
 			{
 				atom := &DataInfo{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("dinf", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("dinf", int64(n)+offset, err)
 					return
 				}
 				self.Data = atom
@@ -1144,8 +1147,8 @@ func (self *MediaInfo) Unmarshal(b []byte, offset int) (n int, err error) {
 		case STBL:
 			{
 				atom := &SampleTable{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("stbl", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("stbl", int64(n)+offset, err)
 					return
 				}
 				self.Sample = atom
@@ -1153,8 +1156,8 @@ func (self *MediaInfo) Unmarshal(b []byte, offset int) (n int, err error) {
 		default:
 			{
 				atom := &Dummy{Tag_: tag, Data: b[n : n+size]}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("", int64(n)+offset, err)
 					return
 				}
 				self.Unknowns = append(self.Unknowns, atom)
@@ -1212,22 +1215,22 @@ func (self DataInfo) Len() (n int) {
 	}
 	return
 }
-func (self *DataInfo) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *DataInfo) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	for n+8 < len(b) {
 		tag := Tag(pio.U32BE(b[n+4:]))
 		size := int(pio.U32BE(b[n:]))
 		if len(b) < n+size {
-			err = parseErr("TagSizeInvalid", n+offset, err)
+			err = parseErr("TagSizeInvalid", int64(n)+offset, err)
 			return
 		}
 		switch tag {
 		case DREF:
 			{
 				atom := &DataRefer{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("dref", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("dref", int64(n)+offset, err)
 					return
 				}
 				self.Refer = atom
@@ -1235,8 +1238,8 @@ func (self *DataInfo) Unmarshal(b []byte, offset int) (n int, err error) {
 		default:
 			{
 				atom := &Dummy{Tag_: tag, Data: b[n : n+size]}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("", int64(n)+offset, err)
 					return
 				}
 				self.Unknowns = append(self.Unknowns, atom)
@@ -1293,17 +1296,17 @@ func (self DataRefer) Len() (n int) {
 	}
 	return
 }
-func (self *DataRefer) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *DataRefer) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
@@ -1313,15 +1316,15 @@ func (self *DataRefer) Unmarshal(b []byte, offset int) (n int, err error) {
 		tag := Tag(pio.U32BE(b[n+4:]))
 		size := int(pio.U32BE(b[n:]))
 		if len(b) < n+size {
-			err = parseErr("TagSizeInvalid", n+offset, err)
+			err = parseErr("TagSizeInvalid", int64(n)+offset, err)
 			return
 		}
 		switch tag {
 		case URL:
 			{
 				atom := &DataReferUrl{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("url ", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("url ", int64(n)+offset, err)
 					return
 				}
 				self.Url = atom
@@ -1363,17 +1366,17 @@ func (self DataReferUrl) Len() (n int) {
 	n += 3
 	return
 }
-func (self *DataReferUrl) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *DataReferUrl) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
@@ -1415,23 +1418,23 @@ func (self SoundMediaInfo) Len() (n int) {
 	n += 2
 	return
 }
-func (self *SoundMediaInfo) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *SoundMediaInfo) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
 	n += 3
 	if len(b) < n+2 {
-		err = parseErr("Balance", n+offset, err)
+		err = parseErr("Balance", int64(n)+offset, err)
 		return
 	}
 	self.Balance = pio.I16BE(b[n:])
@@ -1478,29 +1481,29 @@ func (self VideoMediaInfo) Len() (n int) {
 	n += 2 * len(self.Opcolor[:])
 	return
 }
-func (self *VideoMediaInfo) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *VideoMediaInfo) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
 	n += 3
 	if len(b) < n+2 {
-		err = parseErr("GraphicsMode", n+offset, err)
+		err = parseErr("GraphicsMode", int64(n)+offset, err)
 		return
 	}
 	self.GraphicsMode = pio.I16BE(b[n:])
 	n += 2
 	if len(b) < n+2*len(self.Opcolor) {
-		err = parseErr("Opcolor", n+offset, err)
+		err = parseErr("Opcolor", int64(n)+offset, err)
 		return
 	}
 	for i := range self.Opcolor {
@@ -1579,22 +1582,22 @@ func (self SampleTable) Len() (n int) {
 	}
 	return
 }
-func (self *SampleTable) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *SampleTable) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	for n+8 < len(b) {
 		tag := Tag(pio.U32BE(b[n+4:]))
 		size := int(pio.U32BE(b[n:]))
 		if len(b) < n+size {
-			err = parseErr("TagSizeInvalid", n+offset, err)
+			err = parseErr("TagSizeInvalid", int64(n)+offset, err)
 			return
 		}
 		switch tag {
 		case STSD:
 			{
 				atom := &SampleDesc{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("stsd", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("stsd", int64(n)+offset, err)
 					return
 				}
 				self.SampleDesc = atom
@@ -1602,8 +1605,8 @@ func (self *SampleTable) Unmarshal(b []byte, offset int) (n int, err error) {
 		case STTS:
 			{
 				atom := &TimeToSample{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("stts", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("stts", int64(n)+offset, err)
 					return
 				}
 				self.TimeToSample = atom
@@ -1611,8 +1614,8 @@ func (self *SampleTable) Unmarshal(b []byte, offset int) (n int, err error) {
 		case CTTS:
 			{
 				atom := &CompositionOffset{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("ctts", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("ctts", int64(n)+offset, err)
 					return
 				}
 				self.CompositionOffset = atom
@@ -1620,8 +1623,8 @@ func (self *SampleTable) Unmarshal(b []byte, offset int) (n int, err error) {
 		case STSC:
 			{
 				atom := &SampleToChunk{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("stsc", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("stsc", int64(n)+offset, err)
 					return
 				}
 				self.SampleToChunk = atom
@@ -1629,8 +1632,8 @@ func (self *SampleTable) Unmarshal(b []byte, offset int) (n int, err error) {
 		case STSS:
 			{
 				atom := &SyncSample{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("stss", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("stss", int64(n)+offset, err)
 					return
 				}
 				self.SyncSample = atom
@@ -1638,8 +1641,8 @@ func (self *SampleTable) Unmarshal(b []byte, offset int) (n int, err error) {
 		case STCO, CO64:
 			{
 				atom := &ChunkOffset{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr(tag.String(), n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr(tag.String(), int64(n)+offset, err)
 					return
 				}
 				self.ChunkOffset = atom
@@ -1647,8 +1650,8 @@ func (self *SampleTable) Unmarshal(b []byte, offset int) (n int, err error) {
 		case STSZ:
 			{
 				atom := &SampleSize{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("stsz", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("stsz", int64(n)+offset, err)
 					return
 				}
 				self.SampleSize = atom
@@ -1738,11 +1741,11 @@ func (self SampleDesc) Len() (n int) {
 	}
 	return
 }
-func (self *SampleDesc) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *SampleDesc) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
@@ -1753,15 +1756,15 @@ func (self *SampleDesc) Unmarshal(b []byte, offset int) (n int, err error) {
 		tag := Tag(pio.U32BE(b[n+4:]))
 		size := int(pio.U32BE(b[n:]))
 		if len(b) < n+size {
-			err = parseErr("TagSizeInvalid", n+offset, err)
+			err = parseErr("TagSizeInvalid", int64(n)+offset, err)
 			return
 		}
 		switch tag {
 		case AVC1:
 			{
 				atom := &AVC1Desc{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("avc1", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("avc1", int64(n)+offset, err)
 					return
 				}
 				self.AVC1Desc = atom
@@ -1769,8 +1772,8 @@ func (self *SampleDesc) Unmarshal(b []byte, offset int) (n int, err error) {
 		case MP4A:
 			{
 				atom := &MP4ADesc{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("mp4a", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("mp4a", int64(n)+offset, err)
 					return
 				}
 				self.MP4ADesc = atom
@@ -1778,8 +1781,8 @@ func (self *SampleDesc) Unmarshal(b []byte, offset int) (n int, err error) {
 		default:
 			{
 				atom := &Dummy{Tag_: tag, Data: b[n : n+size]}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("", int64(n)+offset, err)
 					return
 				}
 				self.Unknowns = append(self.Unknowns, atom)
@@ -1867,55 +1870,55 @@ func (self MP4ADesc) Len() (n int) {
 	}
 	return
 }
-func (self *MP4ADesc) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *MP4ADesc) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	n += 6
 	if len(b) < n+2 {
-		err = parseErr("DataRefIdx", n+offset, err)
+		err = parseErr("DataRefIdx", int64(n)+offset, err)
 		return
 	}
 	self.DataRefIdx = pio.I16BE(b[n:])
 	n += 2
 	if len(b) < n+2 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.I16BE(b[n:])
 	n += 2
 	if len(b) < n+2 {
-		err = parseErr("RevisionLevel", n+offset, err)
+		err = parseErr("RevisionLevel", int64(n)+offset, err)
 		return
 	}
 	self.RevisionLevel = pio.I16BE(b[n:])
 	n += 2
 	if len(b) < n+4 {
-		err = parseErr("Vendor", n+offset, err)
+		err = parseErr("Vendor", int64(n)+offset, err)
 		return
 	}
 	self.Vendor = pio.I32BE(b[n:])
 	n += 4
 	if len(b) < n+2 {
-		err = parseErr("NumberOfChannels", n+offset, err)
+		err = parseErr("NumberOfChannels", int64(n)+offset, err)
 		return
 	}
 	self.NumberOfChannels = pio.I16BE(b[n:])
 	n += 2
 	if len(b) < n+2 {
-		err = parseErr("SampleSize", n+offset, err)
+		err = parseErr("SampleSize", int64(n)+offset, err)
 		return
 	}
 	self.SampleSize = pio.I16BE(b[n:])
 	n += 2
 	if len(b) < n+2 {
-		err = parseErr("CompressionId", n+offset, err)
+		err = parseErr("CompressionId", int64(n)+offset, err)
 		return
 	}
 	self.CompressionId = pio.I16BE(b[n:])
 	n += 2
 	n += 2
 	if len(b) < n+4 {
-		err = parseErr("SampleRate", n+offset, err)
+		err = parseErr("SampleRate", int64(n)+offset, err)
 		return
 	}
 	self.SampleRate = GetFixed32(b[n:])
@@ -1924,15 +1927,15 @@ func (self *MP4ADesc) Unmarshal(b []byte, offset int) (n int, err error) {
 		tag := Tag(pio.U32BE(b[n+4:]))
 		size := int(pio.U32BE(b[n:]))
 		if len(b) < n+size {
-			err = parseErr("TagSizeInvalid", n+offset, err)
+			err = parseErr("TagSizeInvalid", int64(n)+offset, err)
 			return
 		}
 		switch tag {
 		case ESDS:
 			{
 				atom := &ElemStreamDesc{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("esds", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("esds", int64(n)+offset, err)
 					return
 				}
 				self.Conf = atom
@@ -1940,8 +1943,8 @@ func (self *MP4ADesc) Unmarshal(b []byte, offset int) (n int, err error) {
 		default:
 			{
 				atom := &Dummy{Tag_: tag, Data: b[n : n+size]}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("", int64(n)+offset, err)
 					return
 				}
 				self.Unknowns = append(self.Unknowns, atom)
@@ -2050,91 +2053,91 @@ func (self AVC1Desc) Len() (n int) {
 	}
 	return
 }
-func (self *AVC1Desc) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *AVC1Desc) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	n += 6
 	if len(b) < n+2 {
-		err = parseErr("DataRefIdx", n+offset, err)
+		err = parseErr("DataRefIdx", int64(n)+offset, err)
 		return
 	}
 	self.DataRefIdx = pio.I16BE(b[n:])
 	n += 2
 	if len(b) < n+2 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.I16BE(b[n:])
 	n += 2
 	if len(b) < n+2 {
-		err = parseErr("Revision", n+offset, err)
+		err = parseErr("Revision", int64(n)+offset, err)
 		return
 	}
 	self.Revision = pio.I16BE(b[n:])
 	n += 2
 	if len(b) < n+4 {
-		err = parseErr("Vendor", n+offset, err)
+		err = parseErr("Vendor", int64(n)+offset, err)
 		return
 	}
 	self.Vendor = pio.I32BE(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("TemporalQuality", n+offset, err)
+		err = parseErr("TemporalQuality", int64(n)+offset, err)
 		return
 	}
 	self.TemporalQuality = pio.I32BE(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("SpatialQuality", n+offset, err)
+		err = parseErr("SpatialQuality", int64(n)+offset, err)
 		return
 	}
 	self.SpatialQuality = pio.I32BE(b[n:])
 	n += 4
 	if len(b) < n+2 {
-		err = parseErr("Width", n+offset, err)
+		err = parseErr("Width", int64(n)+offset, err)
 		return
 	}
 	self.Width = pio.I16BE(b[n:])
 	n += 2
 	if len(b) < n+2 {
-		err = parseErr("Height", n+offset, err)
+		err = parseErr("Height", int64(n)+offset, err)
 		return
 	}
 	self.Height = pio.I16BE(b[n:])
 	n += 2
 	if len(b) < n+4 {
-		err = parseErr("HorizontalResolution", n+offset, err)
+		err = parseErr("HorizontalResolution", int64(n)+offset, err)
 		return
 	}
 	self.HorizontalResolution = GetFixed32(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("VorizontalResolution", n+offset, err)
+		err = parseErr("VorizontalResolution", int64(n)+offset, err)
 		return
 	}
 	self.VorizontalResolution = GetFixed32(b[n:])
 	n += 4
 	n += 4
 	if len(b) < n+2 {
-		err = parseErr("FrameCount", n+offset, err)
+		err = parseErr("FrameCount", int64(n)+offset, err)
 		return
 	}
 	self.FrameCount = pio.I16BE(b[n:])
 	n += 2
 	if len(b) < n+len(self.CompressorName) {
-		err = parseErr("CompressorName", n+offset, err)
+		err = parseErr("CompressorName", int64(n)+offset, err)
 		return
 	}
 	copy(self.CompressorName[:], b[n:])
 	n += len(self.CompressorName)
 	if len(b) < n+2 {
-		err = parseErr("Depth", n+offset, err)
+		err = parseErr("Depth", int64(n)+offset, err)
 		return
 	}
 	self.Depth = pio.I16BE(b[n:])
 	n += 2
 	if len(b) < n+2 {
-		err = parseErr("ColorTableId", n+offset, err)
+		err = parseErr("ColorTableId", int64(n)+offset, err)
 		return
 	}
 	self.ColorTableId = pio.I16BE(b[n:])
@@ -2143,15 +2146,15 @@ func (self *AVC1Desc) Unmarshal(b []byte, offset int) (n int, err error) {
 		tag := Tag(pio.U32BE(b[n+4:]))
 		size := int(pio.U32BE(b[n:]))
 		if len(b) < n+size {
-			err = parseErr("TagSizeInvalid", n+offset, err)
+			err = parseErr("TagSizeInvalid", int64(n)+offset, err)
 			return
 		}
 		switch tag {
 		case AVCC:
 			{
 				atom := &AVC1Conf{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("avcC", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("avcC", int64(n)+offset, err)
 					return
 				}
 				self.Conf = atom
@@ -2159,8 +2162,8 @@ func (self *AVC1Desc) Unmarshal(b []byte, offset int) (n int, err error) {
 		default:
 			{
 				atom := &Dummy{Tag_: tag, Data: b[n : n+size]}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("", int64(n)+offset, err)
 					return
 				}
 				self.Unknowns = append(self.Unknowns, atom)
@@ -2199,7 +2202,7 @@ func (self AVC1Conf) Len() (n int) {
 	n += len(self.Data[:])
 	return
 }
-func (self *AVC1Conf) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *AVC1Conf) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	self.Data = b[n:]
@@ -2244,17 +2247,17 @@ func (self TimeToSample) Len() (n int) {
 	n += LenTimeToSampleEntry * len(self.Entries)
 	return
 }
-func (self *TimeToSample) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *TimeToSample) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
@@ -2264,7 +2267,7 @@ func (self *TimeToSample) Unmarshal(b []byte, offset int) (n int, err error) {
 	n += 4
 	self.Entries = make([]TimeToSampleEntry, _len_Entries)
 	if len(b) < n+LenTimeToSampleEntry*len(self.Entries) {
-		err = parseErr("TimeToSampleEntry", n+offset, err)
+		err = parseErr("TimeToSampleEntry", int64(n)+offset, err)
 		return
 	}
 	for i := range self.Entries {
@@ -2328,17 +2331,17 @@ func (self SampleToChunk) Len() (n int) {
 	n += LenSampleToChunkEntry * len(self.Entries)
 	return
 }
-func (self *SampleToChunk) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *SampleToChunk) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
@@ -2348,7 +2351,7 @@ func (self *SampleToChunk) Unmarshal(b []byte, offset int) (n int, err error) {
 	n += 4
 	self.Entries = make([]SampleToChunkEntry, _len_Entries)
 	if len(b) < n+LenSampleToChunkEntry*len(self.Entries) {
-		err = parseErr("SampleToChunkEntry", n+offset, err)
+		err = parseErr("SampleToChunkEntry", int64(n)+offset, err)
 		return
 	}
 	for i := range self.Entries {
@@ -2415,17 +2418,17 @@ func (self CompositionOffset) Len() (n int) {
 	n += LenCompositionOffsetEntry * len(self.Entries)
 	return
 }
-func (self *CompositionOffset) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *CompositionOffset) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
@@ -2435,7 +2438,7 @@ func (self *CompositionOffset) Unmarshal(b []byte, offset int) (n int, err error
 	n += 4
 	self.Entries = make([]CompositionOffsetEntry, _len_Entries)
 	if len(b) < n+LenCompositionOffsetEntry*len(self.Entries) {
-		err = parseErr("CompositionOffsetEntry", n+offset, err)
+		err = parseErr("CompositionOffsetEntry", int64(n)+offset, err)
 		return
 	}
 	for i := range self.Entries {
@@ -2499,17 +2502,17 @@ func (self SyncSample) Len() (n int) {
 	n += 4 * len(self.Entries)
 	return
 }
-func (self *SyncSample) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *SyncSample) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
@@ -2519,7 +2522,7 @@ func (self *SyncSample) Unmarshal(b []byte, offset int) (n int, err error) {
 	n += 4
 	self.Entries = make([]uint32, _len_Entries)
 	if len(b) < n+4*len(self.Entries) {
-		err = parseErr("uint32", n+offset, err)
+		err = parseErr("uint32", int64(n)+offset, err)
 		return
 	}
 	for i := range self.Entries {
@@ -2582,18 +2585,18 @@ func (self ChunkOffset) Len() (n int) {
 	}
 	return
 }
-func (self *ChunkOffset) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *ChunkOffset) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	self.Is64bit = Tag(pio.U32BE(b[4:])) == CO64
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
@@ -2610,9 +2613,9 @@ func (self *ChunkOffset) Unmarshal(b []byte, offset int) (n int, err error) {
 	}
 	if len(b) < n+entriesSize {
 		if self.Is64bit {
-			err = parseErr("int64", n+offset, err)
+			err = parseErr("int64", int64(n)+offset, err)
 		} else {
-			err = parseErr("uint32", n+offset, err)
+			err = parseErr("uint32", int64(n)+offset, err)
 		}
 		return
 	}
@@ -2671,22 +2674,22 @@ func (self MovieFrag) Len() (n int) {
 	}
 	return
 }
-func (self *MovieFrag) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *MovieFrag) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	for n+8 < len(b) {
 		tag := Tag(pio.U32BE(b[n+4:]))
 		size := int(pio.U32BE(b[n:]))
 		if len(b) < n+size {
-			err = parseErr("TagSizeInvalid", n+offset, err)
+			err = parseErr("TagSizeInvalid", int64(n)+offset, err)
 			return
 		}
 		switch tag {
 		case MFHD:
 			{
 				atom := &MovieFragHeader{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("mfhd", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("mfhd", int64(n)+offset, err)
 					return
 				}
 				self.Header = atom
@@ -2694,8 +2697,8 @@ func (self *MovieFrag) Unmarshal(b []byte, offset int) (n int, err error) {
 		case TRAF:
 			{
 				atom := &TrackFrag{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("traf", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("traf", int64(n)+offset, err)
 					return
 				}
 				self.Tracks = append(self.Tracks, atom)
@@ -2703,8 +2706,8 @@ func (self *MovieFrag) Unmarshal(b []byte, offset int) (n int, err error) {
 		default:
 			{
 				atom := &Dummy{Tag_: tag, Data: b[n : n+size]}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("", int64(n)+offset, err)
 					return
 				}
 				self.Unknowns = append(self.Unknowns, atom)
@@ -2754,23 +2757,23 @@ func (self MovieFragHeader) Len() (n int) {
 	n += 4
 	return
 }
-func (self *MovieFragHeader) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *MovieFragHeader) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
 	n += 3
 	if len(b) < n+4 {
-		err = parseErr("Seqnum", n+offset, err)
+		err = parseErr("Seqnum", int64(n)+offset, err)
 		return
 	}
 	self.Seqnum = pio.U32BE(b[n:])
@@ -2826,22 +2829,22 @@ func (self TrackFrag) Len() (n int) {
 	}
 	return
 }
-func (self *TrackFrag) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *TrackFrag) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	for n+8 < len(b) {
 		tag := Tag(pio.U32BE(b[n+4:]))
 		size := int(pio.U32BE(b[n:]))
 		if len(b) < n+size {
-			err = parseErr("TagSizeInvalid", n+offset, err)
+			err = parseErr("TagSizeInvalid", int64(n)+offset, err)
 			return
 		}
 		switch tag {
 		case TFHD:
 			{
 				atom := &TrackFragHeader{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("tfhd", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("tfhd", int64(n)+offset, err)
 					return
 				}
 				self.Header = atom
@@ -2849,8 +2852,8 @@ func (self *TrackFrag) Unmarshal(b []byte, offset int) (n int, err error) {
 		case TFDT:
 			{
 				atom := &TrackFragDecodeTime{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("tfdt", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("tfdt", int64(n)+offset, err)
 					return
 				}
 				self.DecodeTime = atom
@@ -2858,8 +2861,8 @@ func (self *TrackFrag) Unmarshal(b []byte, offset int) (n int, err error) {
 		case TRUN:
 			{
 				atom := &TrackFragRun{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("trun", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("trun", int64(n)+offset, err)
 					return
 				}
 				self.Run = atom
@@ -2867,8 +2870,8 @@ func (self *TrackFrag) Unmarshal(b []byte, offset int) (n int, err error) {
 		default:
 			{
 				atom := &Dummy{Tag_: tag, Data: b[n : n+size]}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("", int64(n)+offset, err)
 					return
 				}
 				self.Unknowns = append(self.Unknowns, atom)
@@ -2923,22 +2926,22 @@ func (self MovieExtend) Len() (n int) {
 	}
 	return
 }
-func (self *MovieExtend) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *MovieExtend) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	for n+8 < len(b) {
 		tag := Tag(pio.U32BE(b[n+4:]))
 		size := int(pio.U32BE(b[n:]))
 		if len(b) < n+size {
-			err = parseErr("TagSizeInvalid", n+offset, err)
+			err = parseErr("TagSizeInvalid", int64(n)+offset, err)
 			return
 		}
 		switch tag {
 		case TREX:
 			{
 				atom := &TrackExtend{}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("trex", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("trex", int64(n)+offset, err)
 					return
 				}
 				self.Tracks = append(self.Tracks, atom)
@@ -2946,8 +2949,8 @@ func (self *MovieExtend) Unmarshal(b []byte, offset int) (n int, err error) {
 		default:
 			{
 				atom := &Dummy{Tag_: tag, Data: b[n : n+size]}
-				if _, err = atom.Unmarshal(b[n:n+size], offset+n); err != nil {
-					err = parseErr("", n+offset, err)
+				if _, err = atom.Unmarshal(b[n:n+size], offset+int64(n)); err != nil {
+					err = parseErr("", int64(n)+offset, err)
 					return
 				}
 				self.Unknowns = append(self.Unknowns, atom)
@@ -3010,47 +3013,47 @@ func (self TrackExtend) Len() (n int) {
 	n += 4
 	return
 }
-func (self *TrackExtend) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *TrackExtend) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
 	n += 3
 	if len(b) < n+4 {
-		err = parseErr("TrackId", n+offset, err)
+		err = parseErr("TrackId", int64(n)+offset, err)
 		return
 	}
 	self.TrackId = pio.U32BE(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("DefaultSampleDescIdx", n+offset, err)
+		err = parseErr("DefaultSampleDescIdx", int64(n)+offset, err)
 		return
 	}
 	self.DefaultSampleDescIdx = pio.U32BE(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("DefaultSampleDuration", n+offset, err)
+		err = parseErr("DefaultSampleDuration", int64(n)+offset, err)
 		return
 	}
 	self.DefaultSampleDuration = pio.U32BE(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("DefaultSampleSize", n+offset, err)
+		err = parseErr("DefaultSampleSize", int64(n)+offset, err)
 		return
 	}
 	self.DefaultSampleSize = pio.U32BE(b[n:])
 	n += 4
 	if len(b) < n+4 {
-		err = parseErr("DefaultSampleFlags", n+offset, err)
+		err = parseErr("DefaultSampleFlags", int64(n)+offset, err)
 		return
 	}
 	self.DefaultSampleFlags = pio.U32BE(b[n:])
@@ -3105,23 +3108,23 @@ func (self SampleSize) Len() (n int) {
 	n += 4 * len(self.Entries)
 	return
 }
-func (self *SampleSize) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *SampleSize) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
 	n += 3
 	if len(b) < n+4 {
-		err = parseErr("SampleSize", n+offset, err)
+		err = parseErr("SampleSize", int64(n)+offset, err)
 		return
 	}
 	self.SampleSize = pio.U32BE(b[n:])
@@ -3134,7 +3137,7 @@ func (self *SampleSize) Unmarshal(b []byte, offset int) (n int, err error) {
 	n += 4
 	self.Entries = make([]uint32, _len_Entries)
 	if len(b) < n+4*len(self.Entries) {
-		err = parseErr("uint32", n+offset, err)
+		err = parseErr("uint32", int64(n)+offset, err)
 		return
 	}
 	for i := range self.Entries {
@@ -3246,17 +3249,17 @@ func (self TrackFragRun) Len() (n int) {
 	}
 	return
 }
-func (self *TrackFragRun) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *TrackFragRun) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
@@ -3268,7 +3271,7 @@ func (self *TrackFragRun) Unmarshal(b []byte, offset int) (n int, err error) {
 	if self.Flags&TRUN_DATA_OFFSET != 0 {
 		{
 			if len(b) < n+4 {
-				err = parseErr("DataOffset", n+offset, err)
+				err = parseErr("DataOffset", int64(n)+offset, err)
 				return
 			}
 			self.DataOffset = pio.U32BE(b[n:])
@@ -3278,7 +3281,7 @@ func (self *TrackFragRun) Unmarshal(b []byte, offset int) (n int, err error) {
 	if self.Flags&TRUN_FIRST_SAMPLE_FLAGS != 0 {
 		{
 			if len(b) < n+4 {
-				err = parseErr("FirstSampleFlags", n+offset, err)
+				err = parseErr("FirstSampleFlags", int64(n)+offset, err)
 				return
 			}
 			self.FirstSampleFlags = pio.U32BE(b[n:])
@@ -3425,17 +3428,17 @@ func (self TrackFragHeader) Len() (n int) {
 	}
 	return
 }
-func (self *TrackFragHeader) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *TrackFragHeader) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
@@ -3443,7 +3446,7 @@ func (self *TrackFragHeader) Unmarshal(b []byte, offset int) (n int, err error) 
 	if self.Flags&TFHD_BASE_DATA_OFFSET != 0 {
 		{
 			if len(b) < n+8 {
-				err = parseErr("BaseDataOffset", n+offset, err)
+				err = parseErr("BaseDataOffset", int64(n)+offset, err)
 				return
 			}
 			self.BaseDataOffset = pio.U64BE(b[n:])
@@ -3453,7 +3456,7 @@ func (self *TrackFragHeader) Unmarshal(b []byte, offset int) (n int, err error) 
 	if self.Flags&TFHD_STSD_ID != 0 {
 		{
 			if len(b) < n+4 {
-				err = parseErr("StsdId", n+offset, err)
+				err = parseErr("StsdId", int64(n)+offset, err)
 				return
 			}
 			self.StsdId = pio.U32BE(b[n:])
@@ -3463,7 +3466,7 @@ func (self *TrackFragHeader) Unmarshal(b []byte, offset int) (n int, err error) 
 	if self.Flags&TFHD_DEFAULT_DURATION != 0 {
 		{
 			if len(b) < n+4 {
-				err = parseErr("DefaultDuration", n+offset, err)
+				err = parseErr("DefaultDuration", int64(n)+offset, err)
 				return
 			}
 			self.DefaultDuration = pio.U32BE(b[n:])
@@ -3473,7 +3476,7 @@ func (self *TrackFragHeader) Unmarshal(b []byte, offset int) (n int, err error) 
 	if self.Flags&TFHD_DEFAULT_SIZE != 0 {
 		{
 			if len(b) < n+4 {
-				err = parseErr("DefaultSize", n+offset, err)
+				err = parseErr("DefaultSize", int64(n)+offset, err)
 				return
 			}
 			self.DefaultSize = pio.U32BE(b[n:])
@@ -3483,7 +3486,7 @@ func (self *TrackFragHeader) Unmarshal(b []byte, offset int) (n int, err error) 
 	if self.Flags&TFHD_DEFAULT_FLAGS != 0 {
 		{
 			if len(b) < n+4 {
-				err = parseErr("DefaultFlags", n+offset, err)
+				err = parseErr("DefaultFlags", int64(n)+offset, err)
 				return
 			}
 			self.DefaultFlags = pio.U32BE(b[n:])
@@ -3536,17 +3539,17 @@ func (self TrackFragDecodeTime) Len() (n int) {
 	}
 	return
 }
-func (self *TrackFragDecodeTime) Unmarshal(b []byte, offset int) (n int, err error) {
+func (self *TrackFragDecodeTime) Unmarshal(b []byte, offset int64) (n int, err error) {
 	(&self.AtomPos).setPos(offset, len(b))
 	n += 8
 	if len(b) < n+1 {
-		err = parseErr("Version", n+offset, err)
+		err = parseErr("Version", int64(n)+offset, err)
 		return
 	}
 	self.Version = pio.U8(b[n:])
 	n += 1
 	if len(b) < n+3 {
-		err = parseErr("Flags", n+offset, err)
+		err = parseErr("Flags", int64(n)+offset, err)
 		return
 	}
 	self.Flags = pio.U24BE(b[n:])
