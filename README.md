@@ -1,3 +1,7 @@
+# Please use joy5 instead
+
+[joy5](https://github.com/nareix/joy5)
+
 # JOY4
 
 > Golang audio/video library and streaming server
