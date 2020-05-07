@@ -1,6 +1,9 @@
-# Please use joy5 instead
+# PLEASE USE joy5 INSTEAD
 
 [joy5](https://github.com/nareix/joy5)
+
+- High performance Copy-on-write gop cache [code](https://github.com/nareix/joy5/blob/master/cmd/avtool/pubsub.go)
+- Better av.Packet design [code](https://github.com/nareix/joy5/blob/master/av/av.go)
 
 # JOY4
 
