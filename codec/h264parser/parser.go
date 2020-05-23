@@ -16,6 +16,10 @@ const (
 	NALU_AUD = 9
 )
 
+const (
+	EXTENDED_SAR = 255
+)
+
 func IsDataNALU(b []byte) bool {
 	typ := b[0] & 0x1f
 	return typ >= 1 && typ <= 5
@@ -301,6 +305,9 @@ type SPSInfo struct {
 	CropRight  uint
 	CropTop    uint
 	CropBottom uint
+	UnitsInTick uint
+    TimeScale uint
+    FixedRate uint
 
 	Width  uint
 	Height uint
@@ -308,6 +315,7 @@ type SPSInfo struct {
 
 func ParseSPS(data []byte) (self SPSInfo, err error) {
 	r := &bits.GolombBitReader{R: bytes.NewReader(data)}
+
 
 	if _, err = r.ReadBits(8); err != nil {
 		return
@@ -494,6 +502,218 @@ func ParseSPS(data []byte) (self SPSInfo, err error) {
 
 	self.Width = (self.MbWidth * 16) - self.CropLeft*2 - self.CropRight*2
 	self.Height = ((2 - frame_mbs_only_flag) * self.MbHeight * 16) - self.CropTop*2 - self.CropBottom*2
+	
+	var vui_parameters_present_flag  uint
+	if vui_parameters_present_flag, err = r.ReadBit(); err != nil {
+		return
+	}
+
+	if (vui_parameters_present_flag != 0) {
+		/*
+		aspect_ratio_info_present_flag equal to 1 specifies that
+		aspect_ratio_idc is present. aspect_ratio_info_present_flag
+		equal to 0 specifies that aspect_ratio_idc is not present.
+		*/
+		var aspect_ratio_info_present_flag uint
+		if aspect_ratio_info_present_flag, err = r.ReadBit(); err != nil {
+			return
+		}
+
+		if aspect_ratio_info_present_flag != 0 {
+			/*
+			aspect_ratio_idc specifies the value of the sample aspect
+			ratio of the luma samples. Table E-1 shows the meaning of
+			the code. When aspect_ratio_idc indicates Extended_SAR, the
+			sample aspect ratio is represented by sar_width and
+			sar_height. When the aspect_ratio_idc syntax element is not
+			present, aspect_ratio_idc value shall be inferred to be
+			equal to 0.
+			*/
+			var aspect_ratio_idc uint
+			if aspect_ratio_idc, err = r.ReadBits(8); err != nil {
+				return
+			}
+
+			switch aspect_ratio_idc {		
+			case 0:
+				// Unspecified
+				break;
+			case 1:
+				// 1:1
+				/*
+				1280x720 16:9 frame without overscan
+				1920x1080 16:9 frame without overscan (cropped from 1920x1088)
+				640x480 4:3 frame without overscan
+				*/
+				break;
+			case 2:
+				// 12:11
+				/*
+				720x576 4:3 frame with horizontal overscan
+				352x288 4:3 frame without overscan
+				*/
+				break;
+			case 3:
+				// 10:11
+				/*
+				720x480 4:3 frame with horizontal overscan
+				352x240 4:3 frame without overscan
+				*/
+				break;
+			case 4:
+				// 16:11
+				/*
+				720x576 16:9 frame with horizontal overscan
+				540x576 4:3 frame with horizontal overscan
+				*/
+				break;
+			case 5:
+				// 40:33
+				/*
+				720x480 16:9 frame with horizontal overscan
+				540x480 4:3 frame with horizontal overscan
+				*/
+				break;
+			case 6:
+				// 24:11
+				/*
+				352x576 4:3 frame without overscan
+				540x576 16:9 frame with horizontal overscan
+				*/
+				break;
+			case 7:
+				// 20:11
+				/*
+				352x480 4:3 frame without overscan
+				480x480 16:9 frame with horizontal overscan
+				*/
+				break;
+			case 8:
+				// 32:11
+				/*
+				352x576 16:9 frame without overscan
+				*/
+				break;
+			case 9:
+				// 80:33
+				/*
+				352x480 16:9 frame without overscan
+				*/
+				break;
+			case 10:
+				// 18:11
+				/*
+				480x576 4:3 frame with horizontal overscan
+				*/
+				break;
+			case 11:
+				// 15:11
+				/*
+				480x480 4:3 frame with horizontal overscan
+				*/
+				break;
+			case 12:
+				// 64:33
+				/*
+				540x576 16:9 frame with horizontal overscan
+				*/
+				break;
+			case 13:
+				// 160:99
+				/*
+				540x576 16:9 frame with horizontal overscan
+				*/
+				break;
+			case EXTENDED_SAR:
+				if _, err  = r.ReadBits(16); err != nil {
+					return
+				}	
+				if _, err = r.ReadBits(16); err != nil {
+					return
+				}
+				break;
+			}
+		}
+
+		var overscan_info_present_flag uint
+		if overscan_info_present_flag, err = r.ReadBit(); err != nil {
+			return
+		}
+
+		if overscan_info_present_flag != 0 {
+			//overscan_appropriate_flag	
+			if _, err = r.ReadBit(); err != nil {
+				return
+			} 	
+		}
+
+		var video_signal_type_present_flag uint
+		if video_signal_type_present_flag, err = r.ReadBit(); err != nil {
+			return
+		}
+
+		if video_signal_type_present_flag != 0 { //video_signal_type_present_flag
+			if _, err = r.ReadBits(3); err != nil {//video_format
+				return
+			}
+
+			if _, err = r.ReadBit(); err != nil {//video_full_range_flag
+				return
+			} 
+			  
+			var colour_description_present_flag uint
+			if colour_description_present_flag, err = r.ReadBit(); err != nil {
+				return
+			}
+
+			if colour_description_present_flag != 0 {
+				if _, err = r.ReadBits(8); err != nil {// colour_primaries
+					return
+				}
+
+				if _, err = r.ReadBits(8); err != nil {// transfer_characteristics
+					return
+				}
+
+				if _, err = r.ReadBits(8); err != nil {// matrix_coefficients
+					return
+				}
+			}
+		}
+
+		var chroma_loc_info_present_flag uint
+		if chroma_loc_info_present_flag, err = r.ReadBit(); err != nil {
+			return
+		}
+
+		if chroma_loc_info_present_flag != 0 {
+		
+			r.ReadExponentialGolombCode() //chroma_sample_loc_type_top_field ue(v)
+			r.ReadExponentialGolombCode() //chroma_sample_loc_type_bottom_field ue(v)
+		}
+
+		var timing_info_present_flag uint
+		if timing_info_present_flag, err = r.ReadBit(); err != nil {
+			return
+		}
+
+		if timing_info_present_flag != 0 {
+		    //num_units_in_tick
+			if self.UnitsInTick, err = r.ReadBits(32); err != nil {
+				return
+			}
+
+			//time_scale
+			if self.TimeScale, err = r.ReadBits(32); err != nil {
+				return
+			}
+
+			//fixed_frame_rate_flag 
+			if self.FixedRate, err = r.ReadBit(); err != nil {
+				return
+			} 
+		}
+	}
 
 	return
 }
