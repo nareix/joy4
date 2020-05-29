@@ -17,7 +17,7 @@ type Stream struct {
 	timeScale int64
 	duration  int64
 
-	muxer *Muxer
+	muxer   *Muxer
 	demuxer *Demuxer
 
 	sample      *mp4io.SampleTable
@@ -42,17 +42,17 @@ type Stream struct {
 }
 
 func timeToTs(tm time.Duration, timeScale int64) int64 {
-	return int64(tm*time.Duration(timeScale) / time.Second)
+	return int64(tm * time.Duration(timeScale) / time.Second)
 }
 
 func tsToTime(ts int64, timeScale int64) time.Duration {
-	return time.Duration(ts)*time.Second / time.Duration(timeScale)
+	return time.Duration(ts) * time.Second / time.Duration(timeScale)
 }
 
 func (self *Stream) timeToTs(tm time.Duration) int64 {
-	return int64(tm*time.Duration(self.timeScale) / time.Second)
+	return int64(tm * time.Duration(self.timeScale) / time.Second)
 }
 
 func (self *Stream) tsToTime(ts int64) time.Duration {
-	return time.Duration(ts)*time.Second / time.Duration(self.timeScale)
+	return time.Duration(ts) * time.Second / time.Duration(self.timeScale)
 }

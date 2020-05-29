@@ -1,4 +1,3 @@
-
 // Package av defines basic interfaces and data structures of container demux/mux and audio encode/decode.
 package av
 
@@ -11,17 +10,17 @@ import (
 type SampleFormat uint8
 
 const (
-	U8 = SampleFormat(iota + 1) // 8-bit unsigned integer
-	S16 // signed 16-bit integer
-	S32 // signed 32-bit integer
-	FLT // 32-bit float
-	DBL // 64-bit float
-	U8P // 8-bit unsigned integer in planar
-	S16P // signed 16-bit integer in planar
-	S32P // signed 32-bit integer in planar
-	FLTP // 32-bit float in planar
-	DBLP // 64-bit float in planar
-	U32 // unsigned 32-bit integer
+	U8   = SampleFormat(iota + 1) // 8-bit unsigned integer
+	S16                           // signed 16-bit integer
+	S32                           // signed 32-bit integer
+	FLT                           // 32-bit float
+	DBL                           // 64-bit float
+	U8P                           // 8-bit unsigned integer in planar
+	S16P                          // signed 16-bit integer in planar
+	S32P                          // signed 32-bit integer in planar
+	FLTP                          // 32-bit float in planar
+	DBLP                          // 64-bit float in planar
+	U32                           // unsigned 32-bit integer
 )
 
 func (self SampleFormat) BytesPerSample() int {
@@ -116,11 +115,11 @@ func (self ChannelLayout) Count() (n int) {
 type CodecType uint32
 
 var (
-	H264 = MakeVideoCodecType(avCodecTypeMagic + 1)
-	AAC       = MakeAudioCodecType(avCodecTypeMagic + 1)
-	PCM_MULAW = MakeAudioCodecType(avCodecTypeMagic + 2)
-	PCM_ALAW  = MakeAudioCodecType(avCodecTypeMagic + 3)
-	SPEEX = MakeAudioCodecType(avCodecTypeMagic + 4)
+	H264       = MakeVideoCodecType(avCodecTypeMagic + 1)
+	AAC        = MakeAudioCodecType(avCodecTypeMagic + 1)
+	PCM_MULAW  = MakeAudioCodecType(avCodecTypeMagic + 2)
+	PCM_ALAW   = MakeAudioCodecType(avCodecTypeMagic + 3)
+	SPEEX      = MakeAudioCodecType(avCodecTypeMagic + 4)
 	NELLYMOSER = MakeAudioCodecType(avCodecTypeMagic + 5)
 )
 
@@ -171,7 +170,7 @@ const avCodecTypeMagic = 233333
 // can be converted to VideoCodecData or AudioCodecData using:
 //
 //     codecdata.(AudioCodecData) or codecdata.(VideoCodecData)
-// 
+//
 // for H264, CodecData is AVCDecoderConfigure bytes, includes SPS/PPS.
 type CodecData interface {
 	Type() CodecType // Video/Audio codec type
@@ -179,15 +178,15 @@ type CodecData interface {
 
 type VideoCodecData interface {
 	CodecData
-	Width() int // Video width
+	Width() int  // Video width
 	Height() int // Video height
 }
 
 type AudioCodecData interface {
 	CodecData
-	SampleFormat() SampleFormat // audio sample format
-	SampleRate() int // audio sample rate
-	ChannelLayout() ChannelLayout // audio channel layout
+	SampleFormat() SampleFormat                   // audio sample format
+	SampleRate() int                              // audio sample rate
+	ChannelLayout() ChannelLayout                 // audio channel layout
 	PacketDuration([]byte) (time.Duration, error) // get audio compressed packet duration
 }
 
@@ -196,16 +195,16 @@ type PacketWriter interface {
 }
 
 type PacketReader interface {
-	ReadPacket() (Packet,error)
+	ReadPacket() (Packet, error)
 }
 
 // Muxer describes the steps of writing compressed audio/video packets into container formats like MP4/FLV/MPEG-TS.
-// 
+//
 // Container formats, rtmp.Conn, and transcode.Muxer implements Muxer interface.
 type Muxer interface {
 	WriteHeader([]CodecData) error // write the file header
-	PacketWriter // write compressed audio/video packets
-	WriteTrailer() error // finish writing file, this func can be called only once
+	PacketWriter                   // write compressed audio/video packets
+	WriteTrailer() error           // finish writing file, this func can be called only once
 }
 
 // Muxer with Close() method
@@ -216,7 +215,7 @@ type MuxCloser interface {
 
 // Demuxer can read compressed audio/video packets from container formats like MP4/FLV/MPEG-TS.
 type Demuxer interface {
-	PacketReader // read compressed audio/video packets
+	PacketReader                   // read compressed audio/video packets
 	Streams() ([]CodecData, error) // reads the file header, contains video/audio meta infomations
 }
 
@@ -228,20 +227,20 @@ type DemuxCloser interface {
 
 // Packet stores compressed audio/video data.
 type Packet struct {
-	IsKeyFrame      bool // video packet is key frame
-	Idx             int8 // stream index in container format
+	IsKeyFrame      bool          // video packet is key frame
+	Idx             int8          // stream index in container format
 	CompositionTime time.Duration // packet presentation time minus decode time for H264 B-Frame
-	Time time.Duration // packet decode time
-	Data            []byte // packet data
+	Time            time.Duration // packet decode time
+	Data            []byte        // packet data
 }
 
 // Raw audio frame.
 type AudioFrame struct {
-	SampleFormat  SampleFormat // audio sample format, e.g: S16,FLTP,...
+	SampleFormat  SampleFormat  // audio sample format, e.g: S16,FLTP,...
 	ChannelLayout ChannelLayout // audio channel layout, e.g: CH_MONO,CH_STEREO,...
-	SampleCount   int // sample count in this frame
-	SampleRate    int // sample rate
-	Data          [][]byte // data array for planar format len(Data) > 1
+	SampleCount   int           // sample count in this frame
+	SampleRate    int           // sample rate
+	Data          [][]byte      // data array for planar format len(Data) > 1
 }
 
 func (self AudioFrame) Duration() time.Duration {
@@ -291,26 +290,25 @@ func (self AudioFrame) Concat(in AudioFrame) (out AudioFrame) {
 // AudioEncoder can encode raw audio frame into compressed audio packets.
 // cgo/ffmpeg inplements AudioEncoder, using ffmpeg.NewAudioEncoder to create it.
 type AudioEncoder interface {
-	CodecData() (AudioCodecData, error) // encoder's codec data can put into container
-	Encode(AudioFrame) ([][]byte, error) // encode raw audio frame into compressed pakcet(s)
-	Close() // close encoder, free cgo contexts
-	SetSampleRate(int) (error) // set encoder sample rate
-	SetChannelLayout(ChannelLayout) (error) // set encoder channel layout
-	SetSampleFormat(SampleFormat) (error) // set encoder sample format
-	SetBitrate(int) (error) // set encoder bitrate
-	SetOption(string,interface{}) (error) // encoder setopt, in ffmpeg is av_opt_set_dict()
-	GetOption(string,interface{}) (error) // encoder getopt
+	CodecData() (AudioCodecData, error)   // encoder's codec data can put into container
+	Encode(AudioFrame) ([][]byte, error)  // encode raw audio frame into compressed pakcet(s)
+	Close()                               // close encoder, free cgo contexts
+	SetSampleRate(int) error              // set encoder sample rate
+	SetChannelLayout(ChannelLayout) error // set encoder channel layout
+	SetSampleFormat(SampleFormat) error   // set encoder sample format
+	SetBitrate(int) error                 // set encoder bitrate
+	SetOption(string, interface{}) error  // encoder setopt, in ffmpeg is av_opt_set_dict()
+	GetOption(string, interface{}) error  // encoder getopt
 }
 
 // AudioDecoder can decode compressed audio packets into raw audio frame.
 // use ffmpeg.NewAudioDecoder to create it.
 type AudioDecoder interface {
 	Decode([]byte) (bool, AudioFrame, error) // decode one compressed audio packet
-	Close() // close decode, free cgo contexts
+	Close()                                  // close decode, free cgo contexts
 }
 
 // AudioResampler can convert raw audio frames in different sample rate/format/channel layout.
 type AudioResampler interface {
 	Resample(AudioFrame) (AudioFrame, error) // convert raw audio frames
 }
-

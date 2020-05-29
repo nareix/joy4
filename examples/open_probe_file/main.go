@@ -36,4 +36,3 @@ func main() {
 
 	file.Close()
 }
-
