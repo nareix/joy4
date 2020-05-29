@@ -3325,6 +3325,7 @@ const LenTrackFragRunEntry = 16
 type TrackFragHeader struct {
 	Version         uint8
 	Flags           uint32
+	TrackId         uint32
 	BaseDataOffset  uint64
 	StsdId          uint32
 	DefaultDuration uint32
@@ -3344,6 +3345,8 @@ func (self TrackFragHeader) marshal(b []byte) (n int) {
 	n += 1
 	pio.PutU24BE(b[n:], self.Flags)
 	n += 3
+	pio.PutU24BE(b[n:], self.TrackId)
+	n += 4
 	if self.Flags&TFHD_BASE_DATA_OFFSET != 0 {
 		{
 			pio.PutU64BE(b[n:], self.BaseDataOffset)
@@ -3380,6 +3383,7 @@ func (self TrackFragHeader) Len() (n int) {
 	n += 8
 	n += 1
 	n += 3
+	n += 4
 	if self.Flags&TFHD_BASE_DATA_OFFSET != 0 {
 		{
 			n += 8
