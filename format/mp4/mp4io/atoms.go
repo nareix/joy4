@@ -2765,6 +2765,11 @@ func (self TrackFrag) marshal(b []byte) (n int) {
 		n += self.DecodeTime.Marshal(b[n:])
 	}
 	if self.Run != nil {
+		if self.Header != nil {
+			self.Run.defaultSize = self.Header.DefaultSize
+			self.Run.defaultDuration = self.Header.DefaultDuration
+			self.Run.defaultFlags = self.Header.DefaultFlags
+		}
 		n += self.Run.Marshal(b[n:])
 	}
 	for _, atom := range self.Unknowns {
@@ -3115,6 +3120,9 @@ type TrackFragRun struct {
 	DataOffset       uint32
 	FirstSampleFlags uint32
 	Entries          []TrackFragRunEntry
+	defaultDuration  uint32
+	defaultSize      uint32
+	defaultFlags     uint32
 	AtomPos
 }
 
@@ -3146,24 +3154,41 @@ func (self TrackFragRun) marshal(b []byte) (n int) {
 
 	for i, entry := range self.Entries {
 		var flags uint32
-		if i > 0 {
-			flags = self.Flags
-		} else {
+		if i == 0 && self.Flags&TRUN_FIRST_SAMPLE_FLAGS != 0 {
 			flags = self.FirstSampleFlags
+		} else if entry.Flags != 0 {
+			flags = entry.Flags
+		} else {
+			flags = self.defaultFlags
 		}
-		if flags&TRUN_SAMPLE_DURATION != 0 {
-			pio.PutU32BE(b[n:], entry.Duration)
+
+		var duration uint32
+		if entry.Duration != 0 {
+			duration = entry.Duration
+		} else {
+			duration = self.defaultDuration
+		}
+
+		var size uint32
+		if entry.Size != 0 {
+			size = entry.Size
+		} else {
+			size = self.defaultSize
+		}
+
+		if self.Flags&TRUN_SAMPLE_DURATION != 0 {
+			pio.PutU32BE(b[n:], duration)
 			n += 4
 		}
-		if flags&TRUN_SAMPLE_SIZE != 0 {
-			pio.PutU32BE(b[n:], entry.Size)
+		if self.Flags&TRUN_SAMPLE_SIZE != 0 {
+			pio.PutU32BE(b[n:], size)
 			n += 4
 		}
-		if flags&TRUN_SAMPLE_FLAGS != 0 {
-			pio.PutU32BE(b[n:], entry.Flags)
+		if self.Flags&TRUN_SAMPLE_FLAGS != 0 {
+			pio.PutU32BE(b[n:], flags)
 			n += 4
 		}
-		if flags&TRUN_SAMPLE_CTS != 0 {
+		if self.Flags&TRUN_SAMPLE_CTS != 0 {
 			pio.PutU32BE(b[n:], entry.Cts)
 			n += 4
 		}
@@ -3186,26 +3211,21 @@ func (self TrackFragRun) Len() (n int) {
 		}
 	}
 
-	for i := range self.Entries {
-		var flags uint32
-		if i > 0 {
-			flags = self.Flags
-		} else {
-			flags = self.FirstSampleFlags
-		}
-		if flags&TRUN_SAMPLE_DURATION != 0 {
-			n += 4
-		}
-		if flags&TRUN_SAMPLE_SIZE != 0 {
-			n += 4
-		}
-		if flags&TRUN_SAMPLE_FLAGS != 0 {
-			n += 4
-		}
-		if flags&TRUN_SAMPLE_CTS != 0 {
-			n += 4
-		}
+	k := 0
+	if self.Flags&TRUN_SAMPLE_DURATION != 0 {
+		k += 4
 	}
+	if self.Flags&TRUN_SAMPLE_SIZE != 0 {
+		k += 4
+	}
+	if self.Flags&TRUN_SAMPLE_FLAGS != 0 {
+		k += 4
+	}
+	if self.Flags&TRUN_SAMPLE_CTS != 0 {
+		k += 4
+	}
+
+	n += len(self.Entries) * k
 	return
 }
 func (self *TrackFragRun) Unmarshal(b []byte, offset int) (n int, err error) {
