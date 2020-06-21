@@ -1,9 +1,8 @@
-
 package h264parser
 
 import (
-	"testing"
 	"encoding/hex"
+	"testing"
 )
 
 func TestParser(t *testing.T) {
@@ -20,4 +19,3 @@ func TestParser(t *testing.T) {
 	nalus, ok = SplitNALUs(avccFrame)
 	t.Log(ok, len(nalus))
 }
-
