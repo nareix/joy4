@@ -1,25 +1,21 @@
 package ffmpeg
 
-/*
-#include "ffmpeg.h"
-int wrap_avcodec_decode_video2(AVCodecContext *ctx, AVFrame *frame, void *data, int size, int *got) {
-	struct AVPacket pkt = {.data = data, .size = size};
-	return avcodec_decode_video2(ctx, frame, got, &pkt);
-}
-*/
+//#cgo LDFLAGS: -lavformat -lavutil -lavcodec -lavresample -lswscale
+// #include "ffmpeg.h"
 import "C"
 import (
-	"unsafe"
-	"runtime"
 	"fmt"
 	"image"
 	"reflect"
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/codec/h264parser"
+	"runtime"
+	"unsafe"
+
+	"github.com/Danile71/joy4/av"
+	"github.com/Danile71/joy4/codec/h264parser"
 )
 
 type VideoDecoder struct {
-	ff *ffctx
+	ff        *ffctx
 	Extradata []byte
 }
 
@@ -46,12 +42,13 @@ func fromCPtr(buf unsafe.Pointer, size int) (ret []uint8) {
 
 type VideoFrame struct {
 	Image image.YCbCr
-	frame *C.AVFrame
+	Raw   []byte
+	Size  int
 }
 
 func (self *VideoFrame) Free() {
 	self.Image = image.YCbCr{}
-	C.av_frame_free(&self.frame)
+	self.Raw = make([]byte, 0)
 }
 
 func freeVideoFrame(self *VideoFrame) {
@@ -63,7 +60,60 @@ func (self *VideoDecoder) Decode(pkt []byte) (img *VideoFrame, err error) {
 
 	cgotimg := C.int(0)
 	frame := C.av_frame_alloc()
-	cerr := C.wrap_avcodec_decode_video2(ff.codecCtx, frame, unsafe.Pointer(&pkt[0]), C.int(len(pkt)), &cgotimg)
+	defer C.av_frame_free(&frame)
+
+	cerr := C.decode(ff.codecCtx, frame, (*C.uchar)(unsafe.Pointer(&pkt[0])), C.int(len(pkt)), &cgotimg)
+
+	if cerr < C.int(0) {
+		err = fmt.Errorf("ffmpeg: decode failed: %d", cerr)
+		return
+	}
+
+	if cgotimg != C.int(0) {
+		w := int(frame.width)
+		h := int(frame.height)
+		ys := int(frame.linesize[0])
+		cs := int(frame.linesize[1])
+
+		img = &VideoFrame{Image: image.YCbCr{
+			Y:              fromCPtr(unsafe.Pointer(frame.data[0]), ys*h),
+			Cb:             fromCPtr(unsafe.Pointer(frame.data[1]), cs*h/2),
+			Cr:             fromCPtr(unsafe.Pointer(frame.data[2]), cs*h/2),
+			YStride:        ys,
+			CStride:        cs,
+			SubsampleRatio: image.YCbCrSubsampleRatio420,
+			Rect:           image.Rect(0, 0, w, h),
+		}}
+
+		runtime.SetFinalizer(img, freeVideoFrame)
+
+		packet := C.AVPacket{}
+		defer C.av_packet_unref(&packet)
+
+		cerr := C.avcodec_encode_jpeg(ff.codecCtx, frame, &packet)
+
+		if cerr != C.int(0) {
+			err = fmt.Errorf("ffmpeg: avcodec_encode_jpeg failed: %d", cerr)
+			return
+		}
+
+		img.Size = int(packet.size)
+		img.Raw = make([]byte, img.Size)
+		copy(img.Raw, *(*[]byte)(unsafe.Pointer(&packet.data)))
+	}
+
+	return
+}
+
+func (self *VideoDecoder) DecodeBac(pkt []byte) (img *VideoFrame, err error) {
+	ff := &self.ff.ff
+
+	cgotimg := C.int(0)
+	frame := C.av_frame_alloc()
+	defer C.av_frame_free(&frame)
+
+	cerr := C.decode(ff.codecCtx, frame, (*C.uchar)(unsafe.Pointer(&pkt[0])), C.int(len(pkt)), &cgotimg)
+
 	if cerr < C.int(0) {
 		err = fmt.Errorf("ffmpeg: avcodec_decode_video2 failed: %d", cerr)
 		return
@@ -76,15 +126,29 @@ func (self *VideoDecoder) Decode(pkt []byte) (img *VideoFrame, err error) {
 		cs := int(frame.linesize[1])
 
 		img = &VideoFrame{Image: image.YCbCr{
-			Y: fromCPtr(unsafe.Pointer(frame.data[0]), ys*h),
-			Cb: fromCPtr(unsafe.Pointer(frame.data[1]), cs*h/2),
-			Cr: fromCPtr(unsafe.Pointer(frame.data[2]), cs*h/2),
-			YStride: ys,
-			CStride: cs,
+			Y:              fromCPtr(unsafe.Pointer(frame.data[0]), ys*h),
+			Cb:             fromCPtr(unsafe.Pointer(frame.data[1]), cs*h/2),
+			Cr:             fromCPtr(unsafe.Pointer(frame.data[2]), cs*h/2),
+			YStride:        ys,
+			CStride:        cs,
 			SubsampleRatio: image.YCbCrSubsampleRatio420,
-			Rect: image.Rect(0, 0, w, h),
-		}, frame: frame}
+			Rect:           image.Rect(0, 0, w, h),
+		}}
 		runtime.SetFinalizer(img, freeVideoFrame)
+
+		packet := C.AVPacket{}
+		defer C.av_packet_unref(&packet)
+
+		cerr := C.avcodec_encode_jpeg(ff.codecCtx, frame, &packet)
+
+		if cerr != C.int(0) {
+			err = fmt.Errorf("ffmpeg: avcodec_encode_jpeg failed: %d", cerr)
+			return
+		}
+
+		img.Size = int(packet.size)
+		img.Raw = make([]byte, img.Size)
+		copy(img.Raw, *(*[]byte)(unsafe.Pointer(&packet.data)))
 	}
 
 	return
@@ -114,11 +178,10 @@ func NewVideoDecoder(stream av.CodecData) (dec *VideoDecoder, err error) {
 	if _dec.ff, err = newFFCtxByCodec(c); err != nil {
 		return
 	}
-	if err =  _dec.Setup(); err != nil {
+	if err = _dec.Setup(); err != nil {
 		return
 	}
 
 	dec = _dec
 	return
 }
-
