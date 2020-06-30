@@ -1,27 +1,28 @@
 package mp4
 
 import (
-	"fmt"
-	"time"
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/codec/aacparser"
-	"github.com/nareix/joy4/codec/h264parser"
-	"github.com/nareix/joy4/format/mp4/mp4io"
-	"github.com/nareix/joy4/utils/bits/pio"
-	"io"
 	"bufio"
+	"fmt"
+	"io"
+	"time"
+
+	"github.com/sprucehealth/joy4/av"
+	"github.com/sprucehealth/joy4/codec/aacparser"
+	"github.com/sprucehealth/joy4/codec/h264parser"
+	"github.com/sprucehealth/joy4/format/mp4/mp4io"
+	"github.com/sprucehealth/joy4/utils/bits/pio"
 )
 
 type Muxer struct {
-	w          io.WriteSeeker
-	bufw       *bufio.Writer
-	wpos       int64
-	streams    []*Stream
+	w       io.WriteSeeker
+	bufw    *bufio.Writer
+	wpos    int64
+	streams []*Stream
 }
 
 func NewMuxer(w io.WriteSeeker) *Muxer {
 	return &Muxer{
-		w: w,
+		w:    w,
 		bufw: bufio.NewWriterSize(w, pio.RecommendBufioSize),
 	}
 }
@@ -54,7 +55,7 @@ func (self *Muxer) newStream(codec av.CodecData) (err error) {
 
 	stream.trackAtom = &mp4io.Track{
 		Header: &mp4io.TrackHeader{
-			TrackId:  int32(len(self.streams)+1),
+			TrackId:  int32(len(self.streams) + 1),
 			Flags:    0x0003, // Track enabled | Track in movie
 			Duration: 0,      // fill later
 			Matrix:   [9]int32{0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000},
@@ -109,7 +110,7 @@ func (self *Stream) fillTrackAtom() (err error) {
 			Conf:                 &mp4io.AVC1Conf{Data: codec.AVCDecoderConfRecordBytes()},
 		}
 		self.trackAtom.Media.Handler = &mp4io.HandlerRefer{
-			SubType: [4]byte{'v','i','d','e'},
+			SubType: [4]byte{'v', 'i', 'd', 'e'},
 			Name:    []byte("Video Media Handler"),
 		}
 		self.trackAtom.Media.Info.Video = &mp4io.VideoMediaInfo{
@@ -132,7 +133,7 @@ func (self *Stream) fillTrackAtom() (err error) {
 		self.trackAtom.Header.Volume = 1
 		self.trackAtom.Header.AlternateGroup = 1
 		self.trackAtom.Media.Handler = &mp4io.HandlerRefer{
-			SubType: [4]byte{'s','o','u','n'},
+			SubType: [4]byte{'s', 'o', 'u', 'n'},
 			Name:    []byte("Sound Handler"),
 		}
 		self.trackAtom.Media.Info.Sound = &mp4io.SoundMediaInfo{}

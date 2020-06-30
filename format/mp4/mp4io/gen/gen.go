@@ -1,14 +1,13 @@
-
 package main
 
 import (
-	"strings"
 	"fmt"
-	"os"
 	"go/ast"
 	"go/parser"
-	"go/token"
 	"go/printer"
+	"go/token"
+	"os"
+	"strings"
 )
 
 func getexprs(e ast.Expr) string {
@@ -37,7 +36,7 @@ func genatomdecl(origfn *ast.FuncDecl, origname, origtag string) (decls []ast.De
 			if typ == "_unknowns" {
 				fieldslist.List = append(fieldslist.List, &ast.Field{
 					Names: []*ast.Ident{ast.NewIdent("Unknowns")},
-					Type: ast.NewIdent("[]Atom"),
+					Type:  ast.NewIdent("[]Atom"),
 				})
 			}
 			continue
@@ -67,24 +66,24 @@ func genatomdecl(origfn *ast.FuncDecl, origname, origtag string) (decls []ast.De
 		case "bytesleft":
 			typ = "[]byte"
 		case "bytes":
-			typ = "["+name2+"]byte"
+			typ = "[" + name2 + "]byte"
 		case "uint24":
 			typ = "uint32"
 		case "time64", "time32":
 			typ = "time.Time"
 		case "atom":
-			typ = "*"+name2
+			typ = "*" + name2
 		case "atoms":
-			typ = "[]*"+name2
+			typ = "[]*" + name2
 		case "slice":
-			typ = "[]"+name2
+			typ = "[]" + name2
 		case "array":
-			typ = "["+len3+"]"+name2
+			typ = "[" + len3 + "]" + name2
 		}
 
 		fieldslist.List = append(fieldslist.List, &ast.Field{
 			Names: []*ast.Ident{ast.NewIdent(name)},
-			Type: ast.NewIdent(typ),
+			Type:  ast.NewIdent(typ),
 		})
 	}
 
@@ -135,7 +134,7 @@ func typegetlen(typ string) (n int) {
 func typegetlens(typ string) string {
 	n := typegetlen(typ)
 	if n == 0 {
-		return "Len"+typ
+		return "Len" + typ
 	} else {
 		return fmt.Sprint(n)
 	}
@@ -187,7 +186,7 @@ func typegetputfn(typ string) (fn string) {
 	case "fixed16":
 		fn = "PutFixed16"
 	default:
-		fn = "Put"+typ
+		fn = "Put" + typ
 	}
 	return
 }
@@ -218,7 +217,7 @@ func typegetgetfn(typ string) (fn string) {
 	case "fixed16":
 		fn = "GetFixed16"
 	default:
-		fn = "Get"+typ
+		fn = "Get" + typ
 	}
 	return
 }
@@ -237,14 +236,14 @@ func addn(n int) (stmts []ast.Stmt) {
 	return addns(fmt.Sprint(n))
 }
 
-func simplecall(fun string, args... string) *ast.ExprStmt {
+func simplecall(fun string, args ...string) *ast.ExprStmt {
 	_args := []ast.Expr{}
 	for _, s := range args {
 		_args = append(_args, ast.NewIdent(s))
 	}
 	return &ast.ExprStmt{
 		X: &ast.CallExpr{
-			Fun: ast.NewIdent(fun),
+			Fun:  ast.NewIdent(fun),
 			Args: _args,
 		},
 	}
@@ -283,7 +282,7 @@ func newdecl(origname, name string, params, res []*ast.Field, stmts []ast.Stmt) 
 			List: []*ast.Field{
 				&ast.Field{
 					Names: []*ast.Ident{ast.NewIdent("self")},
-					Type: ast.NewIdent(origname),
+					Type:  ast.NewIdent(origname),
 				},
 			},
 		},
@@ -319,7 +318,7 @@ func getstructputgetlenfn(origfn *ast.FuncDecl, origname string) (decls []ast.De
 	getstmts = append(getstmts, &ast.ReturnStmt{})
 
 	decls = append(decls, &ast.FuncDecl{
-		Name: ast.NewIdent("Get"+origname),
+		Name: ast.NewIdent("Get" + origname),
 		Type: &ast.FuncType{
 			Params: &ast.FieldList{
 				List: []*ast.Field{
@@ -336,7 +335,7 @@ func getstructputgetlenfn(origfn *ast.FuncDecl, origname string) (decls []ast.De
 	})
 
 	decls = append(decls, &ast.FuncDecl{
-		Name: ast.NewIdent("Put"+origname),
+		Name: ast.NewIdent("Put" + origname),
 		Type: &ast.FuncType{
 			Params: &ast.FieldList{
 				List: []*ast.Field{
@@ -352,7 +351,7 @@ func getstructputgetlenfn(origfn *ast.FuncDecl, origname string) (decls []ast.De
 		Tok: token.CONST,
 		Specs: []ast.Spec{
 			&ast.ValueSpec{
-				Names: []*ast.Ident{ast.NewIdent("Len"+origname)},
+				Names:  []*ast.Ident{ast.NewIdent("Len" + origname)},
 				Values: []ast.Expr{ast.NewIdent(fmt.Sprint(totlen))},
 			},
 		},
@@ -371,7 +370,7 @@ func cc4decls(name string) (decls []ast.Decl) {
 				},
 				Values: []ast.Expr{
 					&ast.CallExpr{
-						Fun: ast.NewIdent("Tag"),
+						Fun:  ast.NewIdent("Tag"),
 						Args: []ast.Expr{&ast.BasicLit{Kind: token.INT, Value: fmt.Sprintf("0x%x", []byte(name))}},
 					},
 				},
@@ -431,7 +430,7 @@ func getatommarshalfn(origfn *ast.FuncDecl,
 
 	callmarshal := func(name string) (stmts []ast.Stmt) {
 		callexpr := &ast.CallExpr{
-			Fun: ast.NewIdent(name+".Marshal"),
+			Fun:  ast.NewIdent(name + ".Marshal"),
 			Args: []ast.Expr{ast.NewIdent("b[n:]")},
 		}
 		assign := &ast.AssignStmt{
@@ -446,7 +445,7 @@ func getatommarshalfn(origfn *ast.FuncDecl,
 	callputstruct := func(typ, name string) (stmts []ast.Stmt) {
 		stmts = append(stmts, &ast.ExprStmt{
 			X: &ast.CallExpr{
-				Fun: ast.NewIdent(typegetputfn(typ)),
+				Fun:  ast.NewIdent(typegetputfn(typ)),
 				Args: []ast.Expr{ast.NewIdent("b[n:]"), ast.NewIdent(name)},
 			},
 		})
@@ -459,7 +458,7 @@ func getatommarshalfn(origfn *ast.FuncDecl,
 	}
 
 	calllenstruct := func(typ, name string) (stmts []ast.Stmt) {
-		inc := typegetlens(typ)+"*len("+name+")"
+		inc := typegetlens(typ) + "*len(" + name + ")"
 		stmts = append(stmts, &ast.AssignStmt{
 			Tok: token.ADD_ASSIGN,
 			Lhs: []ast.Expr{ast.NewIdent("n")},
@@ -470,7 +469,7 @@ func getatommarshalfn(origfn *ast.FuncDecl,
 
 	calllen := func(name string) (stmts []ast.Stmt) {
 		callexpr := &ast.CallExpr{
-			Fun: ast.NewIdent(name+".Len"),
+			Fun:  ast.NewIdent(name + ".Len"),
 			Args: []ast.Expr{},
 		}
 		assign := &ast.AssignStmt{
@@ -484,13 +483,13 @@ func getatommarshalfn(origfn *ast.FuncDecl,
 
 	foreach := func(name, field string, block []ast.Stmt) (stmts []ast.Stmt) {
 		rangestmt := &ast.RangeStmt{
-			Key: ast.NewIdent("_"),
+			Key:   ast.NewIdent("_"),
 			Value: ast.NewIdent(name),
 			Body: &ast.BlockStmt{
 				List: block,
 			},
 			Tok: token.DEFINE,
-			X: ast.NewIdent(field),
+			X:   ast.NewIdent(field),
 		}
 		stmts = append(stmts, rangestmt)
 		return
@@ -511,7 +510,7 @@ func getatommarshalfn(origfn *ast.FuncDecl,
 				List: block,
 			},
 			Tok: token.DEFINE,
-			X: ast.NewIdent(field),
+			X:   ast.NewIdent(field),
 		}
 		stmts = append(stmts, rangestmt)
 		return
@@ -574,7 +573,7 @@ func getatommarshalfn(origfn *ast.FuncDecl,
 	unmarshalatom := func(typ, init string) (stmts []ast.Stmt) {
 		return []ast.Stmt{
 			&ast.AssignStmt{Tok: token.DEFINE,
-				Lhs: []ast.Expr{ast.NewIdent("atom")}, Rhs: []ast.Expr{ast.NewIdent("&"+typ+"{"+init+"}")},
+				Lhs: []ast.Expr{ast.NewIdent("atom")}, Rhs: []ast.Expr{ast.NewIdent("&" + typ + "{" + init + "}")},
 			},
 			&ast.IfStmt{
 				Init: &ast.AssignStmt{
@@ -591,10 +590,10 @@ func getatommarshalfn(origfn *ast.FuncDecl,
 	unmrashalatoms := func() (stmts []ast.Stmt) {
 		blocks := []ast.Stmt{}
 
-		blocks = append(blocks, &ast.AssignStmt{ Tok: token.DEFINE, Lhs: []ast.Expr{ast.NewIdent("tag")},
+		blocks = append(blocks, &ast.AssignStmt{Tok: token.DEFINE, Lhs: []ast.Expr{ast.NewIdent("tag")},
 			Rhs: []ast.Expr{ast.NewIdent("Tag(pio.U32BE(b[n+4:]))")},
 		})
-		blocks = append(blocks, &ast.AssignStmt{ Tok: token.DEFINE, Lhs: []ast.Expr{ast.NewIdent("size")},
+		blocks = append(blocks, &ast.AssignStmt{Tok: token.DEFINE, Lhs: []ast.Expr{ast.NewIdent("size")},
 			Rhs: []ast.Expr{ast.NewIdent("int(pio.U32BE(b[n:]))")},
 		})
 		blocks = append(blocks, &ast.IfStmt{
@@ -614,7 +613,7 @@ func getatommarshalfn(origfn *ast.FuncDecl,
 		}
 
 		for i, atom := range atomarrnames {
-			selfatom := "self."+atom
+			selfatom := "self." + atom
 			cases = append(cases, &ast.CaseClause{
 				List: []ast.Expr{ast.NewIdent(strings.ToUpper(struct2tag(atomarrtypes[i])))},
 				Body: []ast.Stmt{&ast.BlockStmt{
@@ -635,7 +634,7 @@ func getatommarshalfn(origfn *ast.FuncDecl,
 		}
 
 		blocks = append(blocks, &ast.SwitchStmt{
-			Tag: ast.NewIdent("tag"),
+			Tag:  ast.NewIdent("tag"),
 			Body: &ast.BlockStmt{List: cases},
 		})
 
@@ -659,9 +658,9 @@ func getatommarshalfn(origfn *ast.FuncDecl,
 	ifnotnil := func(name string, block []ast.Stmt) (stmts []ast.Stmt) {
 		stmts = append(stmts, &ast.IfStmt{
 			Cond: &ast.BinaryExpr{
-				X: ast.NewIdent(name),
+				X:  ast.NewIdent(name),
 				Op: token.NEQ,
-				Y: ast.NewIdent("nil"),
+				Y:  ast.NewIdent("nil"),
 			},
 			Body: &ast.BlockStmt{List: block},
 		})
@@ -693,9 +692,9 @@ func getatommarshalfn(origfn *ast.FuncDecl,
 	checkcurlen := func(inc, debug string) (stmts []ast.Stmt) {
 		stmts = append(stmts, &ast.IfStmt{
 			Cond: &ast.BinaryExpr{
-				X: ast.NewIdent("len(b)"),
+				X:  ast.NewIdent("len(b)"),
 				Op: token.LSS,
-				Y: ast.NewIdent("n+"+inc),
+				Y:  ast.NewIdent("n+" + inc),
 			},
 			Body: &ast.BlockStmt{List: parseerrreturn(debug)},
 		})
@@ -710,20 +709,20 @@ func getatommarshalfn(origfn *ast.FuncDecl,
 	}
 
 	checkstructlendo := func(typ, name, debug string,
-		foreach func(string,[]ast.Stmt)[]ast.Stmt,
+		foreach func(string, []ast.Stmt) []ast.Stmt,
 	) (stmts []ast.Stmt) {
-		inc := typegetlens(typ)+"*len("+name+")"
+		inc := typegetlens(typ) + "*len(" + name + ")"
 		stmts = append(stmts, checkcurlen(inc, debug)...)
 		stmts = append(stmts, foreach(name, append(
 			[]ast.Stmt{
 				&ast.AssignStmt{
 					Tok: token.ASSIGN,
 					Lhs: []ast.Expr{
-						ast.NewIdent(name+"[i]"),
+						ast.NewIdent(name + "[i]"),
 					},
 					Rhs: []ast.Expr{
 						&ast.CallExpr{
-							Fun: ast.NewIdent(typegetgetfn(typ)),
+							Fun:  ast.NewIdent(typegetgetfn(typ)),
 							Args: []ast.Expr{ast.NewIdent("b[n:]")},
 						},
 					},
@@ -967,7 +966,7 @@ func genatoms(filename, outfilename string) {
 		&ast.GenDecl{
 			Tok: token.IMPORT,
 			Specs: []ast.Spec{
-				&ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: `"github.com/nareix/joy4/utils/bits/pio"`}},
+				&ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: `"github.com/sprucehealth/joy4/utils/bits/pio"`}},
 			},
 		},
 		&ast.GenDecl{
@@ -1054,4 +1053,3 @@ func main() {
 		genatoms(os.Args[2], os.Args[3])
 	}
 }
-

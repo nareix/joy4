@@ -1,17 +1,18 @@
 package flvio
 
 import (
-	"strings"
-	"math"
 	"fmt"
+	"math"
+	"strings"
 	"time"
-	"github.com/nareix/joy4/utils/bits/pio"
+
+	"github.com/sprucehealth/joy4/utils/bits/pio"
 )
 
 type AMF0ParseError struct {
-	Offset int
+	Offset  int
 	Message string
-	Next *AMF0ParseError
+	Next    *AMF0ParseError
 }
 
 func (self *AMF0ParseError) Error() string {
@@ -25,9 +26,9 @@ func (self *AMF0ParseError) Error() string {
 func amf0ParseErr(message string, offset int, err error) error {
 	next, _ := err.(*AMF0ParseError)
 	return &AMF0ParseError{
-		Offset: offset,
+		Offset:  offset,
 		Message: message,
-		Next: next,
+		Next:    next,
 	}
 }
 
@@ -133,7 +134,7 @@ func LenAMF0Val(_val interface{}) (n int) {
 	case AMFECMAArray:
 		n += 5
 		for k, v := range val {
-			n += 2+len(k)
+			n += 2 + len(k)
 			n += LenAMF0Val(v)
 		}
 		n += 3
@@ -142,7 +143,7 @@ func LenAMF0Val(_val interface{}) (n int) {
 		n++
 		for k, v := range val {
 			if len(k) > 0 {
-				n += 2+len(k)
+				n += 2 + len(k)
 				n += LenAMF0Val(v)
 			}
 		}
@@ -155,7 +156,7 @@ func LenAMF0Val(_val interface{}) (n int) {
 		}
 
 	case time.Time:
-		n += 1+8+2
+		n += 1 + 8 + 2
 
 	case bool:
 		n += 2
@@ -253,7 +254,7 @@ func FillAMF0Val(b []byte, _val interface{}) (n int) {
 		b[n] = datemarker
 		n++
 		u := val.UnixNano()
-		f := float64(u/1000000)
+		f := float64(u / 1000000)
 		n += fillBEFloat64(b[n:], f)
 		pio.PutU16BE(b[n:], uint16(0))
 		n += 2
@@ -277,7 +278,6 @@ func FillAMF0Val(b []byte, _val interface{}) (n int) {
 
 	return
 }
-
 
 func ParseAMF0Val(b []byte) (val interface{}, n int, err error) {
 	return parseAMF0Val(b, 0)
@@ -320,7 +320,7 @@ func parseAMF0Val(b []byte, offset int) (val interface{}, n int, err error) {
 			err = amf0ParseErr("string.body", offset+n, err)
 			return
 		}
-		val = string(b[n:n+length])
+		val = string(b[n : n+length])
 		n += length
 
 	case objectmarker:
@@ -340,7 +340,7 @@ func parseAMF0Val(b []byte, offset int) (val interface{}, n int, err error) {
 				err = amf0ParseErr("object.key.body", offset+n, err)
 				return
 			}
-			okey := string(b[n:n+length])
+			okey := string(b[n : n+length])
 			n += length
 
 			var nval int
@@ -387,7 +387,7 @@ func parseAMF0Val(b []byte, offset int) (val interface{}, n int, err error) {
 				err = amf0ParseErr("array.key.body", offset+n, err)
 				return
 			}
-			okey := string(b[n:n+length])
+			okey := string(b[n : n+length])
 			n += length
 
 			var nval int
@@ -439,7 +439,7 @@ func parseAMF0Val(b []byte, offset int) (val interface{}, n int, err error) {
 			return
 		}
 		ts := parseBEFloat64(b[n:])
-		n += 8+2
+		n += 8 + 2
 
 		val = time.Unix(int64(ts/1000), (int64(ts)%1000)*1000000)
 
@@ -455,7 +455,7 @@ func parseAMF0Val(b []byte, offset int) (val interface{}, n int, err error) {
 			err = amf0ParseErr("longstring.body", offset+n, err)
 			return
 		}
-		val = string(b[n:n+length])
+		val = string(b[n : n+length])
 		n += length
 
 	default:
@@ -465,4 +465,3 @@ func parseAMF0Val(b []byte, offset int) (val interface{}, n int, err error) {
 
 	return
 }
-

@@ -2,8 +2,9 @@ package ts
 
 import (
 	"io"
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/av/avutil"
+
+	"github.com/sprucehealth/joy4/av"
+	"github.com/sprucehealth/joy4/av/avutil"
 )
 
 func Handler(h *avutil.RegisterHandler) {
@@ -23,4 +24,3 @@ func Handler(h *avutil.RegisterHandler) {
 
 	h.CodecTypes = CodecTypes
 }
-

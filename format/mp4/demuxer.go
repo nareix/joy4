@@ -6,10 +6,10 @@ import (
 	"io"
 	"time"
 
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/codec/aacparser"
-	"github.com/nareix/joy4/codec/h264parser"
-	"github.com/nareix/joy4/format/mp4/mp4io"
+	"github.com/sprucehealth/joy4/av"
+	"github.com/sprucehealth/joy4/codec/aacparser"
+	"github.com/sprucehealth/joy4/codec/h264parser"
+	"github.com/sprucehealth/joy4/format/mp4/mp4io"
 )
 
 type Demuxer struct {
@@ -200,6 +200,9 @@ func (self *Stream) setSampleIndex(index int) (err error) {
 }
 
 func (self *Stream) isSampleValid() bool {
+	if self.sample.ChunkOffset == nil {
+		return false
+	}
 	if self.chunkIndex >= len(self.sample.ChunkOffset.Entries) {
 		return false
 	}

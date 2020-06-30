@@ -1,11 +1,10 @@
-
 package main
 
 import (
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/format"
-	"github.com/nareix/joy4/av/avutil"
-	"github.com/nareix/joy4/cgo/ffmpeg"
+	"github.com/sprucehealth/joy4/av"
+	"github.com/sprucehealth/joy4/av/avutil"
+	"github.com/sprucehealth/joy4/cgo/ffmpeg"
+	"github.com/sprucehealth/joy4/format"
 )
 
 // need ffmpeg installed
@@ -37,4 +36,3 @@ func main() {
 
 	file.Close()
 }
-

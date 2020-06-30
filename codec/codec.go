@@ -1,9 +1,10 @@
 package codec
 
 import (
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/codec/fake"
 	"time"
+
+	"github.com/sprucehealth/joy4/av"
+	"github.com/sprucehealth/joy4/codec/fake"
 )
 
 type PCMUCodecData struct {
@@ -50,7 +51,7 @@ func (self SpeexCodecData) PacketDuration(data []byte) (time.Duration, error) {
 	// libavcodec/libspeexdec.c
 	// samples = samplerate/50
 	// duration = 0.02s
-	return time.Millisecond*20, nil
+	return time.Millisecond * 20, nil
 }
 
 func NewSpeexCodecData(sr int, cl av.ChannelLayout) SpeexCodecData {
@@ -61,4 +62,3 @@ func NewSpeexCodecData(sr int, cl av.ChannelLayout) SpeexCodecData {
 	codec.ChannelLayout_ = cl
 	return codec
 }
-

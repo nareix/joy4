@@ -1,10 +1,10 @@
-
 // Package pktque provides packet Filter interface and structures used by other components.
 package pktque
 
 import (
 	"time"
-	"github.com/nareix/joy4/av"
+
+	"github.com/sprucehealth/joy4/av"
 )
 
 type Filter interface {
@@ -30,8 +30,8 @@ func (self Filters) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoid
 // Wrap origin Demuxer and Filter into a new Demuxer, when read this Demuxer filters will be called.
 type FilterDemuxer struct {
 	av.Demuxer
-	Filter Filter
-	streams []av.CodecData
+	Filter   Filter
+	streams  []av.CodecData
 	videoidx int
 	audioidx int
 }
@@ -81,9 +81,9 @@ func (self *WaitKeyFrame) ModifyPacket(pkt *av.Packet, streams []av.CodecData, v
 
 // Fix incorrect packet timestamps.
 type FixTime struct {
-	zerobase time.Duration
-	incrbase time.Duration
-	lasttime time.Duration
+	zerobase      time.Duration
+	incrbase      time.Duration
+	lasttime      time.Duration
 	StartFromZero bool // make timestamp start from zero
 	MakeIncrement bool // force timestamp increment
 }
@@ -114,14 +114,14 @@ func (self *FixTime) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoi
 // Drop incorrect packets to make A/V sync.
 type AVSync struct {
 	MaxTimeDiff time.Duration
-	time []time.Duration
+	time        []time.Duration
 }
 
 func (self *AVSync) ModifyPacket(pkt *av.Packet, streams []av.CodecData, videoidx int, audioidx int) (drop bool, err error) {
 	if self.time == nil {
 		self.time = make([]time.Duration, len(streams))
 		if self.MaxTimeDiff == 0 {
-			self.MaxTimeDiff = time.Millisecond*500
+			self.MaxTimeDiff = time.Millisecond * 500
 		}
 	}
 
@@ -188,4 +188,3 @@ func (self *Walltime) ModifyPacket(pkt *av.Packet, streams []av.CodecData, video
 	}
 	return
 }
-

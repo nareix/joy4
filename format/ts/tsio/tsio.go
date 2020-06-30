@@ -1,11 +1,11 @@
-
 package tsio
 
 import (
+	"fmt"
 	"io"
 	"time"
-	"fmt"
-	"github.com/nareix/joy4/utils/bits/pio"
+
+	"github.com/sprucehealth/joy4/utils/bits/pio"
 )
 
 const (
@@ -48,7 +48,7 @@ type PAT struct {
 }
 
 func (self PAT) Len() (n int) {
-	return len(self.Entries)*4
+	return len(self.Entries) * 4
 }
 
 func (self PAT) Marshal(b []byte) (n int) {
@@ -73,10 +73,10 @@ func (self *PAT) Unmarshal(b []byte) (n int, err error) {
 			entry.ProgramNumber = pio.U16BE(b[n:])
 			n += 2
 			if entry.ProgramNumber == 0 {
-				entry.NetworkPID = pio.U16BE(b[n:])&0x1fff
+				entry.NetworkPID = pio.U16BE(b[n:]) & 0x1fff
 				n += 2
 			} else {
-				entry.ProgramMapPID = pio.U16BE(b[n:])&0x1fff
+				entry.ProgramMapPID = pio.U16BE(b[n:]) & 0x1fff
 				n += 2
 			}
 			self.Entries = append(self.Entries, entry)
@@ -117,7 +117,7 @@ func (self PMT) Len() (n int) {
 	n += 2
 
 	for _, desc := range self.ProgramDescriptors {
-		n += 2+len(desc.Data)
+		n += 2 + len(desc.Data)
 	}
 
 	for _, info := range self.ElementaryStreamInfos {
@@ -133,7 +133,7 @@ func (self PMT) Len() (n int) {
 		n += 2
 
 		for _, desc := range info.Descriptors {
-			n += 2+len(desc.Data)
+			n += 2 + len(desc.Data)
 		}
 	}
 
@@ -162,7 +162,7 @@ func (self PMT) Marshal(b []byte) (n int) {
 	n += 2
 	pos := n
 	n += self.fillDescs(b[n:], self.ProgramDescriptors)
-	desclen := n-pos
+	desclen := n - pos
 	pio.PutU16BE(b[hold:], uint16(desclen)|0xf<<12)
 
 	for _, info := range self.ElementaryStreamInfos {
@@ -178,7 +178,7 @@ func (self PMT) Marshal(b []byte) (n int) {
 		n += 2
 		pos := n
 		n += self.fillDescs(b[n:], info.Descriptors)
-		desclen := n-pos
+		desclen := n - pos
 		pio.PutU16BE(b[hold:], uint16(desclen)|0x3c<<10)
 	}
 
@@ -219,13 +219,13 @@ func (self *PMT) Unmarshal(b []byte) (n int, err error) {
 
 	// 111(3)
 	// PCRPID(13)
-	self.PCRPID = pio.U16BE(b[0:2])&0x1fff
+	self.PCRPID = pio.U16BE(b[0:2]) & 0x1fff
 	n += 2
 
 	// Reserved(4)=0xf
 	// Reserved(2)=0x0
 	// Program info length(10)
-	desclen := int(pio.U16BE(b[2:4])&0x3ff)
+	desclen := int(pio.U16BE(b[2:4]) & 0x3ff)
 	n += 2
 
 	if desclen > 0 {
@@ -233,7 +233,7 @@ func (self *PMT) Unmarshal(b []byte) (n int, err error) {
 			err = ErrParsePMT
 			return
 		}
-		if self.ProgramDescriptors, err = self.parseDescs(b[n:n+desclen]); err != nil {
+		if self.ProgramDescriptors, err = self.parseDescs(b[n : n+desclen]); err != nil {
 			return
 		}
 		n += desclen
@@ -251,12 +251,12 @@ func (self *PMT) Unmarshal(b []byte) (n int, err error) {
 
 		// Reserved(3)
 		// Elementary PID(13)
-		info.ElementaryPID = pio.U16BE(b[n:])&0x1fff
+		info.ElementaryPID = pio.U16BE(b[n:]) & 0x1fff
 		n += 2
 
 		// Reserved(6)
 		// ES Info length(10)
-		desclen := int(pio.U16BE(b[n:])&0x3ff)
+		desclen := int(pio.U16BE(b[n:]) & 0x3ff)
 		n += 2
 
 		if desclen > 0 {
@@ -264,7 +264,7 @@ func (self *PMT) Unmarshal(b []byte) (n int, err error) {
 				err = ErrParsePMT
 				return
 			}
-			if info.Descriptors, err = self.parseDescs(b[n:n+desclen]); err != nil {
+			if info.Descriptors, err = self.parseDescs(b[n : n+desclen]); err != nil {
 				return
 			}
 			n += desclen
@@ -345,7 +345,7 @@ func FillPSI(h []byte, tableid uint8, tableext uint16, datalen int) (n int) {
 	n++
 
 	// section_syntax_indicator(1)=1,private_bit(1)=0,reserved(2)=3,unused(2)=0,section_length(10)
-	pio.PutU16BE(h[n:], uint16(0xa<<12 | 2+3+4+datalen))
+	pio.PutU16BE(h[n:], uint16(0xa<<12|2+3+4+datalen))
 	n += 2
 
 	// Table ID extension(16)
@@ -375,7 +375,7 @@ func FillPSI(h []byte, tableid uint8, tableext uint16, datalen int) (n int) {
 
 func TimeToPCR(tm time.Duration) (pcr uint64) {
 	// base(33)+resverd(6)+ext(9)
-	ts := uint64(tm*PCR_HZ/time.Second)
+	ts := uint64(tm * PCR_HZ / time.Second)
 	base := ts / 300
 	ext := ts % 300
 	pcr = base<<15 | 0x3f<<9 | ext
@@ -386,12 +386,12 @@ func PCRToTime(pcr uint64) (tm time.Duration) {
 	base := pcr >> 15
 	ext := pcr & 0x1ff
 	ts := base*300 + ext
-	tm = time.Duration(ts)*time.Second/time.Duration(PCR_HZ)
+	tm = time.Duration(ts) * time.Second / time.Duration(PCR_HZ)
 	return
 }
 
 func TimeToTs(tm time.Duration) (v uint64) {
-	ts := uint64(tm*PTS_HZ/time.Second)
+	ts := uint64(tm * PTS_HZ / time.Second)
 	// 0010	PTS 32..30 1	PTS 29..15 1 PTS 14..00 1
 	v = ((ts>>30)&0x7)<<33 | ((ts>>15)&0x7fff)<<17 | (ts&0x7fff)<<1 | 0x100010001
 	return
@@ -399,8 +399,8 @@ func TimeToTs(tm time.Duration) (v uint64) {
 
 func TsToTime(v uint64) (tm time.Duration) {
 	// 0010	PTS 32..30 1	PTS 29..15 1 PTS 14..00 1
-	ts := (((v>>33)&0x7)<<30) | (((v>>17)&0x7fff) << 15) | ((v>>1)&0x7fff)
-	tm = time.Duration(ts)*time.Second/time.Duration(PTS_HZ)
+	ts := (((v >> 33) & 0x7) << 30) | (((v >> 17) & 0x7fff) << 15) | ((v >> 1) & 0x7fff)
+	tm = time.Duration(ts) * time.Second / time.Duration(PTS_HZ)
 	return
 }
 
@@ -417,11 +417,11 @@ func ParsePESHeader(h []byte) (hdrlen int, streamid uint8, datalen int, pts, dts
 	streamid = h[3]
 
 	flags := h[7]
-	hdrlen = int(h[8])+9
+	hdrlen = int(h[8]) + 9
 
 	datalen = int(pio.U16BE(h[4:6]))
 	if datalen > 0 {
-		datalen -= int(h[8])+3
+		datalen -= int(h[8]) + 3
 	}
 
 	const PTS = 1 << 7
@@ -479,7 +479,7 @@ func FillPESHeader(h []byte, streamid uint8, datalen int, pts, dts time.Duration
 	}
 	pio.PutU16BE(h[4:6], pktlen)
 
-	h[6] = 2<<6|1 // resverd(6,2)=2,original_or_copy(0,1)=1
+	h[6] = 2<<6 | 1 // resverd(6,2)=2,original_or_copy(0,1)=1
 	h[7] = flags
 	h[8] = uint8(n)
 
@@ -499,9 +499,9 @@ func FillPESHeader(h []byte, streamid uint8, datalen int, pts, dts time.Duration
 }
 
 type TSWriter struct {
-	w   io.Writer
+	w                 io.Writer
 	ContinuityCounter uint
-	tshdr []byte
+	tshdr             []byte
 }
 
 func NewTSWriter(pid uint16) *TSWriter {
@@ -521,21 +521,21 @@ func (self *TSWriter) WritePackets(w io.Writer, datav [][]byte, pcr time.Duratio
 	writepos := 0
 
 	for writepos < datavlen {
-		self.tshdr[1] = self.tshdr[1]&0x1f
-		self.tshdr[3] = byte(self.ContinuityCounter)&0xf|0x30
+		self.tshdr[1] = self.tshdr[1] & 0x1f
+		self.tshdr[3] = byte(self.ContinuityCounter)&0xf | 0x30
 		self.tshdr[5] = 0 // flags
 		hdrlen := 6
 		self.ContinuityCounter++
 
 		if writepos == 0 {
-			self.tshdr[1] = 0x40|self.tshdr[1] // Payload Unit Start Indicator
+			self.tshdr[1] = 0x40 | self.tshdr[1] // Payload Unit Start Indicator
 			if pcr != 0 {
 				hdrlen += 6
-				self.tshdr[5] = 0x10|self.tshdr[5] // PCR flag (Discontinuity indicator 0x80)
+				self.tshdr[5] = 0x10 | self.tshdr[5] // PCR flag (Discontinuity indicator 0x80)
 				pio.PutU48BE(self.tshdr[6:12], TimeToPCR(pcr))
 			}
 			if sync {
-				self.tshdr[5] = 0x40|self.tshdr[5] // Random Access indicator
+				self.tshdr[5] = 0x40 | self.tshdr[5] // Random Access indicator
 			}
 		}
 
@@ -551,7 +551,7 @@ func (self *TSWriter) WritePackets(w io.Writer, datav [][]byte, pcr time.Duratio
 		}
 		n := pio.VecSliceTo(datav, writev, writepos, end)
 
-		self.tshdr[4] = byte(hdrlen)-5 // length
+		self.tshdr[4] = byte(hdrlen) - 5 // length
 		if _, err = w.Write(self.tshdr[:hdrlen]); err != nil {
 			return
 		}
@@ -561,7 +561,7 @@ func (self *TSWriter) WritePackets(w io.Writer, datav [][]byte, pcr time.Duratio
 			}
 		}
 		if padtail > 0 {
-			if _, err = w.Write(self.tshdr[188-padtail:188]); err != nil {
+			if _, err = w.Write(self.tshdr[188-padtail : 188]); err != nil {
 				return
 			}
 		}
@@ -578,13 +578,12 @@ func ParseTSHeader(tshdr []byte) (pid uint16, start bool, iskeyframe bool, hdrle
 		err = fmt.Errorf("tshdr sync invalid")
 		return
 	}
-	pid = uint16((tshdr[1]&0x1f))<<8|uint16(tshdr[2])
+	pid = uint16((tshdr[1]&0x1f))<<8 | uint16(tshdr[2])
 	start = tshdr[1]&0x40 != 0
 	hdrlen += 4
 	if tshdr[3]&0x20 != 0 {
-		hdrlen += int(tshdr[4])+1
+		hdrlen += int(tshdr[4]) + 1
 		iskeyframe = tshdr[5]&0x40 != 0
 	}
 	return
 }
-

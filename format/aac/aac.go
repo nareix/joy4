@@ -1,26 +1,26 @@
-
 package aac
 
 import (
-	"github.com/nareix/joy4/av/avutil"
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/codec/aacparser"
-	"time"
+	"bufio"
 	"fmt"
 	"io"
-	"bufio"
+	"time"
+
+	"github.com/sprucehealth/joy4/av"
+	"github.com/sprucehealth/joy4/av/avutil"
+	"github.com/sprucehealth/joy4/codec/aacparser"
 )
 
 type Muxer struct {
-	w io.Writer
-	config aacparser.MPEG4AudioConfig
+	w       io.Writer
+	config  aacparser.MPEG4AudioConfig
 	adtshdr []byte
 }
 
 func NewMuxer(w io.Writer) *Muxer {
 	return &Muxer{
 		adtshdr: make([]byte, aacparser.ADTSHeaderLength),
-		w: w,
+		w:       w,
 	}
 }
 
@@ -52,10 +52,10 @@ func (self *Muxer) WriteTrailer() (err error) {
 }
 
 type Demuxer struct {
-	r *bufio.Reader
-	config aacparser.MPEG4AudioConfig
+	r         *bufio.Reader
+	config    aacparser.MPEG4AudioConfig
 	codecdata av.CodecData
-	ts time.Duration
+	ts        time.Duration
 }
 
 func NewDemuxer(r io.Reader) *Demuxer {

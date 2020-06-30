@@ -2,8 +2,9 @@ package mp4
 
 import (
 	"io"
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/av/avutil"
+
+	"github.com/sprucehealth/joy4/av"
+	"github.com/sprucehealth/joy4/av/avutil"
 )
 
 var CodecTypes = []av.CodecType{av.H264, av.AAC}
@@ -13,7 +14,7 @@ func Handler(h *avutil.RegisterHandler) {
 
 	h.Probe = func(b []byte) bool {
 		switch string(b[4:8]) {
-		case "moov","ftyp","free","mdat","moof":
+		case "moov", "ftyp", "free", "mdat", "moof":
 			return true
 		}
 		return false
@@ -29,4 +30,3 @@ func Handler(h *avutil.RegisterHandler) {
 
 	h.CodecTypes = CodecTypes
 }
-

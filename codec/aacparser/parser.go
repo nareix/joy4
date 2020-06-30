@@ -1,12 +1,13 @@
 package aacparser
 
 import (
-	"github.com/nareix/joy4/utils/bits"
-	"github.com/nareix/joy4/av"
-	"time"
-	"fmt"
 	"bytes"
+	"fmt"
 	"io"
+	"time"
+
+	"github.com/sprucehealth/joy4/av"
+	"github.com/sprucehealth/joy4/utils/bits"
 )
 
 // copied from libavcodec/mpeg4audio.h
@@ -83,12 +84,12 @@ These are the channel configurations:
 var chanConfigTable = []av.ChannelLayout{
 	0,
 	av.CH_FRONT_CENTER,
-	av.CH_FRONT_LEFT|av.CH_FRONT_RIGHT,
-	av.CH_FRONT_CENTER|av.CH_FRONT_LEFT|av.CH_FRONT_RIGHT,
-	av.CH_FRONT_CENTER|av.CH_FRONT_LEFT|av.CH_FRONT_RIGHT|av.CH_BACK_CENTER,
-	av.CH_FRONT_CENTER|av.CH_FRONT_LEFT|av.CH_FRONT_RIGHT|av.CH_BACK_LEFT|av.CH_BACK_RIGHT,
-	av.CH_FRONT_CENTER|av.CH_FRONT_LEFT|av.CH_FRONT_RIGHT|av.CH_BACK_LEFT|av.CH_BACK_RIGHT|av.CH_LOW_FREQ,
-	av.CH_FRONT_CENTER|av.CH_FRONT_LEFT|av.CH_FRONT_RIGHT|av.CH_SIDE_LEFT|av.CH_SIDE_RIGHT|av.CH_BACK_LEFT|av.CH_BACK_RIGHT|av.CH_LOW_FREQ,
+	av.CH_FRONT_LEFT | av.CH_FRONT_RIGHT,
+	av.CH_FRONT_CENTER | av.CH_FRONT_LEFT | av.CH_FRONT_RIGHT,
+	av.CH_FRONT_CENTER | av.CH_FRONT_LEFT | av.CH_FRONT_RIGHT | av.CH_BACK_CENTER,
+	av.CH_FRONT_CENTER | av.CH_FRONT_LEFT | av.CH_FRONT_RIGHT | av.CH_BACK_LEFT | av.CH_BACK_RIGHT,
+	av.CH_FRONT_CENTER | av.CH_FRONT_LEFT | av.CH_FRONT_RIGHT | av.CH_BACK_LEFT | av.CH_BACK_RIGHT | av.CH_LOW_FREQ,
+	av.CH_FRONT_CENTER | av.CH_FRONT_LEFT | av.CH_FRONT_RIGHT | av.CH_SIDE_LEFT | av.CH_SIDE_RIGHT | av.CH_BACK_LEFT | av.CH_BACK_RIGHT | av.CH_LOW_FREQ,
 }
 
 func ParseADTSHeader(frame []byte) (config MPEG4AudioConfig, hdrlen int, framelen int, samples int, err error) {
@@ -266,7 +267,7 @@ func WriteMPEG4AudioConfig(w io.Writer, config MPEG4AudioConfig) (err error) {
 
 type CodecData struct {
 	ConfigBytes []byte
-	Config MPEG4AudioConfig
+	Config      MPEG4AudioConfig
 }
 
 func (self CodecData) Type() av.CodecType {
@@ -308,4 +309,3 @@ func NewCodecDataFromMPEG4AudioConfigBytes(config []byte) (self CodecData, err e
 	}
 	return
 }
-
