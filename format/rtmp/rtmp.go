@@ -102,6 +102,12 @@ func (self *Server) ListenAndServe() (err error) {
 		fmt.Println("rtmp: server: listening on", addr)
 	}
 
+	return self.Serve(listener)
+}
+
+// Serve will accept connections on a given net.Listener and instanciate
+// RTMP clients for each connection.
+func (self *Server) Serve(listener net.Listener) (err error) {
 	for {
 		var netconn net.Conn
 		if netconn, err = listener.Accept(); err != nil {
@@ -112,15 +118,21 @@ func (self *Server) ListenAndServe() (err error) {
 			fmt.Println("rtmp: server: accepted")
 		}
 
-		conn := NewConn(netconn)
-		conn.isserver = true
 		go func() {
-			err := self.handleConn(conn)
+			err := self.Server(netconn)
 			if Debug {
 				fmt.Println("rtmp: server: client closed err:", err)
 			}
 		}()
 	}
+}
+
+// Server will initiate server-side RTMP protocol negociation on a given
+// net.Conn.
+func (self *Server) Server(netconn net.Conn) error {
+	conn := NewConn(netconn)
+	conn.isserver = true
+	return self.handleConn(conn)
 }
 
 const (
