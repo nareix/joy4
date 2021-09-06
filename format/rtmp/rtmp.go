@@ -6,18 +6,20 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"fmt"
-	"github.com/nareix/joy4/utils/bits/pio"
-	"github.com/nareix/joy4/av"
-	"github.com/nareix/joy4/av/avutil"
-	"github.com/nareix/joy4/format/flv"
-	"github.com/nareix/joy4/format/flv/flvio"
 	"io"
 	"net"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/nareix/joy4/av"
+	"github.com/nareix/joy4/av/avutil"
+	"github.com/nareix/joy4/format/flv"
+	"github.com/nareix/joy4/format/flv/flvio"
+	"github.com/nareix/joy4/utils/bits/pio"
 )
 
 var Debug bool
@@ -58,6 +60,7 @@ type Server struct {
 	HandlePublish func(*Conn)
 	HandlePlay    func(*Conn)
 	HandleConn    func(*Conn)
+	TLSConfig     *tls.Config
 }
 
 func (self *Server) handleConn(conn *Conn) (err error) {
@@ -93,9 +96,13 @@ func (self *Server) ListenAndServe() (err error) {
 		return
 	}
 
-	var listener *net.TCPListener
+	var listener net.Listener
 	if listener, err = net.ListenTCP("tcp", tcpaddr); err != nil {
 		return
+	}
+
+	if self.TLSConfig != nil {
+		listener = tls.NewListener(listener, self.TLSConfig)
 	}
 
 	if Debug {
